@@ -1,25 +1,25 @@
 #!/usr/bin/env python
 """
     Module for pandastable plotting classes .
-
+ 
     Created Jan 2014
     Copyright (C) Damien Farrell
-
+ 
     This program is free software; you can redistribute it and/or
     modify it under the terms of the GNU General Public License
     as published by the Free Software Foundation; either version 2
     of the License, or (at your option) any later version.
-
+ 
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
-
+ 
     You should have received a copy of the GNU General Public License
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 """
-
+ 
 from __future__ import absolute_import, division, print_function
 try:
     from tkinter import *
@@ -45,7 +45,7 @@ import operator
 from .dialogs import *
 from . import util, images
 import logging
-
+ 
 colormaps = sorted(m for m in plt.cm.datad if not m.endswith("_r"))
 markers = ['','o','.','^','v','>','<','s','+','x','p','d','h','*']
 linestyles = ['-','--','-.',':','steps']
@@ -83,7 +83,7 @@ valid_kwds = {'line': ['alpha', 'colormap', 'grid', 'legend', 'linestyle','ms',
             'venn': ['colormap','alpha'],
             'radviz': ['linewidth','marker','edgecolor','s','colormap','alpha']
             }
-
+ 
 def get_defaults(name):
     if name == 'mplopts':
         return MPLBaseOptions().opts
@@ -91,18 +91,18 @@ def get_defaults(name):
         return MPL3DOptions().opts
     elif name == 'labelopts':
         return AnnotationOptions().opts
-
+ 
 class PlotViewer(Frame):
     """Provides a frame for figure canvas and MPL settings.
-
+ 
     Args:
         table: parent table, required
         parent: parent tkinter frame
         layout: 'horizontal' or 'vertical'
     """
-
+ 
     def __init__(self, table, parent=None, showoptions=True):
-
+ 
         self.parent = parent
         self.table = table
         if table is not None:
@@ -129,7 +129,7 @@ class PlotViewer(Frame):
         self.mplopts3d = MPL3DOptions(parent=self)
         self.labelopts = AnnotationOptions(parent=self)
         self.layoutopts = PlotLayoutOptions(parent=self)
-
+ 
         self.gridaxes = {}
         #reset style if it been set globally
         self.style = None
@@ -137,10 +137,10 @@ class PlotViewer(Frame):
         self.updateStyle()
         self.currentdir = os.path.expanduser('~')
         return
-
+ 
     def setupGUI(self):
         """Add GUI elements"""
-
+ 
         #import tkinter as tk
         #self.m = PanedWindow(self.main, orient=self.orient)
         self.m = Frame(self.main)
@@ -150,19 +150,19 @@ class PlotViewer(Frame):
         #add it to the panedwindow
         self.fig, self.canvas = addFigure(self.plotfr)
         self.ax = self.fig.add_subplot(111)
-
+ 
         #self.m.add(self.plotfr, weight=12)
         self.plotfr.pack(side=TOP,fill=BOTH, expand=1)
-
+ 
         #frame for controls
         self.ctrlfr = Frame(self.main)
         #self.m.add(self.ctrlfr, weight=4)
         self.ctrlfr.pack(side=BOTTOM,fill=BOTH)
-
+ 
         #button frame
         bf = Frame(self.ctrlfr, padding=2)
         bf.pack(side=TOP,fill=BOTH)
-
+ 
         side = LEFT
         #add button toolbar
         addButton(bf, 'Plot', self.replot, images.plot(),
@@ -178,7 +178,7 @@ class PlotViewer(Frame):
                   'clear plot', side=side)
         addButton(bf, 'Save', self.savePlot, images.save(),
                   'save plot', side=side)
-
+ 
         #dicts to store global options, can be saved with projects
         self.globalvars = {}
         self.globalopts = OrderedDict({ 'dpi': 80, 'grid layout': False,'3D plot':False })
@@ -199,7 +199,7 @@ class PlotViewer(Frame):
         addButton(bf, 'Hide', self.toggle_options, images.prefs(),
                   'show/hide plot options', side=RIGHT)
         self.addWidgets()
-
+ 
         #def onpick(event):
         #    print(event)
         #self.fig.canvas.mpl_connect('pick_event', onpick)
@@ -208,14 +208,14 @@ class PlotViewer(Frame):
         dr = handlers.DragHandler(self)
         dr.connect()
         return
-
+ 
     def addWidgets(self):
         """Add option widgets to control panel"""
-
+ 
         self.nb = Notebook(self.ctrlfr, height=210)
         if self.showoptions == 1:
             self.nb.pack(side=TOP,fill=BOTH,expand=0)
-
+ 
         #add plotter tool dialogs
         w1 = self.mplopts.showDialog(self.nb)
         self.nb.add(w1, text='Base Options', sticky='news')
@@ -223,7 +223,7 @@ class PlotViewer(Frame):
         self.mplopts.updateFromDict()
         self.styleopts = ExtraOptions(parent=self)
         self.animateopts = AnimateOptions(parent=self)
-
+ 
         w3 = self.labelopts.showDialog(self.nb)
         self.nb.add(w3, text='Annotation', sticky='news')
         self.labelopts.updateFromDict()
@@ -237,22 +237,22 @@ class PlotViewer(Frame):
         w6 = self.animateopts.showDialog(self.nb)
         self.nb.add(w6, text='Animate', sticky='news')
         return
-
+ 
     def setGlobalOption(self, name='', *args):
         """Set global value from widgets"""
-
+ 
         try:
             self.globalopts[name] = self.globalvars[name].get()
             #print (self.globalopts)
         except:
             logging.error("Exception occurred", exc_info=True)
         return
-
+ 
     def updateWidgets(self):
         """Set global widgets from values"""
         for n in self.globalopts:
             self.globalvars[n].set(self.globalopts[n])
-
+ 
     def setOption(self, option, value):
         basewidgets = self.mplopts.tkvars
         labelwidgets = self.labelopts.tkvars
@@ -263,13 +263,13 @@ class PlotViewer(Frame):
         finally:
             pass
         return
-
+ 
     def replot(self, data=None):
         """Re-plot using current parent table selection.
         Args:
         data: set current dataframe, otherwise use
         current table selection"""
-
+ 
         #print (self.table.getSelectedRows())
         if data is None:
             self.data = self.table.getSelectedDataFrame()
@@ -279,27 +279,27 @@ class PlotViewer(Frame):
         self.applyPlotoptions()
         self.plotCurrent()
         return
-
+ 
     def applyPlotoptions(self):
         """Apply the current plotter/options"""
-
+ 
         self.mplopts.applyOptions()
         self.mplopts3d.applyOptions()
         self.labelopts.applyOptions()
         self.styleopts.applyOptions()
         mpl.rcParams['savefig.dpi'] = self.globalopts['dpi'] #self.dpivar.get()
         return
-
+ 
     def updatePlot(self):
         """Update the current plot with new options"""
-
+ 
         self.applyPlotoptions()
         self.plotCurrent()
         return
-
+ 
     def plotCurrent(self, redraw=True):
         """Plot the current data"""
-
+ 
         layout = self.globalopts['grid layout']
         gridmode = self.layoutopts.modevar.get()
         plot3d = self.globalopts['3D plot']
@@ -313,52 +313,52 @@ class PlotViewer(Frame):
         else:
             self.plot2D(redraw=redraw)
         return
-
+ 
     def zoom(self, zoomin=True):
         """Zoom in/out to plot by changing size of elements"""
-
+ 
         if zoomin == False:
             val=-1.0
         else:
             val=1.0
-
+ 
         if len(self.mplopts.kwds) == 0:
             return
-
+ 
         self.mplopts.increment('linewidth',val/10)
         self.mplopts.increment('ms',val)
         self.mplopts.increment('fontsize',val)
         self.replot()
         return
-
+ 
     def clear(self):
         """Clear plot"""
-
+ 
         self.fig.clear()
         self.ax = None
         self.canvas.draw()
         self.table.plotted=None
         self.gridaxes = {}
         return
-
+ 
     def _checkNumeric(self, df):
         """Get only numeric data that can be plotted"""
-
+ 
         #x = df.convert_objects()._get_numeric_data()
         x = df.apply( lambda x: pd.to_numeric(x,errors='ignore',downcast='float') )
         if x.empty==True:
             return False
-
+ 
     def _initFigure(self):
         """Clear figure or add a new axis to existing layout"""
-
+ 
         from matplotlib.gridspec import GridSpec
         layout = self.globalopts['grid layout']
         plot3d = self.globalopts['3D plot']
-
+ 
         #plot layout should be tracked by plotlayoutoptions
         gl = self.layoutopts
-
+ 
         if plot3d == 1:
             proj = '3d'
         else:
@@ -381,7 +381,7 @@ class PlotViewer(Frame):
             bottom = .1
             #print (rows,cols,r,c)
             #print (rowspan,colspan)
-
+ 
             ws = cols/10-.05
             hs = rows/10-.05
             gs = self.gridspec = GridSpec(rows,cols,top=top,bottom=bottom,
@@ -396,10 +396,10 @@ class PlotViewer(Frame):
             #update the axes widget
             self.layoutopts.updateAxesList()
         return
-
+ 
     def removeSubplot(self):
         """Remove a specific axis from the grid layout"""
-
+ 
         axname = self.layoutopts.axeslistvar.get()
         ax = self.gridaxes[axname]
         if ax in self.fig.axes:
@@ -409,10 +409,10 @@ class PlotViewer(Frame):
         self.layoutopts.updateAxesList()
         self.layoutopts.axeslistvar.set('')
         return
-
+ 
     def setSubplotTitle(self):
         """Set a subplot title if using grid layout"""
-
+ 
         axname = self.layoutopts.axeslistvar.get()
         if not axname in self.gridaxes:
             return
@@ -424,10 +424,10 @@ class PlotViewer(Frame):
             ax.set_title(label)
             self.canvas.show()
         return
-
+ 
     def plotMultiViews(self, plot_types=['bar','scatter']):
         """Plot multiple views of the same data in a grid"""
-
+ 
         #plot_types=['bar','scatter','histogram','boxplot']
         #self._initFigure()
         self.fig.clear()
@@ -448,16 +448,16 @@ class PlotViewer(Frame):
                 kwds['legend'] = False
                 self.plot2D(redraw=False)
                 i+=1
-
+ 
         #legend - put this as a normal option..
         handles, labels = self.ax.get_legend_handles_labels()
         self.fig.legend(handles, labels)
         self.canvas.draw()
         return
-
+ 
     def plotSplitData(self):
         """Splits selected data up into multiple plots in a grid"""
-
+ 
         self.fig.clear()
         gs = self.gridspec
         gl = self.layoutopts
@@ -486,25 +486,25 @@ class PlotViewer(Frame):
         self.fig.legend(handles, labels)
         self.canvas.draw()
         return
-
+ 
     def checkColumnNames(self, cols):
         """Check length of column names"""
-
+ 
         from textwrap import fill
         try:
             cols = [fill(l, 25) for l in cols]
         except:
             logging.error("Exception occurred", exc_info=True)
         return cols
-
+ 
     def plot2D(self, redraw=True):
         """Plot method for current data. Relies on pandas plot functionality
            if possible. There is some temporary code here to make sure only the valid
            plot options are passed for each plot kind."""
-
+ 
         if not hasattr(self, 'data'):
             return
-
+ 
         data = self.data
         data.columns = self.checkColumnNames(data.columns)
         #print (data)
@@ -521,14 +521,14 @@ class PlotViewer(Frame):
         if self._checkNumeric(data) == False and kind != 'venn':
             self.showWarning('no numeric data to plot')
             return
-
+ 
         kwds['edgecolor'] = 'black'
         #valid kwd args for this plot type
         kwargs = dict((k, kwds[k]) for k in valid_kwds[kind] if k in kwds)
         #initialise the figure
         #self._initFigure()
         ax = self.ax
-
+ 
         if by != '':
             #groupby needs to be handled per group so we can create the axes
             #for our figure and add them outside the pandas logic
@@ -538,7 +538,7 @@ class PlotViewer(Frame):
             if by2 != '' and by2 in data.columns:
                 by = [by,by2]
             g = data.groupby(by)
-
+ 
             if kwargs['subplots'] == True:
                 i=1
                 if len(g) > 30:
@@ -556,78 +556,97 @@ class PlotViewer(Frame):
                     else:
                         ax = self.fig.add_subplot(nrows,ncols,i)
                     kwargs['legend'] = False #remove axis legends
-                    d = df.drop(by,axis=1) #remove grouping columns
+                    try:
+                        d = df.drop(by,axis=1) #remove grouping columns
+                    except: # if by is a list
+                        d = df.drop(columns=by)
                     axs = self._doplot(d, ax, kind, False,  errorbars, useindex,
                                   bw=bw, yerr=None, kwargs=kwargs)
                     ax.set_title(n)
                     handles, labels = ax.get_legend_handles_labels()
                     i+=1
-
+ 
                 if 'sharey' in kwargs and kwargs['sharey'] == True:
                     self.autoscale()
                 if  'sharex' in kwargs and kwargs['sharex'] == True:
                     self.autoscale('x')
                 self.fig.legend(handles, labels, loc='center right', #bbox_to_anchor=(0.9, 0),
                                  bbox_transform=self.fig.transFigure )
-                axs = self.fig.get_axes()
-
+                axs_list = self.fig.get_axes() # Get all axes after subplot creation
+ 
             else:
                 #single plot grouped only apply to some plot kinds
                 #the remainder are not supported
-                axs = self.ax
+                axs_list = [self.ax] # Use a list for consistency in setFigureOptions
                 labels = []; handles=[]
                 cmap = plt.cm.get_cmap(kwargs['colormap'])
                 #handle as pivoted data for some line, bar
-                if kind in ['line','bar','barh']:
-                    df = pd.pivot_table(data,index=by)
-                    errs = data.groupby(by).std()
-                    self._doplot(df, axs, kind, False, errorbars, useindex=None, yerr=errs,
-                                      bw=bw, kwargs=kwargs)
-                elif kind == 'scatter':
-                    #we plot multiple groups and series in different colors
-                    #this logic could be placed in the scatter method?
-                    d = data.drop(by,1)
-                    d = d._get_numeric_data()
-                    xcol = d.columns[0]
-                    ycols = d.columns[1:]
-                    c=0
-                    legnames = []
-                    handles = []
-                    slen = len(g)*len(ycols)
-                    clrs = [cmap(float(i)/slen) for i in range(slen)]
-                    for n, df in g:
-                        for y in ycols:
-                            kwargs['color'] = clrs[c]
-                            currax, sc = self.scatter(df[[xcol,y]], ax=axs, **kwargs)
-                            if type(n) is tuple:
-                                n = ','.join(n)
-                            legnames.append(','.join([n,y]))
-                            handles.append(sc[0])
-                            c+=1
-                    if kwargs['legend'] == True:
-                        if slen>6:
-                            lc = int(np.round(slen/10))
-                        else:
-                            lc = 1
-                        axs.legend([])
-                        axs.legend(handles, legnames, ncol=lc)
-                else:
-                    self.showWarning('single grouped plots not supported for %s\n'
-                                     'try using multiple subplots' %kind)
+            if kind in ['line','bar','barh']:
+                # Plot each group as separate line
+                cmap = plt.cm.get_cmap(kwargs['colormap'])
+                groups = data.groupby(by)
+                num_groups = len(groups)
+                for i, (name, group) in enumerate(groups):
+                    color = cmap(float(i)/num_groups)
+                    group = group.drop(by, axis=1)  # Remove groupby column
+                    if errorbars:
+                        errs = group.std()
+                        kwargs['color'] = color
+                        self._doplot(group, self.ax, kind, False, errorbars, useindex=None,
+                                   bw=bw, yerr=errs, kwargs=kwargs, label=str(name))
+                    else:
+                        kwargs['color'] = color
+                        self._doplot(group, self.ax, kind, False, errorbars, useindex=None,
+                                   bw=bw, yerr=None, kwargs=kwargs, label=str(name))
+            elif kind == 'scatter':
+                #we plot multiple groups and series in different colors
+                #this logic could be placed in the scatter method?
+                d = data.drop(by,1)
+                d = d._get_numeric_data()
+                xcol = d.columns[0]
+                ycols = d.columns[1:]
+                c=0
+                legnames = []
+                handles = []
+                slen = len(g)*len(ycols)
+                clrs = [cmap(float(i)/slen) for i in range(slen)]
+                for n, df in g:
+                    for y in ycols:
+                        kwargs['color'] = clrs[c]
+                        currax, sc = self.scatter(df[[xcol,y]], ax=self.ax, **kwargs)
+                        if type(n) is tuple:
+                            n = ','.join(n)
+                        legnames.append(','.join([n,y]))
+                        handles.append(sc[0])
+                        c+=1
+                if kwargs['legend'] == True:
+                    if slen>6:
+                        lc = int(np.round(slen/10))
+                    else:
+                        lc = 1
+                    self.ax.legend([])
+                    self.ax.legend(handles, legnames, ncol=lc)
+            else:
+                self.showWarning('single grouped plots not supported for %s\n'
+                                'try using multiple subplots' %kind)
         else:
             #non-grouped plot
             try:
-                axs = self._doplot(data, ax, kind, kwds['subplots'], errorbars,
+                axs = self._doplot(data, self.ax, kind, kwds['subplots'], errorbars,
                                  useindex, bw=bw, yerr=None, kwargs=kwargs)
+                if isinstance(axs, list):
+                    axs_list = axs # Handle list of axes returned by _doplot
+                else:
+                    axs_list = [axs] # Use a list for consistency in setFigureOptions
             except Exception as e:
                 self.showWarning(e)
                 logging.error("Exception occurred", exc_info=True)
                 return
-
+ 
         #set options general for all plot types
         #annotation optons are separate
         lkwds.update(kwds)
-
+ 
         #table = lkwds['table']
         '''if table == True:
             #from pandas.tools.plotting import table
@@ -636,8 +655,8 @@ class PlotViewer(Frame):
                 tabledata = self.table.child.model.df
                 table(axs, np.round(tabledata, 2),
                       loc='upper left', colWidths=[0.1 for i in tabledata.columns])'''
-
-        self.setFigureOptions(axs, lkwds)
+ 
+        self.setFigureOptions(axs_list, lkwds) # Pass axs_list (could be single ax or list)
         scf = 12/kwds['fontsize']
         try:
             self.fig.tight_layout()
@@ -657,41 +676,45 @@ class PlotViewer(Frame):
         if redraw == True:
             self.canvas.draw()
         return
-
+ 
     def setFigureOptions(self, axs, kwds):
-        """Set axis wide options such as ylabels, title"""
-
-        if type(axs) is np.ndarray:
-            self.ax = axs.flat[0]
-        elif type(axs) is list:
-            self.ax = axs[0]
+        """Set figure wide options such as suptitle, and axis labels.
+           'axs' can be a single axis or a list of axes."""
+ 
+        if isinstance(axs, (list, np.ndarray)): # Handle list of axes
+            main_ax = axs[0] # Use the first axis for suptitle
+        else:
+            main_ax = axs
+ 
         self.fig.suptitle(kwds['title'], fontsize=kwds['fontsize']*1.2)
         layout = self.globalopts['grid layout']
-        if layout == 0:
-            for ax in self.fig.axes:
+ 
+        if isinstance(axs, (list, np.ndarray)): # Apply labels to each subplot
+            for ax in axs:
                 self.setAxisLabels(ax, kwds)
-        else:
-            self.setAxisLabels(self.ax, kwds)
+        else: # Apply labels to single axis
+            self.setAxisLabels(axs, kwds)
         return
-
+ 
     def setAxisLabels(self, ax, kwds):
-        """Set a plots axis labels"""
-
-        if kwds['xlabel'] != '':
-            ax.set_xlabel(kwds['xlabel'])
-        if kwds['ylabel'] != '':
-            ax.set_ylabel(kwds['ylabel'])
-        ax.xaxis.set_visible(kwds['showxlabels'])
-        ax.yaxis.set_visible(kwds['showylabels'])
-        try:
-            ax.tick_params(labelrotation=kwds['rot'])
-        except:
-            logging.error("Exception occurred", exc_info=True)
+        """Set axis labels for a single axis"""
+ 
+        if ax is not None: # Check if ax is valid
+            if kwds['xlabel'] != '':
+                ax.set_xlabel(kwds['xlabel'])
+            if kwds['ylabel'] != '':
+                ax.set_ylabel(kwds['ylabel'])
+            ax.xaxis.set_visible(kwds['showxlabels'])
+            ax.yaxis.set_visible(kwds['showylabels'])
+            try:
+                ax.tick_params(labelrotation=kwds['rot'])
+            except:
+                logging.error("Exception occurred in setAxisLabels", exc_info=True)
         return
-
+ 
     def autoscale(self, axis='y'):
         """Set all subplots to limits of largest range"""
-
+ 
         l=None
         u=None
         for ax in self.fig.axes:
@@ -711,27 +734,27 @@ class PlotViewer(Frame):
             else:
                 a.set_xlim(lims)
         return
-
+ 
     def _clearArgs(self, kwargs):
         """Clear kwargs of formatting options so that a style can be used"""
-
+ 
         keys = ['colormap','grid']
         for k in keys:
             if k in kwargs:
                 kwargs[k] = None
         return kwargs
-
-    def _doplot(self, data, ax, kind, subplots, errorbars, useindex, bw, yerr, kwargs):
+ 
+    def _doplot(self, data, ax, kind, subplots, errorbars, useindex, bw, yerr, kwargs, label=None):
         """Core plotting method where the individual plot functions are called"""
-
+ 
         kwargs = kwargs.copy()
         if self.style != None:
             keargs = self._clearArgs(kwargs)
-
+ 
         cols = data.columns
         if kind == 'line':
             data = data.sort_index()
-
+ 
         rows = int(round(np.sqrt(len(data.columns)),0))
         if len(data.columns) == 1 and kind not in ['pie']:
             kwargs['subplots'] = False
@@ -748,19 +771,19 @@ class PlotViewer(Frame):
             styles = ["-","--","-.",":"]
             if 'linestyle' in kwargs:
                 del kwargs['linestyle']
-
+ 
         if subplots == 0:
             layout = None
         else:
             layout=(rows,-1)
-
+ 
         if errorbars == True and yerr == None:
             yerr = data[data.columns[1::2]]
             data = data[data.columns[0::2]]
             yerr.columns = data.columns
             plt.rcParams['errorbar.capsize']=4
             #kwargs['elinewidth'] = 1
-
+ 
         if kind == 'bar' or kind == 'barh':
             if len(data) > 50:
                 ax.get_xaxis().set_visible(False)
@@ -789,7 +812,7 @@ class PlotViewer(Frame):
             axs = self.violinplot(data, ax, kwargs)
         elif kind == 'dotplot':
             axs = self.dotplot(data, ax, kwargs)
-
+ 
         elif kind == 'histogram':
             #bins = int(kwargs['bins'])
             axs = data.plot(kind='hist',layout=layout, ax=ax, **kwargs)
@@ -828,7 +851,7 @@ class PlotViewer(Frame):
                 lbls=None
             else:
                 lbls = list(data.index)
-
+ 
             axs = data.plot(ax=ax,kind='pie', labels=lbls, layout=layout,
                             autopct='%1.1f%%', subplots=True, **kwargs)
             if lbls == None:
@@ -856,13 +879,54 @@ class PlotViewer(Frame):
             if kind == 'barh':
                 kwargs['xerr']=yerr
                 yerr=None
-
+ 
             axs = data.plot(ax=ax, layout=layout, yerr=yerr, style=styles, cmap=cmap,
                              **kwargs)
+            
+            if label is not None:
+                # Get current handles and labels
+                handles, labels = axs.get_legend_handles_labels()
+                
+                # If you want to append the new label to existing legend text
+                # Update label for the current group curve only
+                # Determine how many new labels correspond to the new group
+                new_labels_count = len(data.columns)  # Assuming each column represents a new curve for the group
+
+                # Update only the last new_labels_count labels for the existing curves
+                if isinstance(label, str):
+                    for i in range(-new_labels_count, 0):  # Update the last new_labels_count labels
+                        labels[i] = f"{labels[i]} {label}"  # Update the label
+                elif isinstance(label, (list, tuple)):
+                    for i in range(-new_labels_count, 0):  # Update the last new_labels_count labels
+                        labels[i] = f"{labels[i]} {label[i + new_labels_count]}"  # Update the label
+
+                # Update the total number of curves
+                if not hasattr(self, 'total_curves'):
+                    self.total_curves = 0  # Initialize if it doesn't exist
+                
+                self.total_curves += new_labels_count  # Increment total curves by the number of new curves
+                
+                if not hasattr(self, 'local_labels'):
+                    self.local_labels = []  # Initialize local_labels if it doesn't exist
+                self.local_labels.extend(labels[-new_labels_count:])  # Append the last new_labels_count of labels to local version
+                # axs.legend(handles, self.local_labels[-1], loc='best', frameon=True) #False, bbox_to_anchor=(0.5, 0.5))  # Refresh the chart with the latest local labels and adjust position
+                axs.legend(handles, self.local_labels, loc='best', frameon=True) 
+                
+            # Restore the legend to compare with the local ones
+            if hasattr(self, 'local_labels'):
+                handles, labels = axs.get_legend_handles_labels()
+            
+            # Customize legend after plotting
+            # axs.legend(loc='best', title='My Legend', frameon=True)
+
+        # Handle case where axs is a list of axes returned by pandas plot
+        if isinstance(axs, (list, np.ndarray)):
+            axs = axs[0]
+ 
         self._setAxisRanges()
         self._setAxisTickFormat()
         return axs
-
+ 
     def _setAxisRanges(self):
         kwds = self.styleopts.kwds
         ax = self.ax
@@ -879,10 +943,10 @@ class PlotViewer(Frame):
         except:
             pass
         return
-
+ 
     def _setAxisTickFormat(self):
         """Set axis tick format"""
-
+ 
         import matplotlib.ticker as mticker
         kwds = self.styleopts.kwds
         ax = self.ax
@@ -918,11 +982,11 @@ class PlotViewer(Frame):
             import matplotlib.dates as mdates
             ax.xaxis.set_major_formatter(mdates.DateFormatter(dateformat))
         return
-
+ 
     def scatter(self, df, ax, alpha=0.8, marker='o', color=None, **kwds):
         """A custom scatter plot rather than the pandas one. By default this
         plots the first column selected versus the others"""
-
+ 
         if len(df.columns)<2:
             return
         data = df
@@ -936,7 +1000,7 @@ class PlotViewer(Frame):
         cscale = kwds['cscale']
         grid = kwds['grid']
         bw = kwds['bw']
-
+ 
         if cscale == 'log':
             norm = mpl.colors.LogNorm()
         else:
@@ -965,7 +1029,7 @@ class PlotViewer(Frame):
         else:
             colormap = None
             c=None
-
+ 
         #print (kwds)
         labelcol = kwds['labelcol']
         pointsizes = kwds['pointsizes']
@@ -982,7 +1046,7 @@ class PlotViewer(Frame):
                 clr=None
             if marker in ['x','+'] and bw == False:
                 ec = clr
-
+ 
             if kwds['subplots'] == True:
                 ax = self.fig.add_subplot(nrows,ncols,i)
             if pointsizes != '' and pointsizes in df.columns:
@@ -996,7 +1060,7 @@ class PlotViewer(Frame):
             sc = ax.scatter(x, y, marker=marker, alpha=alpha, linewidth=lw, c=c,
                        s=ms, edgecolors=ec, facecolor=clr, cmap=colormap,
                        norm=norm, label=cols[i], picker=True)
-
+ 
             #create proxy artist for markers so we can return these handles if needed
             mkr = Line2D([0], [0], marker=marker, alpha=alpha, ms=10, markerfacecolor=c,
                         markeredgewidth=lw, markeredgecolor=ec, linewidth=0)
@@ -1013,7 +1077,7 @@ class PlotViewer(Frame):
                 ax.set_title(cols[i])
             if colormap is not None and kwds['colorbar'] == True:
                 self.fig.colorbar(sc, ax=ax)
-
+ 
             if labelcol != '':
                 if not labelcol in data.columns:
                     self.showWarning('label column %s not in selected data' %labelcol)
@@ -1024,15 +1088,15 @@ class PlotViewer(Frame):
                             continue
                         ax.annotate(txt, (x[i],y[i]), xycoords='data',
                                     xytext=(5, 5), textcoords='offset points',)
-
+ 
         if kwds['legend'] == 1 and kwds['subplots'] == False:
             ax.legend(cols[1:])
-
+ 
         return ax, handles
-
+ 
     def violinplot(self, df, ax, kwds):
         """violin plot"""
-
+ 
         data=[]
         clrs=[]
         cols = len(df.columns)
@@ -1054,10 +1118,10 @@ class PlotViewer(Frame):
         ax.set_xticks(np.arange(1, len(labels) + 1))
         ax.set_xticklabels(labels)
         return
-
+ 
     def dotplot(self, df, ax, kwds):
         """Dot plot"""
-
+ 
         marker = kwds['marker']
         if marker == '':
             marker = 'o'
@@ -1080,10 +1144,10 @@ class PlotViewer(Frame):
         if kwds['logy'] == 1:
             ax.set_yscale('log')
         return ax
-
+ 
     def heatmap(self, df, ax, kwds):
         """Plot heatmap"""
-
+ 
         X = df._get_numeric_data()
         clr='black'
         lw = kwds['linewidth']
@@ -1109,10 +1173,10 @@ class PlotViewer(Frame):
         #from mpl_toolkits.axes_grid1 import make_axes_locatable
         #divider = make_axes_locatable(ax)
         return
-
+ 
     def venn(self, data, ax, colormap=None, alpha=0.8):
         """Plot venn diagram, requires matplotlb-venn"""
-
+ 
         try:
             from matplotlib_venn import venn2,venn3
         except:
@@ -1132,10 +1196,10 @@ class PlotViewer(Frame):
         ax.axis('off')
         ax.set_axis_off()
         return ax
-
+ 
     def contourData(self, data):
         """Get data for contour plot"""
-
+ 
         #from matplotlib.mlab import griddata
         from scipy.interpolate import griddata
         x = data.values[:,0]
@@ -1145,10 +1209,10 @@ class PlotViewer(Frame):
         yi = np.linspace(y.min(), y.max())
         zi = griddata((x, y), z, (xi[None,:], yi[:,None]), method='cubic')
         return xi,yi,zi
-
+ 
     def meshData(self, x,y,z):
         """Prepare 1D data for plotting in the form (x,y)->Z"""
-
+ 
         from scipy.interpolate import griddata
         xi = np.linspace(x.min(), x.max())
         yi = np.linspace(y.min(), y.max())
@@ -1156,7 +1220,7 @@ class PlotViewer(Frame):
         zi = griddata((x, y), z, (xi[None,:], yi[:,None]), method='cubic')
         X, Y = np.meshgrid(xi, yi)
         return X,Y,zi
-
+ 
     def getView(self):
         ax = self.ax
         if hasattr(ax,'azim'):
@@ -1166,16 +1230,16 @@ class PlotViewer(Frame):
         else:
             return None,None,None
         return azm,ele,dst
-
+ 
     def getcmap(self, name):
         try:
             return plt.cm.get_cmap(name)
         except:
             return plt.cm.get_cmap('Spectral')
-
+ 
     def plot3D(self, redraw=True):
         """3D plot"""
-
+ 
         if not hasattr(self, 'data') or len(self.data.columns)<3:
             return
         kwds = self.mplopts.kwds.copy()
@@ -1188,7 +1252,7 @@ class PlotViewer(Frame):
         y = data.values[:,1]
         z = data.values[:,2]
         azm,ele,dst = self.getView()
-
+ 
         #self.fig.clear()
         ax = self.ax# = Axes3D(self.fig)
         kind = kwds['kind']
@@ -1198,7 +1262,7 @@ class PlotViewer(Frame):
         lw = kwds['linewidth']
         alpha = kwds['alpha']
         cmap = kwds['colormap']
-
+ 
         if kind == 'scatter':
             self.scatter3D(data, ax, kwds)
         elif kind == 'bar':
@@ -1222,13 +1286,13 @@ class PlotViewer(Frame):
         elif kind == 'surface':
             X,Y,zi = self.meshData(x,y,z)
             surf = ax.plot_surface(X, Y, zi, rstride=rstride, cstride=cstride,
-                                   cmap=cmap, alpha=alpha,
-                                   linewidth=lw)
+                                     cmap=cmap, alpha=alpha,
+                                     linewidth=lw)
             cb = self.fig.colorbar(surf, shrink=0.5, aspect=5)
             surf.set_clim(vmin=zi.min(), vmax=zi.max())
         if kwds['points'] == True:
             self.scatter3D(data, ax, kwds)
-
+ 
         self.setFigureOptions(ax, kwds)
         if azm!=None:
             self.ax.azim = azm
@@ -1238,10 +1302,10 @@ class PlotViewer(Frame):
         #self.fig.legend(handles, labels)
         self.canvas.draw()
         return
-
+ 
     def bar3D(self, data, ax, kwds):
         """3D bar plot"""
-
+ 
         i=0
         plots=len(data.columns)
         cmap = plt.cm.get_cmap(kwds['colormap'])
@@ -1250,15 +1314,15 @@ class PlotViewer(Frame):
             c = cmap(float(i)/(plots))
             ax.bar(data.index, h, zs=i, zdir='y', color=c)
             i+=1
-
+ 
     def scatter3D(self, data, ax, kwds):
         """3D scatter plot"""
-
+ 
         def doscatter(data, ax, color=None, pointlabels=None):
             data = data._get_numeric_data()
             l = len(data.columns)
             if l<3: return
-
+ 
             X = data.values
             x = X[:,0]
             y = X[:,1]
@@ -1280,9 +1344,9 @@ class PlotViewer(Frame):
                     txt=i[3]
                     ax.text(i[0],i[1],i[2], txt, None,
                     transform=trans_offset)
-
+ 
             return handles,labels
-
+ 
         lw = kwds['linewidth']
         alpha = kwds['alpha']
         ms = kwds['ms']*6
@@ -1309,34 +1373,34 @@ class PlotViewer(Frame):
                 h,l = doscatter(df, ax, color=c, pointlabels=pl)
                 handles.append(h[0])
                 i+=1
-            self.fig.legend(handles, g.groups)
-
+            self.fig.legend(handles, list(g.groups.keys()))
+ 
         else:
             if labelcol != '':
                 pl = data[labelcol]
             handles,lbls=doscatter(data, ax, pointlabels=pl)
             self.fig.legend(handles, lbls)
         return
-
+ 
     def updateData(self):
         """Update data widgets"""
-
+ 
         if self.table is None:
             return
         df = self.table.model.df
         self.mplopts.update(df)
         return
-
+ 
     def updateStyle(self):
         if self.style == None:
             mpl.rcParams.update(mpl.rcParamsDefault)
         else:
             plt.style.use(self.style)
         return
-
+ 
     def savePlot(self, filename=None):
         """Save the current plot"""
-
+ 
         ftypes = [('png','*.png'),('jpg','*.jpg'),('tif','*.tif'),('pdf','*.pdf'),
                     ('eps','*.eps'),('svg','*.svg')]
         if filename == None:
@@ -1348,10 +1412,10 @@ class PlotViewer(Frame):
             dpi = self.globalopts['dpi']
             self.fig.savefig(filename, dpi=dpi)
         return
-
+ 
     def showWarning(self, text='plot error', ax=None):
         """Show warning message in the plot window"""
-
+ 
         if ax==None:
             ax = self.fig.add_subplot(111)
         ax.clear()
@@ -1359,23 +1423,24 @@ class PlotViewer(Frame):
                        horizontalalignment='center', color='blue', fontsize=16)
         self.canvas.draw()
         return
-
+ 
     def toggle_options(self):
         """Show/hide plot options"""
-
+ 
         if self.nb.winfo_ismapped() == 1:
             self.nb.pack_forget()
         else:
             self.nb.pack(fill=BOTH,expand=1)
         return
-
+ 
     def close(self):
         """Close the window"""
-
+ 
         self.table.pf = None
         self.animateopts.stop()
         self.main.destroy()
         return
+ 
 
 class TkOptions(object):
     """Class to generate tkinter widget dialog for dict of options"""
@@ -2144,15 +2209,16 @@ class AnimateOptions(TkOptions):
             pass
         return
 
+
 def addFigure(parent, figure=None, resize_callback=None):
     """Create a tk figure and canvas in the parent frame"""
-
+ 
     from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg#, NavigationToolbar2TkAgg
     from matplotlib.figure import Figure
-
+ 
     if figure == None:
         figure = Figure(figsize=(6,4), dpi=100, facecolor='white')
-
+ 
     canvas = FigureCanvasTkAgg(figure, master=parent)
     canvas.draw()
     canvas.get_tk_widget().pack(side=TOP, fill=BOTH, expand=1)
