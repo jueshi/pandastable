@@ -915,11 +915,16 @@ class PlotViewer(Frame):
                 self.showWarning('too many bars to plot')
                 return
         if kind == 'scatter':
-            axs, sc = self.scatter(data, ax, **kwargs)
-            if kwargs['sharey'] == 1:
-                lims = self.fig.axes[0].get_ylim()
-                for a in self.fig.axes:
-                    a.set_ylim(lims)
+            try:
+                axs, sc = self.scatter(data, ax, **kwargs)
+                if kwargs['sharey'] == 1:
+                    lims = self.fig.axes[0].get_ylim()
+                    for a in self.fig.axes:
+                        a.set_ylim(lims)
+            except Exception as e:
+                print(f"Error in scatter plot: {e}")
+                # Continue with default plotting if scatter fails
+                axs = data.plot(ax=ax, **kwargs)
         elif kind == 'boxplot':
             axs = data.boxplot(ax=ax, grid=kwargs['grid'],
                                patch_artist=True, return_type='dict')

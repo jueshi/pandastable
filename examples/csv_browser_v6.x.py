@@ -115,8 +115,9 @@ class CSVBrowser(tk.Tk):
         self.recent_directories = []
         
         # File to store settings (recent directories and filters)
-        self.settings_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "csv_browser_settings.json")
-        
+        self.settings_file = os.path.join(os.path.expanduser("~"), "csv_browser_settings.json")
+        print(f"Settings file path: {self.settings_file}")
+
         # Load settings from file
         self.load_settings()
         
@@ -912,6 +913,9 @@ class CSVBrowser(tk.Tk):
                         # Update the original DataFrame as well
                         self.original_csv_df = df.copy()
                                     
+            # Restore table settings if available
+            self.restore_table_settings()
+                                                
             # Check if we have active filters
             has_row_filter = self.csv_filter_text.get().strip() != ""
             has_column_filter = hasattr(self, 'visible_columns') and self.visible_columns is not None
@@ -953,9 +957,6 @@ class CSVBrowser(tk.Tk):
             filename = os.path.basename(file_path)
             self.title(f"CSV Browser - {filename}")
             
-            # Restore table settings if available
-            self.restore_table_settings()
-
             # Restore plot settings if available
             self.restore_plot_settings()
 
@@ -1241,6 +1242,15 @@ class CSVBrowser(tk.Tk):
         if directory:
             print(f"Selected directory: {directory}")  # Debug print
             self.current_directory = directory
+            # Add to recent directories list
+            self.add_to_recent_directories(directory)
+            # Force explicit menu update
+            self.update_recent_directories_menu()
+            print(f"Recent directories menu updated with {len(self.recent_directories)} items")
+            # Save settings explicitly
+            print("Explicitly saving settings after directory change")
+            self.save_settings()
+            
             self.include_subfolders.set(False)  # Reset to not include subfolders
             
             # Update file list
@@ -2267,6 +2277,15 @@ class CSVBrowser(tk.Tk):
                 # Update current directory
                 self.current_directory = directory
                 
+                # Add to recent directories list
+                self.add_to_recent_directories(directory)
+                # Force explicit menu update
+                self.update_recent_directories_menu()
+                print(f"Recent directories menu updated with {len(self.recent_directories)} items")
+                # Save settings explicitly
+                print("Explicitly saving settings after directory change")
+                self.save_settings()
+                
                 # Update file list
                 self.update_file_list()
                 
@@ -2664,6 +2683,9 @@ Features:
             # Force explicit menu update
             self.update_recent_directories_menu()
             print(f"Recent directories menu updated with {len(self.recent_directories)} items")
+            # Save settings explicitly
+            print("Explicitly saving settings after directory change")
+            self.save_settings()
             
             self.include_subfolders.set(False)  # Reset to not include subfolders
             
@@ -3927,6 +3949,7 @@ Features:
 
     def save_settings(self):
         """Save settings to file"""
+        print(f"Settings file absolute path: {os.path.abspath(self.settings_file)}")
         try:
             # Create settings directory if it doesn't exist
             directory = os.path.dirname(self.settings_file)
@@ -3951,6 +3974,11 @@ Features:
             
             # Debug print before saving
             print(f"Saving settings: {settings}")
+            # Add this after line 3954 (inside the save_settings method)
+            print(f"Writing settings to file: {self.settings_file}")
+            print(f"File exists before writing: {os.path.exists(self.settings_file)}")
+            print(f"Directory exists: {os.path.exists(os.path.dirname(self.settings_file))}")
+            print(f"Directory is writable: {os.access(os.path.dirname(self.settings_file), os.W_OK)}")
             
             with open(self.settings_file, 'w') as f:
                 json.dump(settings, f)
