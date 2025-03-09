@@ -178,6 +178,8 @@ class PlotViewer(Frame):
                   'clear plot', side=side)
         addButton(bf, 'Save', self.savePlot, images.save(),
                   'save plot', side=side)
+        addButton(bf, 'Fullscreen', self.toggle_fullscreen, images.expand_col(),
+                  'toggle fullscreen mode for plot', side=side)
  
         #dicts to store global options, can be saved with projects
         self.globalvars = {}
@@ -199,6 +201,9 @@ class PlotViewer(Frame):
         addButton(bf, 'Hide', self.toggle_options, images.prefs(),
                   'show/hide plot options', side=RIGHT)
         self.addWidgets()
+ 
+        # Bind Escape key to toggle fullscreen
+        self.main.bind('<Escape>', lambda event: self.toggle_fullscreen())
  
         #def onpick(event):
         #    print(event)
@@ -1547,6 +1552,32 @@ class PlotViewer(Frame):
             self.nb.pack_forget()
         else:
             self.nb.pack(fill=BOTH,expand=1)
+        return
+ 
+    def toggle_fullscreen(self):
+        """Toggle full screen mode for the plot area"""
+        
+        if not hasattr(self, 'fullscreen_mode'):
+            self.fullscreen_mode = False
+            
+        if not self.fullscreen_mode:
+            # Save current state
+            self.prev_ctrlfr_state = self.ctrlfr.winfo_viewable()
+            
+            # Hide the control frame
+            self.ctrlfr.pack_forget()
+            
+            # Set fullscreen flag
+            self.fullscreen_mode = True
+        else:
+            # Restore control frame
+            self.ctrlfr.pack(side=BOTTOM, fill=BOTH)
+            
+            # Reset fullscreen flag
+            self.fullscreen_mode = False
+            
+        # Update the plot to adjust to new size
+        self.canvas.draw()
         return
  
     def close(self):
