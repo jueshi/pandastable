@@ -3738,6 +3738,11 @@ Features:
             
             # Update file list
             self.update_file_list()
+
+            # After line 3739: self.update_file_list()
+            # Add these lines:
+            self.update_file_dataframe()
+            self.setup_file_browser()
             
             # Update max fields
             old_max = self.max_fields
