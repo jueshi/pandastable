@@ -372,11 +372,21 @@ class PlotViewer(Frame):
             #get grid layout from layout opt
             rows = gl.rows
             cols = gl.cols
+            grid_width = gl.grid_width if hasattr(gl, 'grid_width') else cols
+            
+            # Ensure grid_width is at least equal to cols to prevent GridSpec errors
+            grid_width = max(grid_width, cols)
+            
             x = gl.selectedrows
             y = gl.selectedcols
             r=min(x); c=min(y)
             rowspan = gl.rowspan
             colspan = gl.colspan
+            
+            # Ensure colspan doesn't exceed grid_width
+            if c + colspan > grid_width:
+                colspan = grid_width - c
+            
             top = .92
             bottom = .1
             #print (rows,cols,r,c)
@@ -384,15 +394,23 @@ class PlotViewer(Frame):
  
             ws = cols/10-.05
             hs = rows/10-.05
-            gs = self.gridspec = GridSpec(rows,cols,top=top,bottom=bottom,
-                                          left=0.1,right=0.9,wspace=ws,hspace=hs)
+            gs = self.gridspec = GridSpec(rows, grid_width, top=top, bottom=bottom,
+                                          left=0.1, right=0.9, wspace=ws, hspace=hs)
             name = str(r+1)+','+str(c+1)
             if name in self.gridaxes:
                 ax = self.gridaxes[name]
                 if ax in self.fig.axes:
                     self.fig.delaxes(ax)
-            self.ax = self.fig.add_subplot(gs[r:r+rowspan,c:c+colspan], projection=proj)
-            self.gridaxes[name] = self.ax
+            
+            # Ensure we don't try to create a subplot outside the grid boundaries
+            if r < rows and c < grid_width and colspan > 0 and rowspan > 0:
+                self.ax = self.fig.add_subplot(gs[r:r+rowspan,c:c+colspan], projection=proj)
+                self.gridaxes[name] = self.ax
+            else:
+                # Fallback to a safe default if coordinates are out of bounds
+                self.ax = self.fig.add_subplot(gs[0:1,0:1], projection=proj)
+                self.gridaxes[name] = self.ax
+                
             #update the axes widget
             self.layoutopts.updateAxesList()
         return
@@ -428,36 +446,59 @@ class PlotViewer(Frame):
     def plotMultiViews(self, plot_types=['bar','scatter']):
         """Plot multiple views of the same data in a grid"""
  
+        if not hasattr(self, 'data') or self.data is None or len(self.data) == 0:
+            self.showWarning('No data to plot')
+            return
+        
         #plot_types=['bar','scatter','histogram','boxplot']
         #self._initFigure()
         self.fig.clear()
         gs = self.gridspec
         gl = self.layoutopts
         plot_types = getListBoxSelection(gl.plottypeslistbox)
+        if not plot_types:
+            self.showWarning('No plot types selected')
+            return
+        
         kwds = self.mplopts.kwds
         rows = gl.rows
         cols = gl.cols
+        grid_width = gl.grid_width if hasattr(gl, 'grid_width') else cols
+        
         c=0; i=0
         for r in range(0,rows):
-            for c in range(0,cols):
+            for c in range(0,grid_width):
                 if i>=len(plot_types):
                     break
-                self.ax = self.fig.add_subplot(gs[r:r+1,c:c+1])
-                #print (self.ax)
-                kwds['kind'] = plot_types[i]
-                kwds['legend'] = False
-                self.plot2D(redraw=False)
-                i+=1
+                try:
+                    self.ax = self.fig.add_subplot(gs[r:r+1,c:c+1])
+                    #print (self.ax)
+                    kwds['kind'] = plot_types[i]
+                    kwds['legend'] = False
+                    self.plot2D(redraw=False)
+                    i+=1
+                except Exception as e:
+                    print(f"Error creating subplot at position ({r},{c}): {e}")
+                    continue
  
-        #legend - put this as a normal option..
-        handles, labels = self.ax.get_legend_handles_labels()
-        self.fig.legend(handles, labels)
+        # Only add legend if we have at least one successful subplot
+        if i > 0 and hasattr(self, 'ax'):
+            try:
+                handles, labels = self.ax.get_legend_handles_labels()
+                self.fig.legend(handles, labels, loc='center right', bbox_to_anchor=(0.9, 0.5))  #bbox_transform=self.fig.transFigure )
+            except Exception as e:
+                print(f"Error creating legend: {e}")
+        
         self.canvas.draw()
         return
  
     def plotSplitData(self):
         """Splits selected data up into multiple plots in a grid"""
  
+        if not hasattr(self, 'data') or self.data is None or len(self.data) == 0:
+            self.showWarning('No data to plot')
+            return
+        
         self.fig.clear()
         gs = self.gridspec
         gl = self.layoutopts
@@ -465,25 +506,48 @@ class PlotViewer(Frame):
         kwds['legend'] = False
         rows = gl.rows
         cols = gl.cols
+        grid_width = gl.grid_width if hasattr(gl, 'grid_width') else cols
+        
         c=0; i=0
         data = self.data
-        n = rows * cols
-        chunks = np.array_split(data, n)
+        
+        # Make sure we don't try to create more chunks than rows in the dataframe
+        max_chunks = min(rows * grid_width, len(data))
+        if max_chunks <= 0:
+            self.showWarning('Not enough data to split')
+            return
+        
+        chunks = np.array_split(data, max_chunks)
         proj=None
         plot3d = self.globalopts['3D plot']
         if plot3d == True:
             proj='3d'
         for r in range(0,rows):
-            for c in range(0,cols):
-                self.data = chunks[i]
-                self.ax = self.fig.add_subplot(gs[r:r+1,c:c+1], projection=proj)
-                if plot3d == True:
-                    self.plot3D()
-                else:
-                    self.plot2D(redraw=False)
-                i+=1
-        handles, labels = self.ax.get_legend_handles_labels()
-        self.fig.legend(handles, labels)
+            for c in range(0,grid_width):
+                if i >= len(chunks):
+                    break
+                try:
+                    self.data = chunks[i]
+                    self.ax = self.fig.add_subplot(gs[r:r+1,c:c+1], projection=proj)
+                    if plot3d == True:
+                        self.plot3D()
+                    else:
+                        self.plot2D(redraw=False)
+                    i+=1
+                except Exception as e:
+                    print(f"Error creating subplot at position ({r},{c}): {e}")
+                    continue
+        
+        # Only add legend if we have at least one successful subplot
+        if i > 0 and hasattr(self, 'ax'):
+            try:
+                handles, labels = self.ax.get_legend_handles_labels()
+                self.fig.legend(handles, labels, loc='center right', bbox_to_anchor=(0.9, 0.5))  #bbox_transform=self.fig.transFigure )
+            except Exception as e:
+                print(f"Error creating legend: {e}")
+                
+        # Restore the original data
+        self.data = data
         self.canvas.draw()
         return
  
@@ -545,8 +609,15 @@ class PlotViewer(Frame):
                     self.showWarning('%s is too many subplots' %len(g))
                     return
                 size = len(g)
-                nrows = int(round(np.sqrt(size),0))
-                ncols = int(np.ceil(size/nrows))
+                
+                # Use grid_width from layoutopts if available
+                gl = self.layoutopts
+                grid_width = gl.grid_width if hasattr(gl, 'grid_width') else int(np.ceil(np.sqrt(size)))
+                
+                # Calculate rows based on grid_width and size
+                nrows = int(np.ceil(size / grid_width))
+                ncols = grid_width
+                
                 self.ax.set_visible(False)
                 del kwargs['subplots']
                 for n,df in g:
@@ -554,13 +625,16 @@ class PlotViewer(Frame):
                         ax = self.fig.add_subplot(111)
                         self.ax.set_visible(True)
                     else:
-                        ax = self.fig.add_subplot(nrows,ncols,i)
+                        # Calculate row and column position based on grid_width
+                        row = (i-1) // grid_width
+                        col = (i-1) % grid_width
+                        ax = self.fig.add_subplot(nrows, ncols, i)
                     kwargs['legend'] = False #remove axis legends
                     try:
                         d = df.drop(by,axis=1) #remove grouping columns
                     except: # if by is a list
                         d = df.drop(columns=by)
-                    axs = self._doplot(d, ax, kind, False,  errorbars, useindex,
+                    axs = self._doplot(d, ax, kind, False, errorbars, useindex,
                                   bw=bw, yerr=None, kwargs=kwargs)
                     ax.set_title(n)
                     handles, labels = ax.get_legend_handles_labels()
@@ -570,8 +644,7 @@ class PlotViewer(Frame):
                     self.autoscale()
                 if  'sharex' in kwargs and kwargs['sharex'] == True:
                     self.autoscale('x')
-                self.fig.legend(handles, labels, loc='center right', #bbox_to_anchor=(0.9, 0),
-                                 bbox_transform=self.fig.transFigure )
+                self.fig.legend(handles, labels, loc='center right', bbox_to_anchor=(0.9, 0.5))  #bbox_transform=self.fig.transFigure )
                 axs_list = self.fig.get_axes() # Get all axes after subplot creation
  
             else:
@@ -610,7 +683,7 @@ class PlotViewer(Frame):
                 handles = []
                 slen = len(g)*len(ycols)
                 clrs = [cmap(float(i)/slen) for i in range(slen)]
-                for n, df in g:
+                for n,df in g:
                     for y in ycols:
                         kwargs['color'] = clrs[c]
                         currax, sc = self.scatter(df[[xcol,y]], ax=self.ax, **kwargs)
@@ -659,7 +732,11 @@ class PlotViewer(Frame):
         self.setFigureOptions(axs_list, lkwds) # Pass axs_list (could be single ax or list)
         scf = 12/kwds['fontsize']
         try:
-            self.fig.tight_layout()
+            # Suppress warnings about tight_layout
+            import warnings
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                self.fig.tight_layout()
             self.fig.subplots_adjust(top=0.9)
             if by != '':
                 self.fig.subplots_adjust(right=0.9)
@@ -699,17 +776,44 @@ class PlotViewer(Frame):
     def setAxisLabels(self, ax, kwds):
         """Set axis labels for a single axis"""
  
-        if ax is not None: # Check if ax is valid
-            if kwds['xlabel'] != '':
-                ax.set_xlabel(kwds['xlabel'])
-            if kwds['ylabel'] != '':
-                ax.set_ylabel(kwds['ylabel'])
-            ax.xaxis.set_visible(kwds['showxlabels'])
-            ax.yaxis.set_visible(kwds['showylabels'])
+        if ax is None:
+            return
+        
+        # Check if ax is a numpy array and handle accordingly
+        if isinstance(ax, np.ndarray):
+            # Handle array of axes
+            for a in ax.flatten():
+                if a is not None:
+                    self.setAxisLabels(a, kwds)
+            return
+        
+        import matplotlib.pyplot as plt
+        if 'xlabel' in kwds and kwds['xlabel'] != '':
+            ax.set_xlabel(kwds['xlabel'])
+        if 'ylabel' in kwds and kwds['ylabel'] != '':
+            ax.set_ylabel(kwds['ylabel'])
+        if 'title' in kwds and kwds['title'] != '':
+            ax.set_title(kwds['title'])
+        if 'rot' in kwds and kwds['rot'] != '':
             try:
-                ax.tick_params(labelrotation=kwds['rot'])
+                rot = float(kwds['rot'])
+                plt.xticks(rotation=rot)
             except:
-                logging.error("Exception occurred in setAxisLabels", exc_info=True)
+                pass
+        if 'logx' in kwds and kwds['logx'] == True:
+            ax.set_xscale('log')
+        if 'logy' in kwds and kwds['logy'] == True:
+            ax.set_yscale('log')
+        if 'grid' in kwds and kwds['grid'] == True:
+            ax.grid(True)
+        if 'legend' in kwds and kwds['legend'] == True:
+            # Check if 'loc' is in kwds, otherwise use default 'best'
+            loc = kwds.get('loc', 'best')
+            ax.legend(loc=loc)
+        if 'showxlabels' in kwds:
+            ax.xaxis.set_visible(kwds['showxlabels'])
+        if 'showylabels' in kwds:
+            ax.yaxis.set_visible(kwds['showylabels'])
         return
  
     def autoscale(self, axis='y'):
@@ -1002,9 +1106,9 @@ class PlotViewer(Frame):
         bw = kwds['bw']
  
         if cscale == 'log':
-            norm = mpl.colors.LogNorm()
+            norm=mpl.colors.LogNorm()
         else:
-            norm = None
+            norm=None
         if color != None:
             c = color
         elif clrcol != '':
@@ -1441,7 +1545,7 @@ class PlotViewer(Frame):
         self.main.destroy()
         return
  
-
+ 
 class TkOptions(object):
     """Class to generate tkinter widget dialog for dict of options"""
     def __init__(self, parent=None):
@@ -1450,7 +1554,7 @@ class TkOptions(object):
         self.parent = parent
         df = self.parent.table.model.df
         return
-
+ 
     def applyOptions(self):
         """Set the plot kwd arguments from the tk variables"""
 
@@ -1470,7 +1574,7 @@ class TkOptions(object):
                 kwds[i] = self.tkvars[i].get()
         self.kwds = kwds
         return
-
+ 
     def setWidgetStyles(self):
 
         style = Style()
@@ -1481,13 +1585,13 @@ class TkOptions(object):
             except:
                 pass
         return
-
+ 
     def apply(self):
         self.applyOptions()
         if self.callback != None:
             self.callback()
         return
-
+ 
     def showDialog(self, parent, layout='horizontal'):
         """Auto create tk vars, widgets for corresponding options and
            and return the frame"""
@@ -1497,7 +1601,7 @@ class TkOptions(object):
                                                               layout=layout)
         self.setWidgetStyles()
         return dialog
-
+ 
     def updateFromDict(self, kwds=None):
         """Update all widget tk vars using plot kwds dict"""
 
@@ -1513,14 +1617,14 @@ class TkOptions(object):
             if i in self.tkvars and self.tkvars[i]:
                 self.tkvars[i].set(kwds[i])
         return
-
+ 
     def increment(self, key, inc):
         """Increase the value of a widget"""
 
         new = self.kwds[key]+inc
         self.tkvars[key].set(new)
         return
-
+ 
 class MPLBaseOptions(TkOptions):
     """Class to provide a dialog for matplotlib options and returning
         the selected prefs"""
@@ -1530,7 +1634,7 @@ class MPLBaseOptions(TkOptions):
     legendlocs = ['best','upper right','upper left','lower left','lower right','right','center left',
                 'center right','lower center','upper center','center']
     defaultfont = 'monospace'
-
+ 
     def __init__(self, parent=None):
         """Setup variables"""
 
@@ -1586,7 +1690,7 @@ class MPLBaseOptions(TkOptions):
                 }
         self.kwds = {}
         return
-
+ 
     def applyOptions(self):
         """Set the plot kwd arguments from the tk variables"""
 
@@ -1595,7 +1699,7 @@ class MPLBaseOptions(TkOptions):
         plt.rc("font", family=self.kwds['font'], size=size)
         plt.rc('legend', fontsize=size-1)
         return
-
+ 
     def update(self, df):
         """Update data widget(s) when dataframe changes"""
 
@@ -1610,13 +1714,13 @@ class MPLBaseOptions(TkOptions):
         self.widgets['labelcol']['values'] = cols
         self.widgets['clrcol']['values'] = cols
         return
-
+ 
 class MPL3DOptions(MPLBaseOptions):
     """Class to provide 3D matplotlib options"""
 
     kinds = ['scatter', 'bar', 'contour', 'wireframe', 'surface']
     defaultfont = 'monospace'
-
+ 
     def __init__(self, parent=None):
         """Setup variables"""
 
@@ -1641,13 +1745,13 @@ class MPL3DOptions(MPLBaseOptions):
                  }
         self.kwds = {}
         return
-
+ 
     def applyOptions(self):
         """Set the plot kwd arguments from the tk variables"""
 
         TkOptions.applyOptions(self)
         return
-
+ 
 class PlotLayoutOptions(TkOptions):
     def __init__(self, parent=None):
         """Setup variables"""
@@ -1655,10 +1759,11 @@ class PlotLayoutOptions(TkOptions):
         self.parent = parent
         self.rows = 2
         self.cols = 2
+        self.grid_width = 3  # Default grid width for subplots
         self.top = .1
         self.bottom =.9
         return
-
+ 
     def showDialog(self, parent, layout='horizontal'):
         """Override because we need to add custom bits"""
 
@@ -1667,7 +1772,7 @@ class PlotLayoutOptions(TkOptions):
         self.plotgrid = c = PlotLayoutGrid(self.main)
         self.plotgrid.update_callback = self.updateFromGrid
         c.pack(side=LEFT,fill=Y,pady=2,padx=2)
-
+ 
         frame = Frame(self.main)
         frame.pack(side=LEFT,fill=Y)
         v = self.rowsvar = IntVar()
@@ -1688,7 +1793,22 @@ class PlotLayoutOptions(TkOptions):
                  variable=v,
                  command=self.resetGrid)
         w.pack(side=TOP,fill=X,pady=2)
-
+        
+        # Create a separate frame for grid width to ensure it's visible
+        gridframe = Frame(self.main)
+        gridframe.pack(side=LEFT,fill=Y,before=frame)
+        
+        # Add grid width control in its own frame
+        v = self.grid_width_var = IntVar()
+        v.set(self.grid_width)
+        w = Scale(gridframe,label='grid width',
+                 from_=1,to=6,
+                 orient='horizontal',
+                 resolution=1,
+                 variable=v,
+                 command=self.updateGridWidth)
+        w.pack(side=TOP,fill=X,pady=2)
+ 
         self.modevar = StringVar()
         self.modevar.set('normal')
         frame = LabelFrame(self.main, text='modes')
@@ -1696,7 +1816,7 @@ class PlotLayoutOptions(TkOptions):
         Radiobutton(frame, text='split data', variable=self.modevar, value='splitdata').pack(fill=X)
         Radiobutton(frame, text='multi views', variable=self.modevar, value='multiviews').pack(fill=X)
         frame.pack(side=LEFT,fill=Y)
-
+ 
         frame = LabelFrame(self.main, text='multi views')
         #v = self.multiviewsvar = BooleanVar()
         plot_types = ['histogram','line','scatter','boxplot','dotplot','area','density','bar','barh',
@@ -1706,10 +1826,10 @@ class PlotLayoutOptions(TkOptions):
         w.pack(fill=X)
         self.plottypeslistbox = v
         frame.pack(side=LEFT,fill=Y)
-
+ 
         frame = LabelFrame(self.main, text='split data')
         frame.pack(side=LEFT,fill=Y)
-
+ 
         frame = LabelFrame(self.main, text='subplots')
         v = self.axeslistvar = StringVar()
         v.set('')
@@ -1725,7 +1845,7 @@ class PlotLayoutOptions(TkOptions):
         frame.pack(side=LEFT,fill=Y)
         self.updateFromGrid()
         return self.main
-
+ 
     def setmultiviews(self, event=None):
         val=self.multiviewsvar.get()
         if val == 1:
@@ -1734,10 +1854,10 @@ class PlotLayoutOptions(TkOptions):
         if val == 0:
             self.parent.multiviews = False
         return
-
+ 
     def resetGrid(self, event=None):
         """update grid and redraw"""
-
+ 
         pg = self.plotgrid
         self.rows = pg.rows = self.rowsvar.get()
         self.cols = pg.cols = self.colsvar.get()
@@ -1746,7 +1866,7 @@ class PlotLayoutOptions(TkOptions):
         pg.redraw()
         self.updateFromGrid()
         return
-
+ 
     def updateFromGrid(self):
         pg = self.plotgrid
         r = self.selectedrows = pg.selectedrows
@@ -1754,28 +1874,34 @@ class PlotLayoutOptions(TkOptions):
         self.rowspan = len(r)
         self.colspan = len(c)
         return
-
+ 
     def updateAxesList(self):
         """Update axes list"""
-
+ 
         axes = list(self.parent.gridaxes.keys())
         self.axeslist['values'] = axes
         return
-
+ 
+    def updateGridWidth(self, event=None):
+        """Update grid width setting"""
+        
+        self.grid_width = self.grid_width_var.get()
+        return
+    
 class PlotLayoutGrid(BaseTable):
     def __init__(self, parent=None, width=280, height=205, rows=2, cols=2, **kwargs):
         BaseTable.__init__(self, parent, bg='white',
                          width=width, height=height )
         return
-
+ 
     def handle_left_click(self, event):
         BaseTable.handle_left_click(self, event)
-
+ 
 class AnnotationOptions(TkOptions):
     """This class also provides custom tools for adding items to the plot"""
     def __init__(self, parent=None):
         """Setup variables"""
-
+ 
         from matplotlib import colors
         import six
         colors = list(six.iteritems(colors.cnames))
@@ -1786,7 +1912,7 @@ class AnnotationOptions(TkOptions):
         defaultfont = 'monospace'
         fontweights = ['normal','bold','heavy','light','ultrabold','ultralight']
         alignments = ['left','center','right']
-
+ 
         self.parent = parent
         self.groups = grps = {'global labels':['title','xlabel','ylabel','rot'],
                               'textbox': ['boxstyle','facecolor','linecolor','rotate'],
@@ -1794,30 +1920,29 @@ class AnnotationOptions(TkOptions):
                               'text to add': ['text']
                              }
         self.groups = OrderedDict(sorted(grps.items()))
-        opts = self.opts = {
-                'title':{'type':'entry','default':'','width':20},
-                'xlabel':{'type':'entry','default':'','width':20},
-                'ylabel':{'type':'entry','default':'','width':20},
-                'facecolor':{'type':'combobox','default':'white','items': colors},
-                'linecolor':{'type':'combobox','default':'black','items': colors},
-                'fill':{'type':'combobox','default':'-','items': fillpatterns},
-                'rotate':{'type':'scale','default':0,'range':(-180,180),'interval':1,'label':'rotate'},
-                'boxstyle':{'type':'combobox','default':'square','items': bstyles},
-                'text':{'type':'scrolledtext','default':'','width':20},
-                'align':{'type':'combobox','default':'center','items': alignments},
-                'font':{'type':'combobox','default':defaultfont,'items':fonts},
-                'fontsize':{'type':'scale','default':12,'range':(4,50),'interval':1,'label':'font size'},
-                'fontweight':{'type':'combobox','default':'normal','items': fontweights},
-                'rot':{'type':'entry','default':0, 'label':'ticklabel angle'}
-                }
+        opts = self.opts = {'title':{'type':'entry','default':'','width':20},
+                            'xlabel':{'type':'entry','default':'','width':20},
+                            'ylabel':{'type':'entry','default':'','width':20},
+                            'facecolor':{'type':'combobox','default':'white','items': colors},
+                            'linecolor':{'type':'combobox','default':'black','items': colors},
+                            'fill':{'type':'combobox','default':'-','items': fillpatterns},
+                            'rotate':{'type':'scale','default':0,'range':(-180,180),'interval':1,'label':'rotate'},
+                            'boxstyle':{'type':'combobox','default':'square','items': bstyles},
+                            'text':{'type':'scrolledtext','default':'','width':20},
+                            'align':{'type':'combobox','default':'center','items': alignments},
+                            'font':{'type':'combobox','default':defaultfont,'items':fonts},
+                            'fontsize':{'type':'scale','default':12,'range':(4,50),'interval':1,'label':'font size'},
+                            'fontweight':{'type':'combobox','default':'normal','items': fontweights},
+                            'rot':{'type':'entry','default':0, 'label':'ticklabel angle'}
+                            }
         self.kwds = {}
         #used to store annotations
         self.textboxes = {}
         return
-
+ 
     def showDialog(self, parent, layout='horizontal'):
         """Override because we need to add custom widgets"""
-
+ 
         dialog, self.tkvars, self.widgets = dialogFromOptions(parent,
                                                               self.opts, self.groups,
                                                               layout=layout)
@@ -1825,10 +1950,10 @@ class AnnotationOptions(TkOptions):
         self.addWidgets()
         self.setWidgetStyles()
         return dialog
-
+ 
     def addWidgets(self):
         """Custom dialogs for manually adding annotation items like text"""
-
+ 
         frame = LabelFrame(self.main, text='add objects')
         v = self.objectvar = StringVar()
         v.set('textbox')
@@ -1842,36 +1967,36 @@ class AnnotationOptions(TkOptions):
                          textvariable=self.coordsvar,width=14)
         Label(frame,text='coord system').pack()
         w.pack(fill=BOTH,pady=2)
-
+ 
         b = Button(frame, text='Create', command=self.addObject)
         b.pack(fill=X,pady=2)
         b = Button(frame, text='Clear', command=self.clear)
         b.pack(fill=X,pady=2)
         frame.pack(side=LEFT,fill=Y)
         return
-
+ 
     def clear(self):
         """Clear annotations"""
         self.textboxes = {}
         self.parent.replot()
         return
-
+ 
     def addObject(self):
         """Add an annotation object"""
-
+ 
         o = self.objectvar.get()
         if o == 'textbox':
             self.addTextBox()
         elif o == 'arrow':
             self.addArrow()
         return
-
+ 
     def addTextBox(self, kwds=None, key=None):
         """Add a text annotation and store it using key"""
-
+ 
         import matplotlib.patches as patches
         from matplotlib.text import OffsetFrom
-
+ 
         self.applyOptions()
         if kwds == None:
             kwds = self.kwds
@@ -1890,7 +2015,7 @@ class AnnotationOptions(TkOptions):
                             weight=kwds['fontweight'])
         bbox_args = dict(boxstyle=bstyle, fc=fc, ec=ec, lw=1, alpha=0.9)
         arrowprops = dict(arrowstyle="-|>", connectionstyle="arc3")
-
+ 
         xycoords = kwds['xycoords']
         #if previously drawn will have xy values
         if 'xy' in kwds:
@@ -1899,7 +2024,7 @@ class AnnotationOptions(TkOptions):
         else:
             xy=(.1, .8)
             xycoords='axes fraction'
-
+ 
         an = ax.annotate(text, xy=xy, xycoords=xycoords,
                    ha=kwds['align'], va="center",
                    size=fontsize,
@@ -1922,10 +2047,10 @@ class AnnotationOptions(TkOptions):
         #canvas.show()
         canvas.draw()
         return
-
+ 
     def addArrow(self, kwds=None, key=None):
         """Add line/arrow"""
-
+ 
         fig = self.parent.fig
         canvas = self.parent.canvas
         ax = fig.get_axes()[0]
@@ -1934,21 +2059,21 @@ class AnnotationOptions(TkOptions):
         canvas.draw()
         #self.lines.append(line)
         return
-
+ 
     def redraw(self):
         """Redraw all stored annotations in the right places
            after a plot update"""
-
+ 
         #print (self.textboxes)
         for key in self.textboxes:
             self.addTextBox(self.textboxes[key], key)
         return
-
+ 
 class ExtraOptions(TkOptions):
     """Class for additional formatting options like styles"""
     def __init__(self, parent=None):
         """Setup variables"""
-
+ 
         self.parent = parent
         self.styles = sorted(plt.style.available)
         formats = ['auto','percent','eng','sci notation']
@@ -1976,10 +2101,10 @@ class ExtraOptions(TkOptions):
                             }
         self.kwds = {}
         return
-
+ 
     def showDialog(self, parent, layout='horizontal'):
         """Create dialog widgets"""
-
+ 
         dialog, self.tkvars, self.widgets = dialogFromOptions(parent,
                                                               self.opts, self.groups,
                                                               layout=layout)
@@ -1987,10 +2112,10 @@ class ExtraOptions(TkOptions):
         self.addWidgets()
         self.setWidgetStyles()
         return dialog
-
+ 
     def addWidgets(self):
         """Custom dialogs for manually adding annotation items like text"""
-
+ 
         main = self.main
         frame = LabelFrame(main, text='styles')
         v = self.stylevar = StringVar()
@@ -2004,24 +2129,24 @@ class ExtraOptions(TkOptions):
                   'reset', side=TOP, compound="left", width=20, padding=2)
         frame.pack(side=LEFT,fill='y')
         return main
-
+ 
     def apply(self):
         mpl.rcParams.update(mpl.rcParamsDefault)
         self.parent.style = self.stylevar.get()
         self.parent.replot()
         return
-
+ 
     def reset(self):
         mpl.rcParams.update(mpl.rcParamsDefault)
         self.parent.style = None
         self.parent.replot()
         return
-
+ 
 class AnimateOptions(TkOptions):
     """Class for live update/animation of plots."""
     def __init__(self, parent=None):
         """Setup variables"""
-
+ 
         self.parent = parent
         df = self.parent.table.model.df
         datacols = list(df.columns)
@@ -2053,20 +2178,20 @@ class AnimateOptions(TkOptions):
         self.kwds = {}
         self.running = False
         return
-
+ 
     def showDialog(self, parent, layout='horizontal'):
         """Create dialog widgets"""
-
+ 
         dialog, self.tkvars, self.widgets = dialogFromOptions(parent,
                                                               self.opts, self.groups,
                                                               layout=layout)
         self.main = dialog
         self.addWidgets()
         return dialog
-
+ 
     def addWidgets(self):
         """Custom dialogs for manually adding annotation items like text"""
-
+ 
         main = self.main
         frame = LabelFrame(main, text='Run')
         addButton(frame, 'START', self.start, None,
@@ -2075,7 +2200,7 @@ class AnimateOptions(TkOptions):
                   'reset', side=TOP, compound="left", width=20, padding=2)
         frame.pack(side=LEFT,fill='y')
         return main
-
+ 
     def getWriter(self):
         fps = self.kwds['fps']
         import matplotlib.animation as manimation
@@ -2084,10 +2209,10 @@ class AnimateOptions(TkOptions):
                         comment='Made using DataExplore')
         writer = FFMpegWriter(fps=fps, metadata=metadata)
         return writer
-
+ 
     def update(self):
         """do live updating"""
-
+ 
         self.applyOptions()
         savevid = self.kwds['savevideo']
         videofile  = self.kwds['filename']
@@ -2101,10 +2226,10 @@ class AnimateOptions(TkOptions):
         else:
             self.updateCurrent()
         return
-
+ 
     def updateCurrent(self, writer=None):
         """Iterate over current table and update plot"""
-
+ 
         kwds = self.kwds
         table = self.parent.table
         df = table.model.df
@@ -2129,16 +2254,16 @@ class AnimateOptions(TkOptions):
             else:
                 rows = range(i,i+w)
             data = df.iloc[list(rows),cols]
-
+ 
             if smooth == 1:
                 w=int(len(data)/10.0)
                 data = data.rolling(w).mean()
-
+ 
             self.parent.data = data
             #plot but don't redraw figure until the end
             self.parent.applyPlotoptions()
             self.parent.plotCurrent(redraw=False)
-
+ 
             if titledata is not None:
                 l = titledata.iloc[i]
                 self.parent.setOption('title',l)
@@ -2150,7 +2275,7 @@ class AnimateOptions(TkOptions):
                 self.parent.ax.set_ylim(ymin,ymax)
             #finally draw the plot
             self.parent.canvas.draw()
-
+ 
             table.multiplerowlist = rows
             if refresh == 1:
                 table.drawMultipleRows(rows)
@@ -2161,10 +2286,10 @@ class AnimateOptions(TkOptions):
                 writer.grab_frame()
         self.running = False
         return
-
+ 
     def stream(self):
         """Stream data into table and plot - not implemented yet"""
-
+ 
         import requests, io
         kwds = self.kwds
         table = self.parent.table
@@ -2175,18 +2300,16 @@ class AnimateOptions(TkOptions):
         raw = io.BytesIO(raw.content)
         print ('got data source')
         print(raw)
-        df = pd.read_csv(raw, sep=",")
-        print (df)
-
+ 
         table.model.df = df
         for i in range(0,100):
             table.selectAll()
             self.parent.replot()
         return
-
+ 
     def start(self):
         """start animation using a thread"""
-
+ 
         if self.running == True:
             return
         from threading import Thread
@@ -2196,10 +2319,10 @@ class AnimateOptions(TkOptions):
         t.start()
         self.thread = t
         return
-
+ 
     def stop(self):
         """Stop animation loop"""
-
+ 
         self.stopthread = True
         self.running = False
         time.sleep(.2)
@@ -2208,8 +2331,8 @@ class AnimateOptions(TkOptions):
         except:
             pass
         return
-
-
+ 
+ 
 def addFigure(parent, figure=None, resize_callback=None):
     """Create a tk figure and canvas in the parent frame"""
  
