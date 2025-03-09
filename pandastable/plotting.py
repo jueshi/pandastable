@@ -602,7 +602,7 @@ class PlotViewer(Frame):
             if by2 != '' and by2 in data.columns:
                 by = [by,by2]
             g = data.groupby(by)
- 
+
             if kwargs['subplots'] == True:
                 i=1
                 if len(g) > 30:
@@ -612,6 +612,18 @@ class PlotViewer(Frame):
                 
                 # Use grid_width from layoutopts if available
                 gl = self.layoutopts
+                
+                # If by2 is used, try to set rows/cols based on the group sizes
+                if isinstance(by, list) and len(by) == 2:
+                    # Get unique values in each grouping column to determine grid dimensions
+                    unique_by1 = len(data[by[0]].unique())
+                    unique_by2 = len(data[by[1]].unique())
+                    
+                    # Set grid_width to match first group by column's unique values
+                    # Only if it hasn't been manually set by the user
+                    if not hasattr(gl, '_grid_width_manually_set') or not gl._grid_width_manually_set:
+                        gl.grid_width = unique_by1
+                
                 grid_width = gl.grid_width if hasattr(gl, 'grid_width') else int(np.ceil(np.sqrt(size)))
                 
                 # Calculate rows based on grid_width and size
@@ -1762,6 +1774,7 @@ class PlotLayoutOptions(TkOptions):
         self.grid_width = 3  # Default grid width for subplots
         self.top = .1
         self.bottom =.9
+        self._grid_width_manually_set = False  # Flag to track if grid width is manually set
         return
  
     def showDialog(self, parent, layout='horizontal'):
@@ -1886,6 +1899,7 @@ class PlotLayoutOptions(TkOptions):
         """Update grid width setting"""
         
         self.grid_width = self.grid_width_var.get()
+        self._grid_width_manually_set = True  # Flag that grid width was manually set
         return
     
 class PlotLayoutGrid(BaseTable):
