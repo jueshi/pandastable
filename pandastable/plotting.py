@@ -136,6 +136,7 @@ class PlotViewer(Frame):
         self.setupGUI()
         self.updateStyle()
         self.currentdir = os.path.expanduser('~')
+        self.legend_visible = True  # Initialize legend visibility flag
         return
  
     def setupGUI(self):
@@ -180,7 +181,9 @@ class PlotViewer(Frame):
                   'save plot', side=side)
         addButton(bf, 'Fullscreen', self.toggle_fullscreen, images.expand_col(),
                   'toggle fullscreen mode for plot', side=side)
- 
+        addButton(bf, 'Legend', self.toggle_legend, images.plot_prefs(),
+                  'toggle legend visibility', side=side)
+
         #dicts to store global options, can be saved with projects
         self.globalvars = {}
         self.globalopts = OrderedDict({ 'dpi': 80, 'grid layout': False,'3D plot':False })
@@ -468,7 +471,7 @@ class PlotViewer(Frame):
         kwds = self.mplopts.kwds
         rows = gl.rows
         cols = gl.cols
-        grid_width = gl.grid_width if hasattr(gl, 'grid_width') else cols
+        grid_width = gl.grid_width if hasattr(gl, 'grid_width') else int(np.ceil(np.sqrt(len(plot_types))))
         
         c=0; i=0
         for r in range(0,rows):
@@ -629,7 +632,7 @@ class PlotViewer(Frame):
                     if not hasattr(gl, '_grid_width_manually_set') or not gl._grid_width_manually_set:
                         gl.grid_width = unique_by1
                 
-                grid_width = gl.grid_width if hasattr(gl, 'grid_width') else int(np.ceil(np.sqrt(size)))
+                grid_width = gl.grid_width if hasattr(gl, 'grid_width') else int(np.ceil(np.sqrt(len(g))))
                 
                 # Calculate rows based on grid_width and size
                 nrows = int(np.ceil(size / grid_width))
@@ -1578,6 +1581,47 @@ class PlotViewer(Frame):
             
         # Update the plot to adjust to new size
         self.canvas.draw()
+        return
+ 
+    def toggle_legend(self):
+        """Toggle the visibility of the legend in the plot"""
+        
+        if not hasattr(self, 'legend_visible'):
+            self.legend_visible = True
+        
+        # Toggle the legend state
+        self.legend_visible = not self.legend_visible
+        print(f"Legend visibility toggled to: {self.legend_visible}")
+        
+        # Directly manipulate the legend objects in the figure
+        if hasattr(self, 'fig'):
+            # Handle the main figure legend
+            if hasattr(self.fig, 'legends') and len(self.fig.legends) > 0:
+                for legend in self.fig.legends:
+                    legend.set_visible(self.legend_visible)
+                print(f"Toggled visibility of {len(self.fig.legends)} figure legends")
+            
+            # Handle legends in individual axes
+            legend_count = 0
+            for ax in self.fig.axes:
+                if ax.get_legend() is not None:
+                    ax.get_legend().set_visible(self.legend_visible)
+                    legend_count += 1
+            
+            if legend_count > 0:
+                print(f"Toggled visibility of {legend_count} axis legends")
+            
+            # Also update the mplopts for future plots
+            if hasattr(self, 'mplopts') and hasattr(self.mplopts, 'kwds'):
+                # Set to 1/0 instead of True/False for compatibility with all code paths
+                self.mplopts.kwds['legend'] = 1 if self.legend_visible else 0
+                print(f"Updated mplopts.kwds['legend'] to: {self.mplopts.kwds['legend']}")
+            
+            # Redraw the canvas to show changes
+            self.canvas.draw()
+        else:
+            print("Could not toggle legend: figure not available")
+            
         return
  
     def close(self):
