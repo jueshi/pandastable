@@ -333,7 +333,7 @@ class CSVBrowser(tk.Tk):
                 
                 if filter_text:
                     # Split filter text by AND (both & and +)
-                    filter_terms = [term.strip() for term in filter_text.replace('&', '+').split('+')]
+                    filter_terms = [term.strip() for term in filter_text.split()]
                     print(f"Searching for terms: {filter_terms}")  # Debug print
                     
                     # Start with all rows
@@ -711,7 +711,7 @@ class CSVBrowser(tk.Tk):
                     # Apply contains search if contains part exists
                     if contains_part:
                         # Split contains terms
-                        filter_terms = [term.strip() for term in contains_part.replace('&', '+').split('+')]
+                        filter_terms = [term.strip() for term in contains_part.split()]
                         print(f"Contains search terms: {filter_terms}")
                         
                         # Convert to string DataFrame for searching
