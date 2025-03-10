@@ -324,6 +324,7 @@ class CSVBrowser(tk.Tk):
         self.table.bind('<Down>', self.on_key_press)
 
     def merge_selected_csv_files(self):
+        """Merge selected CSV files with comprehensive error handling and column preservation"""
         try:
             # Check if table exists
             if not hasattr(self, 'table'):
@@ -339,22 +340,42 @@ class CSVBrowser(tk.Tk):
             # Get full paths of selected files
             selected_files = [self.df.iloc[idx]['File_Path'] for idx in selected_rows]
             
-            # Read the first CSV as the base file
-            base_df = pd.read_csv(selected_files[0])
-            base_filename = os.path.basename(selected_files[0])
+            # Read the first CSV as the base file with error handling
+            try:
+                base_df = pd.read_csv(selected_files[0], index_col=False)
+                base_filename = os.path.basename(selected_files[0])
+            except UnicodeDecodeError:
+                # Try different encodings
+                encodings = ['utf-8', 'latin1', 'cp1252']
+                for encoding in encodings:
+                    try:
+                        base_df = pd.read_csv(selected_files[0], encoding=encoding, index_col=False)
+                        base_filename = os.path.basename(selected_files[0])
+                        break
+                    except UnicodeDecodeError:
+                        continue
+                else:
+                    raise Exception(f"Failed to read {selected_files[0]} with any encoding")
             
             # Merge subsequent CSVs
             for file_path in selected_files[1:]:
-                # Read the next CSV
-                next_df = pd.read_csv(file_path)
+                try:
+                    # Try reading with default encoding
+                    next_df = pd.read_csv(file_path, index_col=False)
+                except UnicodeDecodeError:
+                    # Try different encodings
+                    encodings = ['utf-8', 'latin1', 'cp1252']
+                    for encoding in encodings:
+                        try:
+                            next_df = pd.read_csv(file_path, encoding=encoding, index_col=False)
+                            break
+                        except UnicodeDecodeError:
+                            continue
+                    else:
+                        raise Exception(f"Failed to read {file_path} with any encoding")
                 
-                # Check if headers are different
-                if not base_df.columns.equals(next_df.columns):
-                    # If headers are different, concatenate with original headers
-                    base_df = pd.concat([base_df, next_df], ignore_index=True)
-                else:
-                    # If headers are the same, concatenate
-                    base_df = pd.concat([base_df, next_df], ignore_index=True)
+                # Concatenate with outer join to preserve all columns
+                base_df = pd.concat([base_df, next_df], ignore_index=True, join='outer')
             
             # Create merged filename
             merged_filename = os.path.splitext(base_filename)[0] + "_merged.csv"
