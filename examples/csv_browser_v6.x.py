@@ -41,8 +41,8 @@ import os
 import sys
 
 # Add custom pandastable path to sys.path BEFORE importing pandastable
-custom_pandastable_path = r"C:\Users\juesh\OneDrive\Documents\windsurf\pandastable\pandastable"
-# custom_pandastable_path = r"C:\Users\JueShi\OneDrive - Astera Labs, Inc\Documents\windsurf\pandastable\pandastable"
+# custom_pandastable_path = r"C:\Users\juesh\OneDrive\Documents\windsurf\pandastable\pandastable"
+custom_pandastable_path = r"C:\Users\JueShi\OneDrive - Astera Labs, Inc\Documents\windsurf\pandastable\pandastable"
 if os.path.exists(custom_pandastable_path):
     # Insert at the beginning of sys.path to prioritize this version
     sys.path.insert(0, custom_pandastable_path)
@@ -322,6 +322,54 @@ class CSVBrowser(tk.Tk):
         self.table.bind('<ButtonRelease-1>', self.on_table_select)
         self.table.bind('<Up>', self.on_key_press)
         self.table.bind('<Down>', self.on_key_press)
+
+    def merge_selected_csv_files(self):
+        try:
+            # Check if table exists
+            if not hasattr(self, 'table'):
+                messagebox.showwarning("Merge CSV", "File table not initialized.")
+                return
+    
+            # Get selected rows indices
+            selected_rows = self.table.multiplerowlist
+            if not selected_rows or len(selected_rows) < 2:
+                messagebox.showwarning("Merge CSV", "Please select at least two CSV files to merge.")
+                return
+            
+            # Get full paths of selected files
+            selected_files = [self.df.iloc[idx]['File_Path'] for idx in selected_rows]
+            
+            # Read the first CSV as the base file
+            base_df = pd.read_csv(selected_files[0])
+            base_filename = os.path.basename(selected_files[0])
+            
+            # Merge subsequent CSVs
+            for file_path in selected_files[1:]:
+                # Read the next CSV
+                next_df = pd.read_csv(file_path)
+                
+                # Check if headers are different
+                if not base_df.columns.equals(next_df.columns):
+                    # If headers are different, concatenate with original headers
+                    base_df = pd.concat([base_df, next_df], ignore_index=True)
+                else:
+                    # If headers are the same, concatenate
+                    base_df = pd.concat([base_df, next_df], ignore_index=True)
+            
+            # Create merged filename
+            merged_filename = os.path.splitext(base_filename)[0] + "_merged.csv"
+            merged_filepath = os.path.join(os.path.dirname(selected_files[0]), merged_filename)
+            
+            # Save merged CSV
+            base_df.to_csv(merged_filepath, index=False)
+            
+            messagebox.showinfo("Merge CSV", f"Files merged successfully!\nMerged file: {merged_filename}")
+            
+            # Refresh file list to show the new merged file
+            self.update_file_list()
+        
+        except Exception as e:
+            messagebox.showerror("Merge CSV Error", f"An error occurred while merging files:\n{str(e)}")
 
     def filter_files(self, *args):
         """Filter files based on the filter text"""
@@ -1205,6 +1253,14 @@ class CSVBrowser(tk.Tk):
         ttk.Button(self.toolbar, text="Reveal in Explorer", 
                 command=self.reveal_in_explorer).pack(side="left", padx=5)                
 
+        # Add Merge CSV button
+        self.merge_csv_button = ttk.Button(
+            self.toolbar, 
+            text="Merge CSV", 
+            command=self.merge_selected_csv_files
+        )
+        self.merge_csv_button.pack(side="left", padx=2)
+
         # Add open in Excel button
         ttk.Button(self.toolbar, text="Open in Excel",
                 command=self.open_in_excel).pack(side="left", padx=5)
@@ -1223,15 +1279,15 @@ class CSVBrowser(tk.Tk):
 
         # Add save plot settings button
         ttk.Button(self.toolbar, text="Save Plot Settings",
-                command=self.save_plot_settings_to_file).pack(side="left", padx=5)
+                command=self.save_plot_settings_to_file).pack(side="right", padx=5)
                 
         # Add load plot settings button
         ttk.Button(self.toolbar, text="Load Plot Settings",
-                command=self.load_plot_settings_from_file).pack(side="left", padx=5)
+                command=self.load_plot_settings_from_file).pack(side="right", padx=5)
         
         # Add save table settings button
         ttk.Button(self.toolbar, text="Save Table Settings",
-                command=self.save_table_settings).pack(side="left", padx=5)
+                command=self.save_table_settings).pack(side="right", padx=5)
 
     def browse_folder(self):
         """Open a directory chooser dialog and update the file list"""
