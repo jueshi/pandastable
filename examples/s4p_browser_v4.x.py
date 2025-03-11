@@ -2367,9 +2367,26 @@ class SParamBrowser(tk.Tk):
             device = rf.Network(os.path.normpath(file1_path))
             fixture = rf.Network(os.path.normpath(file2_path))
 
-            # Check if the frequencies match
-            if not np.array_equal(device.f, fixture.f):
-                device = device.interpolate(fixture.f)
+            # Find common frequency range
+            min_freq = max(device.f[0], fixture.f[0])
+            max_freq = min(device.f[-1], fixture.f[-1])
+            if min_freq > max_freq:
+                messagebox.showerror("Error", "No overlapping frequency range between files")
+                return
+
+            # Get frequency points within common range
+            device_mask = (device.f >= min_freq) & (device.f <= max_freq)
+            fixture_mask = (fixture.f >= min_freq) & (fixture.f <= max_freq)
+            device_points = sum(device_mask)
+            fixture_points = sum(fixture_mask)
+
+            # Use frequency points from file with higher resolution
+            if device_points >= fixture_points:
+                target_freq = device.f[device_mask]
+                fixture = fixture.interpolate(target_freq)
+            else:
+                target_freq = fixture.f[fixture_mask]
+                device = device.interpolate(target_freq)
 
             if device.nports != 4 or fixture.nports != 4:
                 messagebox.showerror("Error", "Both networks must be 4-port for this embedding method")
@@ -2462,9 +2479,26 @@ class SParamBrowser(tk.Tk):
             device = rf.Network(os.path.normpath(file1_path))
             fixture = rf.Network(os.path.normpath(file2_path))
 
-            # Check if the frequencies match
-            if not np.array_equal(device.f, fixture.f):
-                device = device.interpolate(fixture.f)
+            # Find common frequency range
+            min_freq = max(device.f[0], fixture.f[0])
+            max_freq = min(device.f[-1], fixture.f[-1])
+            if min_freq > max_freq:
+                messagebox.showerror("Error", "No overlapping frequency range between files")
+                return
+
+            # Get frequency points within common range
+            device_mask = (device.f >= min_freq) & (device.f <= max_freq)
+            fixture_mask = (fixture.f >= min_freq) & (fixture.f <= max_freq)
+            device_points = sum(device_mask)
+            fixture_points = sum(fixture_mask)
+
+            # Use frequency points from file with higher resolution
+            if device_points >= fixture_points:
+                target_freq = device.f[device_mask]
+                fixture = fixture.interpolate(target_freq)
+            else:
+                target_freq = fixture.f[fixture_mask]
+                device = device.interpolate(target_freq)
 
             if device.nports != 4 or fixture.nports != 4:
                 messagebox.showerror("Error", "Both networks must be 4-port for this embedding method")
@@ -2933,10 +2967,26 @@ class SParamBrowser(tk.Tk):
             dut_with_fixture = self.last_networks[0]
             fixture = self.last_networks[1]
 
-            # Check if frequencies match
-            if not np.allclose(dut_with_fixture.f, fixture.f):
-                messagebox.showerror("Error", "Frequency points must match between the two files")
+            # Find common frequency range
+            min_freq = max(dut_with_fixture.f[0], fixture.f[0])
+            max_freq = min(dut_with_fixture.f[-1], fixture.f[-1])
+            if min_freq > max_freq:
+                messagebox.showerror("Error", "No overlapping frequency range between files")
                 return
+
+            # Get frequency points within common range
+            dut_mask = (dut_with_fixture.f >= min_freq) & (dut_with_fixture.f <= max_freq)
+            fixture_mask = (fixture.f >= min_freq) & (fixture.f <= max_freq)
+            dut_points = sum(dut_mask)
+            fixture_points = sum(fixture_mask)
+
+            # Use frequency points from file with higher resolution
+            if dut_points >= fixture_points:
+                target_freq = dut_with_fixture.f[dut_mask]
+                fixture = fixture.interpolate(target_freq)
+            else:
+                target_freq = fixture.f[fixture_mask]
+                dut_with_fixture = dut_with_fixture.interpolate(target_freq)
 
             # Reorder ports to group differential pairs
             reorder_idx = [0, 2, 1, 3]
@@ -3008,10 +3058,26 @@ class SParamBrowser(tk.Tk):
             dut_with_fixture = self.last_networks[0]
             fixture = self.last_networks[1]
 
-            # Check if frequencies match
-            if not np.allclose(dut_with_fixture.f, fixture.f):
-                messagebox.showerror("Error", "Frequency points must match between the two files")
+            # Find common frequency range
+            min_freq = max(dut_with_fixture.f[0], fixture.f[0])
+            max_freq = min(dut_with_fixture.f[-1], fixture.f[-1])
+            if min_freq > max_freq:
+                messagebox.showerror("Error", "No overlapping frequency range between files")
                 return
+
+            # Get frequency points within common range
+            dut_mask = (dut_with_fixture.f >= min_freq) & (dut_with_fixture.f <= max_freq)
+            fixture_mask = (fixture.f >= min_freq) & (fixture.f <= max_freq)
+            dut_points = sum(dut_mask)
+            fixture_points = sum(fixture_mask)
+
+            # Use frequency points from file with higher resolution
+            if dut_points >= fixture_points:
+                target_freq = dut_with_fixture.f[dut_mask]
+                fixture = fixture.interpolate(target_freq)
+            else:
+                target_freq = fixture.f[fixture_mask]
+                dut_with_fixture = dut_with_fixture.interpolate(target_freq)
 
             # Reorder ports to group differential pairs
             reorder_idx = [0, 2, 1, 3]
