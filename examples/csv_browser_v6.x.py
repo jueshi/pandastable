@@ -134,8 +134,8 @@ class CSVBrowser(tk.Tk):
         self.saved_table_settings = None
         
         # # Initialize frame attributes
-        # self.pt_frame = ttk.Frame(self)
-        # self.csv_frame = ttk.Frame(self)
+        self.pt_frame = ttk.Frame(self)
+        self.csv_frame = ttk.Frame(self)
         
         # Set default directory
         # self.current_directory = os.path.dirname(os.path.abspath(__file__))
@@ -268,14 +268,14 @@ class CSVBrowser(tk.Tk):
         filter_menu.add_command(label="Filtering Instructions", state='disabled', font=('Arial', 10, 'bold'))
         filter_menu.add_separator()
         filter_menu.add_command(label="Basic Search: Enter any text to match", state='disabled')
-        filter_menu.add_command(label="Multiple Terms: Use '+' or '&' to combine", state='disabled')
+        filter_menu.add_command(label="Multiple Terms: Use space ' 'to combine", state='disabled')
         filter_menu.add_command(label="Exclude Terms: Use '!' prefix", state='disabled')
         filter_menu.add_separator()
         filter_menu.add_command(label="Examples:", state='disabled', font=('Arial', 10, 'bold'))
         filter_menu.add_command(label="'csv': Show files with 'csv'", state='disabled')
-        filter_menu.add_command(label="'2024 + report': Files with both terms", state='disabled')
+        filter_menu.add_command(label="'2024 report': Files with both terms", state='disabled')
         filter_menu.add_command(label="'!temp': Exclude files with 'temp'", state='disabled')
-        filter_menu.add_command(label="'csv + !old': CSV files, not old", state='disabled')
+        filter_menu.add_command(label="'csv !old': CSV files, not old", state='disabled')
         
         def show_filter_menu(event):
             filter_menu.tk_popup(event.x_root, event.y_root)
