@@ -233,6 +233,10 @@ class SParamBrowser(tk.Tk):
             self.paned.sashpos(0, 400)  # 400 pixels from left
         else:
             self.paned.sashpos(0, 300)  # 300 pixels from top
+            
+        # Initialize fullscreen state and bind escape key
+        self.is_plot_fullscreen = False
+        self.bind('<Escape>', lambda e: self.toggle_plot_fullscreen())
 
     def setup_file_browser(self):
         """Setup the file browser panel with pandastable"""
@@ -1266,7 +1270,8 @@ class SParamBrowser(tk.Tk):
         ttk.Button(self.toolbar, text="Browse Folder", command=self.browse_folder).pack(side=tk.LEFT, padx=2)
         ttk.Button(self.toolbar, text="Load Subfolders", command=self.load_subfolders).pack(side=tk.LEFT, padx=2)
         ttk.Button(self.toolbar, text="Refresh", command=self.refresh_file_list).pack(side=tk.RIGHT, padx=2)
-        
+        ttk.Button(self.toolbar, text="Fullscreen Plot", command=self.toggle_plot_fullscreen).pack(side=tk.RIGHT, padx=2)
+
         ttk.Button(self.toolbar, text="Move Files", command=self.move_selected_files).pack(side=tk.LEFT, padx=2)
         ttk.Button(self.toolbar, text="Copy Files", command=self.copy_selected_files).pack(side=tk.LEFT, padx=2)
         ttk.Button(self.toolbar, text="Delete Files", command=self.delete_selected_files).pack(side=tk.LEFT, padx=2)
@@ -2366,6 +2371,151 @@ class SParamBrowser(tk.Tk):
         # Redraw the canvas
         self.canvas.draw()
 
+    def toggle_plot_fullscreen(self, event=None):
+        """Toggle the plot area between normal and fullscreen mode using Escape key"""
+        if not hasattr(self, 'is_plot_fullscreen'):
+            self.is_plot_fullscreen = False
+            
+        if not self.is_plot_fullscreen:
+            # Enter fullscreen mode - hide file frame to show only plot area
+            try:
+                # Store complete screen state before modifying
+                self.screen_state = {
+                    'figure_size': self.figure.get_size_inches() if hasattr(self, 'figure') else None,
+                    'subplot_params': {
+                        'top': self.figure.subplotpars.top,
+                        'bottom': self.figure.subplotpars.bottom,
+                        'left': self.figure.subplotpars.left,
+                        'right': self.figure.subplotpars.right,
+                        'hspace': self.figure.subplotpars.hspace,
+                        'wspace': self.figure.subplotpars.wspace
+                    } if hasattr(self, 'figure') else None,
+                    'window_geometry': self.geometry(),
+                    'plot_frame_info': self.sparam_plot_frame.grid_info() if hasattr(self, 'sparam_plot_frame') else None,
+                    'row_weights': [
+                        (i, self.sparam_view_container.grid_rowconfigure(i)['weight'])
+                        for i in range(10)
+                    ] if hasattr(self, 'sparam_view_container') else None,
+                    'ui_elements_state': {
+                        'marker_frame': {'visible': hasattr(self, 'marker_frame'), 'info': self.marker_frame.grid_info() if hasattr(self, 'marker_frame') else None},
+                        'marker_text': {'visible': hasattr(self, 'marker_text'), 'info': self.marker_text.grid_info() if hasattr(self, 'marker_text') else None},
+                        'plot_control_frame': {'visible': hasattr(self, 'plot_control_frame'), 'info': self.plot_control_frame.grid_info() if hasattr(self, 'plot_control_frame') else None},
+                        'zoom_frame': {'visible': hasattr(self, 'zoom_frame'), 'info': self.zoom_frame.grid_info() if hasattr(self, 'zoom_frame') else None}
+                    }
+                }
+                
+                # Hide the file frame
+                self.paned.forget(self.file_frame)
+                
+                # Hide UI elements
+                ui_elements = ['marker_frame', 'marker_text', 'plot_control_frame', 'zoom_frame']
+                for element in ui_elements:
+                    if hasattr(self, element):
+                        getattr(self, element).grid_remove()
+                
+                # Configure plot frame for fullscreen
+                if hasattr(self, 'sparam_plot_frame'):
+                    self.sparam_plot_frame.grid_remove()
+                    self.sparam_plot_frame.grid(row=0, column=0, sticky='nsew', padx=0, pady=0)
+                    self.sparam_plot_frame.pack_propagate(False)
+                
+                # Maximize figure
+                if hasattr(self, 'figure'):
+                    self.figure.set_size_inches(14, 10)
+                    self.figure.subplots_adjust(top=0.98, bottom=0.05, left=0.05, right=0.98, hspace=0.1)
+                    self.esc_text = self.figure.text(0.99, 0.01, "Press ESC to exit fullscreen", 
+                                                   ha='right', va='bottom', fontsize=9, alpha=0.7,
+                                                   bbox=dict(boxstyle='round,pad=0.5', 
+                                                           facecolor='white', alpha=0.7))
+                
+                # Configure container for fullscreen
+                if hasattr(self, 'sparam_view_container'):
+                    for i in range(10):
+                        self.sparam_view_container.rowconfigure(i, weight=0)
+                    self.sparam_view_container.rowconfigure(0, weight=1)
+                    self.sparam_view_container.columnconfigure(0, weight=1)
+                
+            except Exception as e:
+                print(f"Error entering fullscreen mode: {e}")
+                import traceback
+                traceback.print_exc()
+                
+        else:
+            # Exit fullscreen mode - restore file frame and UI elements
+            try:
+                # Restore file frame
+                self.paned.insert(0, self.file_frame, weight=1)
+                
+                if hasattr(self, 'screen_state'):
+                    try:
+                        # Capture geometry before any other operations
+                        geometry_to_restore = self.screen_state['window_geometry']
+                        
+                        # Restore UI elements with their original grid info
+                        ui_state = self.screen_state['ui_elements_state']
+                        for element, state in ui_state.items():
+                            if state['visible']:
+                                widget = getattr(self, element)
+                                if state['info']:
+                                    widget.grid(**state['info'])
+                                else:
+                                    widget.grid()
+                        
+                        # Restore figure state
+                        if hasattr(self, 'figure'):
+                            if self.screen_state['figure_size'] is not None:
+                                self.figure.set_size_inches(*self.screen_state['figure_size'])
+                            
+                            if self.screen_state['subplot_params'] is not None:
+                                params = self.screen_state['subplot_params']
+                                self.figure.subplots_adjust(**params)
+                            
+                            if hasattr(self, 'esc_text'):
+                                self.esc_text.remove()
+                                delattr(self, 'esc_text')
+                        
+                        # Restore plot frame
+                        if hasattr(self, 'sparam_plot_frame'):
+                            self.sparam_plot_frame.grid_remove()
+                            if self.screen_state['plot_frame_info']:
+                                self.sparam_plot_frame.grid(**self.screen_state['plot_frame_info'])
+                            else:
+                                self.sparam_plot_frame.grid(row=1, column=0, sticky='nsew', padx=5, pady=5)
+                            self.sparam_plot_frame.pack_propagate(True)
+                        
+                        # Restore container state
+                        if hasattr(self, 'sparam_view_container'):
+                            if self.screen_state['row_weights']:
+                                for row, weight in self.screen_state['row_weights']:
+                                    self.sparam_view_container.rowconfigure(row, weight=weight)
+                            else:
+                                for i in range(10):
+                                    self.sparam_view_container.rowconfigure(i, weight=0)
+                                self.sparam_view_container.rowconfigure(1, weight=1)
+                            self.sparam_view_container.columnconfigure(0, weight=1)
+                    
+                    finally:
+                        # Clean up screen state
+                        delattr(self, 'screen_state')
+                        
+                        # Schedule geometry restoration after cleanup
+                        if geometry_to_restore:
+                            self.after(100, lambda: self.restore_geometry_delayed(geometry_to_restore))
+                
+            except Exception as e:
+                print(f"Error exiting fullscreen mode: {e}")
+                import traceback
+                traceback.print_exc()
+        
+        # Update state and redraw
+        self.is_plot_fullscreen = not self.is_plot_fullscreen
+        if hasattr(self, 'canvas'):
+            self.canvas.draw()
+            
+    def restore_geometry_delayed(self, geometry):
+        """Helper method to restore window geometry after a delay"""
+        self.geometry(geometry)
+        
     def embed_left_sparams(self):
         """Embed the second S-parameter to the left side of the first (formerly cascaded)."""
         selected_rows = self.table.multiplerowlist
@@ -2821,15 +2971,15 @@ class SParamBrowser(tk.Tk):
                 
             # Create button frame at the top
             btn_frame = ttk.Frame(self.smith_window)
-            btn_frame.pack(fill=tk.X, padx=5, pady=2)
+            btn_frame.pack(fill="x", padx=5, pady=2)
             
             # Add port mapping button
             ttk.Button(btn_frame, text="Port Mapping", 
-                      command=self.show_port_mapping_dialog).pack(side=tk.LEFT, padx=2)
+                      command=self.show_port_mapping_dialog).pack(side="left", padx=2)
             
             # Add close button
             ttk.Button(btn_frame, text="Close", 
-                      command=self.close_smith_chart).pack(side=tk.RIGHT, padx=2)
+                      command=self.close_smith_chart).pack(side="right", padx=2)
                 
             # Create figure with subplots based on checkbox status
             num_plots = sum([self.plot_sdd11_var.get(), self.plot_sdd21_var.get()])
@@ -2840,7 +2990,7 @@ class SParamBrowser(tk.Tk):
                 
             fig = Figure(figsize=(8, 4 if num_plots > 1 else 8))
             canvas = FigureCanvasTkAgg(fig, master=self.smith_window)
-            canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+            canvas.get_tk_widget().pack(fill="both", expand=True)
             
             # Add toolbar
             toolbar = NavigationToolbar2Tk(canvas, self.smith_window)
@@ -3216,7 +3366,7 @@ class SParamBrowser(tk.Tk):
                             abcd_sqrt = scipy.linalg.sqrtm(abcd_matrix[f])
                             s_sqrt[f] = rf.t2s(abcd_sqrt.reshape(1, 2, 2))[0]
                         except Exception as e:
-                            print(f"Error at frequency point {f}: {str(e)}")
+                            print(f"Error at frequency point {f}: {e}")
                             print(f"ABCD matrix:\n{abcd_matrix[f]}")
                             raise
                 else:
