@@ -156,6 +156,7 @@ class SParamBrowser(tk.Tk):
         # Add time domain resolution control variables
         self.padding_factor = tk.StringVar(value='4')  # Zero-padding factor
         self.window_type = tk.StringVar(value='exponential')  # Window function type
+        self.freq_limit = tk.StringVar(value='')  # Add frequency limit variable for TDR
         
         # Add Smith chart window variable
         self.smith_window = None
@@ -527,9 +528,6 @@ class SParamBrowser(tk.Tk):
             self.marker_frame = ttk.LabelFrame(self.sparam_view_container, text="Markers")
             self.marker_frame.grid(row=2, column=0, sticky='ew', padx=5, pady=5)
             
-            # self.marker_entry = ttk.Entry(self.marker_frame, width=15)
-            # self.marker_entry.pack(side=tk.LEFT, padx=5)
-            
             self.add_marker_button = ttk.Button(self.marker_frame, text="Add Marker", command=self.add_marker)
             self.add_marker_button.pack(side=tk.LEFT, padx=5)
             
@@ -591,11 +589,11 @@ class SParamBrowser(tk.Tk):
             zoom_frame = ttk.LabelFrame(self.sparam_view_container, text="Zoom")
             zoom_frame.grid(row=5, column=0, sticky='ew', padx=2, pady=2)
             
-            # Create main zoom controls container
+            # Create zoom container
             zoom_container = ttk.Frame(zoom_frame)
             zoom_container.pack(fill='x', padx=2, pady=2)
             
-            # Frequency domain controls - more compact
+            # Frequency controls - more compact
             freq_frame = ttk.Frame(zoom_container)
             freq_frame.pack(side=tk.LEFT, padx=2)
             ttk.Label(freq_frame, text="f(GHz):").pack(side=tk.LEFT)
@@ -658,7 +656,7 @@ class SParamBrowser(tk.Tk):
             btn_frame.pack(side=tk.RIGHT, padx=2)
             ttk.Button(btn_frame, text="Apply", command=self.apply_zoom, width=6).pack(side=tk.LEFT, padx=1)
             ttk.Button(btn_frame, text="Reset", command=self.reset_zoom, width=6).pack(side=tk.LEFT, padx=1)
-
+    
             # Add time domain settings frame with compact layout
             td_settings_frame = ttk.LabelFrame(self.sparam_view_container, text="Time Domain")
             td_settings_frame.grid(row=6, column=0, sticky='ew', padx=2, pady=2)
@@ -686,6 +684,16 @@ class SParamBrowser(tk.Tk):
                                       values=['none', 'hamming', 'hanning', 'blackman', 'kaiser', 'flattop', 'exponential'],
                                       width=8, state='readonly')
             window_combo.pack(side=tk.LEFT, padx=1)
+            
+            ttk.Separator(settings_container, orient='vertical').pack(side=tk.LEFT, padx=4, fill='y')
+            
+            # Add frequency limit control - more compact
+            freq_limit_frame = ttk.Frame(settings_container)
+            freq_limit_frame.pack(side=tk.LEFT, padx=2)
+            ttk.Label(freq_limit_frame, text="Freq Limit (GHz):").pack(side=tk.LEFT)
+            ttk.Entry(freq_limit_frame, textvariable=self.freq_limit, width=6).pack(side=tk.LEFT, padx=1)
+            
+            ttk.Separator(settings_container, orient='vertical').pack(side=tk.LEFT, padx=4, fill='y')
             
             # Add Low Pass checkbox
             lowpass_frame = ttk.Frame(settings_container)
@@ -922,10 +930,22 @@ class SParamBrowser(tk.Tk):
                     self.current_file = file_path
                 
                 try:
-                    network = rf.Network(os.path.normpath(file_path))
+                    # First try loading with scikit-rf's native loader
+                    try:
+                        network = rf.Network(os.path.normpath(file_path))
+                    except Exception as rf_error:
+                        print(f"Native loader failed, trying custom parser: {str(rf_error)}")
+                        # If native loader fails, use our custom parser
+                        freq, s_params = self.parse_sparam_file(file_path)
+                        network = rf.Network()
+                        network.frequency = rf.Frequency.from_f(freq, unit='hz')
+                        network.s = s_params
+                        network.z0 = 50  # Standard impedance
+                        network.name = os.path.splitext(os.path.basename(file_path))[0]  # Set name from filename
                     networks.append(network)
                 except Exception as e:
                     print(f"Error loading network {file_path}: {str(e)}")
+                    traceback.print_exc()
                     continue
             
             if networks:
@@ -945,7 +965,7 @@ class SParamBrowser(tk.Tk):
         try:
             with open(file_path, 'r') as f:
                 lines = f.readlines()
-
+    
             # Find header line and data format
             header = None
             format_line = None
@@ -956,105 +976,61 @@ class SParamBrowser(tk.Tk):
                 if line.strip().startswith('#'):
                     if 'hz' in line.lower():  # Look for the main header line
                         header = line.strip().split()
-                        print(f"Found header: {header}")
                     elif 'format' in line.lower():
                         format_line = line
-                        print(f"Found format line: {format_line}")
-                elif line.strip().startswith('!'):
-                    data_start = i + 1
-                else:
+                elif line.strip() and not line.strip().startswith('!'):
+                    data_start = i
                     break
-
+    
             if not header:
                 raise ValueError("No valid header found in file")
-
+    
             # Get frequency unit from header
             unit = 'hz'  # Default to Hz
             for i, val in enumerate(header):
                 if val.lower() in ['hz', 'khz', 'mhz', 'ghz']:
                     unit = val.lower()
                     break
-            print(f"Frequency unit: {unit}")
-
+    
             # Parse the data section
             data = []
-            current_freq = None
-            current_values = []
-            invalid_lines = 0
-
-            i = data_start
-            while i < len(lines):
-                line = lines[i].strip()
-                
-                if not line or line.startswith('#') or line.startswith('!'):
-                    i += 1
+            for line in lines[data_start:]:
+                line = line.strip()
+                if not line or line.startswith('!') or line.startswith('#'):
                     continue
-
+                    
                 try:
                     values = [float(x) for x in line.split()]
-                    
-                    # Check if this is a single-line format (33 values) or multi-line format
-                    if len(values) == 33:  # Single line format
+                    if len(values) == 9:  # One frequency point + 8 S-parameter values
                         data.append(values)
-                        i += 1
-                        continue
-                        
-                    # Multi-line format handling
-                    if len(values) == 9 and current_freq is None:  # First line of group
-                        current_freq = values[0]
-                        current_values = values[1:]
-                    elif len(values) == 8 and current_freq is not None:  # Continuation line
-                        current_values.extend(values)
-                    else:
-                        print(f"Unexpected line format at line {i+1}: {line}")
-                        i += 1
-                        continue
-
-                    # Check if we have a complete set of values for multi-line format
-                    if len(current_values) >= 32:  # 4x4 matrix * 2 values per entry
-                        all_values = [current_freq] + current_values[:32]  # Trim any extra values
-                        data.append(all_values)
-                        current_freq = None
-                        current_values = []
-                        
-                except Exception as e:
-                    invalid_lines += 1
-                    if invalid_lines <= 5:
-                        print(f"Line {i+1}: Failed to parse: {str(e)}")
-                        print(f"Line content: {line}")
-                
-                i += 1
-
-            print(f"Found {len(data)} valid frequency points")
-            print(f"Found {invalid_lines} invalid lines")
-
+                except ValueError:
+                    continue
+    
             if not data:
                 raise ValueError("No valid data found in file")
-
+    
             # Convert to numpy array
             data = np.array(data)
-            print(f"Data array shape: {data.shape}")
-
+            
             # Extract frequency and S-parameters
-            freq = data[:, 0]
-            s_data = data[:, 1:]  # All columns except frequency
+            freq = data[:, 0]  # First column is frequency
+            s_data = data[:, 1:]  # Rest is S-parameter data
+    
+            # For 2-port network, format is:
+            # f Re(S11) Im(S11) Re(S21) Im(S21) Re(S12) Im(S12) Re(S22) Im(S22)
+            s_params = np.zeros((len(freq), 2, 2), dtype=complex)
             
-            # Convert magnitude/angle format to complex S-parameters
-            n_freq = len(freq)
-            s_params = np.zeros((n_freq, 4, 4), dtype=complex)
-            
-            for i in range(4):
-                for j in range(4):
-                    idx = 2*(i*4 + j)  # Index into the magnitude/angle data
-                    mag = s_data[:, idx]
-                    ang = s_data[:, idx+1] * np.pi/180  # Convert to radians
-                    s_params[:, i, j] = mag * np.exp(1j*ang)
-            
+            # Construct complex S-parameters
+            s_params[:, 0, 0] = s_data[:, 0] + 1j * s_data[:, 1]  # S11
+            s_params[:, 1, 0] = s_data[:, 2] + 1j * s_data[:, 3]  # S21
+            s_params[:, 0, 1] = s_data[:, 4] + 1j * s_data[:, 5]  # S12
+            s_params[:, 1, 1] = s_data[:, 6] + 1j * s_data[:, 7]  # S22
+    
+            print(f"Successfully parsed {len(freq)} frequency points")
             print(f"Frequency range: {freq[0]} to {freq[-1]} {unit}")
-            print(f"S-parameter matrix shape: {s_params.shape}")
-
+            
             return freq, s_params
-
+    
         except Exception as e:
             print(f"Error parsing S-parameter file: {str(e)}")
             raise
@@ -1677,18 +1653,35 @@ class SParamBrowser(tk.Tk):
         if self.last_networks:
             self.plot_network_params(*self.last_networks, show_mag=self.plot_mag_var.get(), show_phase=self.plot_phase_var.get())
 
-    def calculate_tdr(self, network=None):
-        """Calculate Time Domain Reflectometry (TDR) response using MATLAB-style implementation"""
+    def calculate_tdr(self, network=None, freq_limit=None):
+        """Calculate Time Domain Reflectometry (TDR) response using MATLAB-style implementation
+        
+        Args:
+            network: Network object with S-parameters (default: None, uses first network)
+            freq_limit: Optional upper frequency limit in Hz (default: None, uses full range)
+        """
         print(f"\n==== TDR Calculation (MATLAB-style) ====")
         print(f"Padding Factor: {self.padding_factor.get()}")
         print(f"Window Type: {self.window_type.get()}")
-    
+        if freq_limit:
+            print(f"Frequency Limit: {freq_limit/1e9:.2f} GHz")
+
         if network is None:
             network = self.data[0]  # Use first network if none specified
         
         # Get frequency points and S-parameters
         f = network.f
         s11 = network.s[:, 0, 0]  # Get S11 parameter
+        
+        # Apply frequency limit if specified
+        if freq_limit is not None:
+            if freq_limit < f[0]:
+                raise ValueError(f"Frequency limit ({freq_limit/1e9:.2f} GHz) is below minimum frequency ({f[0]/1e9:.2f} GHz)")
+            # Find indices where frequency is below limit
+            freq_mask = f <= freq_limit
+            f = f[freq_mask]
+            s11 = s11[freq_mask]
+            print(f"Applied frequency limit: {len(freq_mask[freq_mask])} of {len(freq_mask)} points kept")
         
         # === Step 1: Preprocessing ===
         # First ensure we have DC (f=0) component
@@ -2008,6 +2001,12 @@ class SParamBrowser(tk.Tk):
             show_pulse = self.show_pulse_var.get()
             show_impedance = self.show_impedance_var.get()
             
+            # Get frequency limit if specified
+            try:
+                freq_limit = float(self.freq_limit.get()) * 1e9 if self.freq_limit.get() else None
+            except ValueError:
+                freq_limit = None
+            
             if show_tdr or show_pulse or show_impedance:
                 if show_tdr and show_pulse and show_impedance:
                     # Create three subplots for TDR, pulse response, and impedance profile
@@ -2034,11 +2033,10 @@ class SParamBrowser(tk.Tk):
                     label = f'Net{i+1}' if len(net.name) == 0 else net.name
                     
                     if show_tdr:
-                        distance, tdr = self.calculate_tdr(net)
+                        distance, tdr = self.calculate_tdr(net, freq_limit=freq_limit)
                         ax_plot = ax_tdr if show_pulse or show_impedance else ax
                         # Use PLTS-style plotting
                         self.plot_tdr_and_impedance(ax_plot, distance, tdr, label)
-
                     
                     if show_pulse:
                         time, pulse = self.calculate_pulse_response(net)
@@ -2054,7 +2052,7 @@ class SParamBrowser(tk.Tk):
                         ax_plot.legend()
                     
                     if show_impedance:
-                        distance, tdr = self.calculate_tdr(net)
+                        distance, tdr = self.calculate_tdr(net, freq_limit=freq_limit)
                         impedance = self.calculate_impedance_profile(tdr)
                         ax_plot = ax_imp if show_tdr or show_pulse else ax
                         # Plot impedance vs. distance
@@ -3405,7 +3403,7 @@ class SParamBrowser(tk.Tk):
                             abcd_sqrt = scipy.linalg.sqrtm(abcd_matrix[f])
                             s_sqrt[f] = rf.t2s(abcd_sqrt.reshape(1, 2, 2))[0]
                         except Exception as e:
-                            print(f"Error at frequency point {f}: {str(e)}")
+                            print(f"Error at frequency point {f}: {e}")
                             print(f"ABCD matrix:\n{abcd_matrix[f]}")
                             raise
                 else:
