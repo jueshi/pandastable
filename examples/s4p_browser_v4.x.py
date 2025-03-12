@@ -505,18 +505,6 @@ class SParamBrowser(tk.Tk):
             self.sparam_view_container = ttk.Frame(self.sparam_frame)
             self.sparam_view_container.pack(fill="both", expand=True)
             
-            # Add filter entry for S-parameter viewer using grid
-            self.sparam_filter_frame = ttk.Frame(self.sparam_view_container)
-            self.sparam_filter_frame.grid(row=0, column=0, sticky='ew', padx=5, pady=5)
-            self.sparam_filter_frame.columnconfigure(1, weight=1)  # Make the entry expand
-            
-            # Use the existing StringVar - don't add another trace
-            # print(f"Current filter value: '{self.filter_text.get()}'")  # Debug print
-            
-            # # Create and set up the entry widget
-            # filter_entry = ttk.Entry(self.sparam_filter_frame, textvariable=self.filter_text)
-            # filter_entry.grid(row=0, column=1, sticky='ew')
-            
             # Create frame for plot using grid
             self.sparam_plot_frame = ttk.Frame(self.sparam_view_container)
             self.sparam_plot_frame.grid(row=1, column=0, sticky='nsew', padx=5, pady=5)
@@ -913,7 +901,7 @@ class SParamBrowser(tk.Tk):
         """Handle table row selection"""
         try:
             selected_rows = self.table.multiplerowlist
-            if not selected_rows or len(selected_rows) == 0:
+            if not selected_rows:
                 return
                 
             networks = []
@@ -1275,30 +1263,49 @@ class SParamBrowser(tk.Tk):
 
     def setup_toolbar(self):
         """Setup the toolbar with necessary controls"""
-        # File operation buttons
         ttk.Button(self.toolbar, text="Browse Folder", command=self.browse_folder).pack(side=tk.LEFT, padx=2)
         ttk.Button(self.toolbar, text="Load Subfolders", command=self.load_subfolders).pack(side=tk.LEFT, padx=2)
+        ttk.Button(self.toolbar, text="Refresh", command=self.refresh_file_list).pack(side=tk.RIGHT, padx=2)
+        
         ttk.Button(self.toolbar, text="Move Files", command=self.move_selected_files).pack(side=tk.LEFT, padx=2)
         ttk.Button(self.toolbar, text="Copy Files", command=self.copy_selected_files).pack(side=tk.LEFT, padx=2)
         ttk.Button(self.toolbar, text="Delete Files", command=self.delete_selected_files).pack(side=tk.LEFT, padx=2)
         ttk.Button(self.toolbar, text="Rename All Files", command=self.rename_all_files).pack(side=tk.LEFT, padx=2)
+
         ttk.Button(self.toolbar, text="Embed-Left", command=self.embed_left_sparams).pack(side=tk.LEFT, padx=2)
         ttk.Button(self.toolbar, text="Embed-Right", command=self.embed_right_sparams).pack(side=tk.LEFT, padx=2)
         ttk.Button(self.toolbar, text="De-embed Left", command=self.deembed_sparams).pack(side=tk.LEFT, padx=2)
         ttk.Button(self.toolbar, text="De-embed Right", command=self.deembed_sparams_right).pack(side=tk.LEFT, padx=2)
+        
         ttk.Button(self.toolbar, text="Open in Notepad++", command=self.open_in_notepadpp).pack(side=tk.LEFT, padx=2)
         ttk.Button(self.toolbar, text="Smith Chart", command=self.show_smith_chart).pack(side=tk.LEFT, padx=2)
         ttk.Button(self.toolbar, text="Port Mapping", command=self.show_port_mapping_dialog).pack(side=tk.LEFT, padx=2)
-        ttk.Button(self.toolbar, text="Refresh", command=self.refresh_file_list).pack(side=tk.RIGHT, padx=2)
-        
-        # Add S-parameter conversion button
-        self.convert_sparam_btn = ttk.Button(
-            self.toolbar, 
-            text="Convert 2x → 1x S-Param", 
-            command=self.convert_2x_to_1x_sparam
-        )
-        self.convert_sparam_btn.pack(side=tk.LEFT, padx=5)
 
+        
+        # Add 2x to 1x conversion menu button
+        self.conversion_button = ttk.Menubutton(self.toolbar, text="Convert 2x → 1x")
+        self.conversion_button.pack(side="left", padx=2)
+        
+        self.conversion_menu = tk.Menu(self.conversion_button, tearoff=0)
+        self.conversion_button["menu"] = self.conversion_menu
+        
+        self.conversion_menu.add_command(
+            label="ABCD Matrix Method",
+            command=lambda: self.convert_2x_to_1x_sparam(method='abcd'))
+        self.conversion_menu.add_command(
+            label="对称网络假设法 (Symmetric Network)",
+            command=lambda: self.convert_2x_to_1x_sparam(method='symmetric'))
+        
+        # # Add filter controls
+        # ttk.Label(self.toolbar, text="Filter:").pack(side="left", padx=2)
+        # self.filter_entry = ttk.Entry(self.toolbar, textvariable=self.filter_text)
+        # self.filter_entry.pack(side="left", padx=2)
+        
+        # # Add include subfolders checkbox
+        # ttk.Checkbutton(self.toolbar, text="Include Subfolders", 
+        #                variable=self.include_subfolders,
+        #                command=self.update_file_list).pack(side="left", padx=2)
+        
     def open_in_notepadpp(self):
         """Open the selected S-parameter file in Notepad++"""
         selected_rows = self.table.multiplerowlist
@@ -2275,7 +2282,7 @@ class SParamBrowser(tk.Tk):
             # Extract 4x4 single-ended S-parameters at this frequency
             s_f = s[f]
             # Convert to differential mode (2x2 matrix)
-            sdd[f] = (M @ s_f @ M_inv)[:2, :2]  # Take only the differential mode quadrant
+            sdd[f] = M @ s_f @ M_inv
             
         return sdd
 
@@ -2465,7 +2472,8 @@ class SParamBrowser(tk.Tk):
 
             # Update the GUI
             self.refresh_file_list()
-            messagebox.showinfo("Success", f"Left-side embedding completed successfully\nSaved as: {output_filename}")
+            messagebox.showinfo("Success", 
+                f"Left-side embedding completed successfully\nSaved as: {output_filename}")
             
         except Exception as e:
             messagebox.showerror("Error", f"Failed to embed S-parameters:\n{str(e)}")
@@ -2579,7 +2587,8 @@ class SParamBrowser(tk.Tk):
 
             # Update the GUI
             self.refresh_file_list()
-            messagebox.showinfo("Success", f"Right-side embedding completed successfully\nSaved as: {output_filename}")
+            messagebox.showinfo("Success", 
+                f"Right-side embedding completed successfully\nSaved as: {output_filename}")
 
         except Exception as e:
             messagebox.showerror("Error", f"Failed to embed S-parameters:\n{str(e)}")
@@ -3061,7 +3070,8 @@ class SParamBrowser(tk.Tk):
             # Refresh the file list to show the new file
             self.refresh_file_list()
             
-            messagebox.showinfo("Success", f"Left-side de-embedding completed successfully\nSaved as: {output_filename}")
+            messagebox.showinfo("Success", 
+                f"Left-side de-embedding completed successfully\nSaved as: {output_filename}")
             
         except Exception as e:
             messagebox.showerror("Error", f"De-embedding failed: {str(e)}")
@@ -3154,17 +3164,22 @@ class SParamBrowser(tk.Tk):
             # Refresh the file list to show the new file
             self.refresh_file_list()
             
-            messagebox.showinfo("Success", f"Right-side de-embedding completed successfully\nSaved as: {output_filename}")
+            messagebox.showinfo("Success", 
+                f"Right-side de-embedding completed successfully\nSaved as: {output_filename}")
             
         except Exception as e:
             messagebox.showerror("Error", f"Right-side de-embedding failed: {str(e)}")
             traceback.print_exc()
 
-    def convert_2x_to_1x_sparam(self):
+    def convert_2x_to_1x_sparam(self, method='abcd'):
         """
-        Convert 2x S-parameters to 1x S-parameters using ABCD parameter method.
+        Convert 2x S-parameters to 1x S-parameters using specified method.
         For .s2p files: Converts a 2-port measurement of cascaded devices to single device
         For .s4p files: Converts a 4-port measurement of cascaded differential pairs to single pair
+        
+        Args:
+            method: Conversion method, either 'abcd' (ABCD matrix method) or 
+                   'symmetric' (对称网络假设法, symmetric network assumption)
         
         Port mapping for 4-port networks:
         - Ports 1,3: Input differential pair (P1 positive, P3 negative)
@@ -3191,8 +3206,23 @@ class SParamBrowser(tk.Tk):
             # Check port count
             if network.nports == 2:
                 # For 2-port networks (single-ended devices)
-                abcd_matrix = rf.s2t(network.s)  # S to T (ABCD) conversion
-                
+                if method == 'abcd':
+                    # ABCD matrix method
+                    abcd_matrix = rf.s2t(network.s)  # S to T (ABCD) conversion
+                    # Calculate matrix square root
+                    s_sqrt = np.zeros_like(network.s)
+                    for f in range(len(network.f)):
+                        try:
+                            abcd_sqrt = scipy.linalg.sqrtm(abcd_matrix[f])
+                            s_sqrt[f] = rf.t2s(abcd_sqrt.reshape(1, 2, 2))[0]
+                        except Exception as e:
+                            print(f"Error at frequency point {f}: {str(e)}")
+                            print(f"ABCD matrix:\n{abcd_matrix[f]}")
+                            raise
+                else:
+                    # Symmetric network assumption method
+                    s_sqrt = self.split_symmetric_adapter(network.s)
+                    
             elif network.nports == 4:
                 # For 4-port networks (differential pairs)
                 # Original port order: [P1+, P2+, P3-, P4-]
@@ -3215,8 +3245,22 @@ class SParamBrowser(tk.Tk):
                     # Convert to differential mode (2x2 matrix)
                     sdd[f] = M @ s_f @ M_inv
                 
-                # Convert differential S-parameters to ABCD
-                abcd_matrix = rf.s2t(sdd)
+                if method == 'abcd':
+                    # ABCD matrix method
+                    abcd_matrix = rf.s2t(sdd)
+                    # Calculate matrix square root
+                    s_sqrt = np.zeros_like(sdd)
+                    for f in range(len(network.f)):
+                        try:
+                            abcd_sqrt = scipy.linalg.sqrtm(abcd_matrix[f])
+                            s_sqrt[f] = rf.t2s(abcd_sqrt.reshape(1, 2, 2))[0]
+                        except Exception as e:
+                            print(f"Error at frequency point {f}: {str(e)}")
+                            print(f"ABCD matrix:\n{abcd_matrix[f]}")
+                            raise
+                else:
+                    # Symmetric network assumption method
+                    s_sqrt = self.split_symmetric_adapter(sdd)
                 
             else:
                 messagebox.showerror("Error", 
@@ -3225,46 +3269,35 @@ class SParamBrowser(tk.Tk):
                     "- 4-port networks (.s4p files)")
                 return
             
-            # Calculate matrix square root using NumPy
-            try:
-                abcd_sqrt = np.zeros_like(abcd_matrix)
-                for f in range(len(network.f)):
-                    abcd_sqrt[f] = scipy.linalg.sqrtm(abcd_matrix[f])
-            except Exception as e:
-                messagebox.showerror("Error", 
-                    "Failed to calculate ABCD matrix square root.\n"
-                    "This usually means the file is not a valid 2X measurement.\n\n"
-                    "Make sure the file contains S-parameters of:\n"
-                    "- Two identical devices in series (for .s2p)\n"
-                    "- Two identical differential pairs in series (for .s4p)")
-                return
-            
-            # Convert back to S-parameters
-            s_sqrt = rf.t2s(abcd_sqrt)
-            
             # Create a new network with the converted S-parameters
-            sqrt_network = rf.Network(s=s_sqrt, frequency=network.frequency)
-            
-            # Save the converted network in the same directory with "_1x" postfix
+            sqrt_network = rf.Network(
+                s=s_sqrt,
+                frequency=network.frequency,
+                name='Left-Embedded Network'
+            )
+
+            # Save the converted network in the same directory with appropriate postfix
             directory = os.path.dirname(self.current_file)
             filename = os.path.basename(self.current_file)
             base_name, ext = os.path.splitext(filename)
             
-            # Determine output filename based on input file type
+            # Determine output filename based on input file type and method
+            postfix = "_1x_sym" if method == 'symmetric' else "_1x"
             if ext == '.s2p':
-                output_filename = os.path.join(directory, f"{base_name}_1x.s1p")
+                output_filename = os.path.join(directory, f"{base_name}{postfix}.s1p")
                 msg_detail = "Extracted single-ended device parameters"
             elif ext == '.s4p':
-                output_filename = os.path.join(directory, f"{base_name}_1x.s2p")
+                output_filename = os.path.join(directory, f"{base_name}{postfix}.s2p")
                 msg_detail = "Extracted differential pair parameters"
             
             # Write the converted network
             sqrt_network.write_touchstone(output_filename)
             
+            method_name = "symmetric network assumption" if method == 'symmetric' else "ABCD matrix"
             messagebox.showinfo("Success", 
                 f"Converted S-parameters saved to:\n{output_filename}\n\n"
-                f"{msg_detail} from a cascaded measurement\n"
-                "of two identical devices.")
+                f"{msg_detail} using {method_name} method\n"
+                "from a cascaded measurement of two identical devices.")
             
             # Refresh the file list to show the new file
             self.update_file_list()
@@ -3275,6 +3308,34 @@ class SParamBrowser(tk.Tk):
                 "Make sure the file contains valid S-parameters\n"
                 "of two identical devices in series.")
             traceback.print_exc()
+
+    def split_symmetric_adapter(self, s):
+        """
+        Simplified decomposition method for symmetric adapters.
+        适用于对称适配器的简化分解方法
+        
+        Args:
+            s: Combined S-parameters of cascaded symmetric adapters
+            
+        Returns:
+            Single adapter S-parameters assuming symmetry
+        """
+        nfreqs = s.shape[0]
+        s_single = np.zeros_like(s)
+        
+        for f in range(len(s)):
+            s11_combined = s[f, 0, 0]
+            s21_combined = s[f, 1, 0]
+            
+            # Calculate single adapter S-parameters (assuming symmetry)
+            # 计算单个适配器的S参数（假设对称）
+            s11_single = 1 - np.sqrt(1 - s11_combined + 1e-20)  # Add small constant for numerical stability
+            s21_single = np.sqrt(s21_combined + 1e-20)  # Add small constant for numerical stability
+            
+            s_single[f] = np.array([[s11_single, s21_single],
+                                  [s21_single, s11_single]])
+            
+        return s_single
 
 if __name__ == "__main__":
     app = SParamBrowser()
