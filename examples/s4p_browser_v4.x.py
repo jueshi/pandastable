@@ -22,8 +22,8 @@ import os
 import sys
 
 # Add custom pandastable path to sys.path BEFORE importing pandastable
-# custom_pandastable_path = r"C:\Users\juesh\OneDrive\Documents\windsurf\pandastable\pandastable"
-custom_pandastable_path = r"C:\Users\JueShi\OneDrive - Astera Labs, Inc\Documents\windsurf\pandastable\pandastable"
+custom_pandastable_path = r"C:\Users\juesh\OneDrive\Documents\windsurf\pandastable\pandastable"
+# custom_pandastable_path = r"C:\Users\JueShi\OneDrive - Astera Labs, Inc\Documents\windsurf\pandastable\pandastable"
 if os.path.exists(custom_pandastable_path):
     # Insert at the beginning of sys.path to prioritize this version
     sys.path.insert(0, custom_pandastable_path)
@@ -56,6 +56,7 @@ import mpl_toolkits.axisartist.grid_finder as grid_finder
 from scipy import signal
 # Import ICZT function from local module
 from iczt_function import calculate_tdr_iczt
+import scipy.linalg
 
 class SmithAxes(PolarAxes):
     """Custom Smith chart projection"""
@@ -160,7 +161,7 @@ class SParamBrowser(tk.Tk):
         self.smith_window = None
         
         # Set and validate default directory
-        default_dir = r"C:\Users\JueShi\Astera Labs, Inc\Silicon Engineering - T3_MPW_Rx_C2M_Test_Results"
+        default_dir = os.path.join(os.path.expanduser("~"), "OneDrive", "Documents", "MATLAB", "alab")  # Start in MATLAB/alab directory
         self.current_directory = default_dir if self.validate_directory(default_dir) else None
         
         if self.current_directory is None:
@@ -912,14 +913,22 @@ class SParamBrowser(tk.Tk):
         """Handle table row selection"""
         try:
             selected_rows = self.table.multiplerowlist
-            if not selected_rows:
+            if not selected_rows or len(selected_rows) == 0:
                 return
                 
             networks = []
             for row in selected_rows:
+                if row >= len(self.df):  # Check if row index is valid
+                    continue
+                    
                 file_path = self.df.iloc[row].get('File_Path', os.path.join(self.current_directory, self.df.iloc[row]['Name']))
                 # Fix potential path separator inconsistencies
                 file_path = os.path.normpath(file_path.replace('\\', '/'))
+                
+                # Update current_file when a single file is selected
+                if len(selected_rows) == 1:
+                    self.current_file = file_path
+                
                 try:
                     network = rf.Network(os.path.normpath(file_path))
                     networks.append(network)
@@ -1281,6 +1290,14 @@ class SParamBrowser(tk.Tk):
         ttk.Button(self.toolbar, text="Smith Chart", command=self.show_smith_chart).pack(side=tk.LEFT, padx=2)
         ttk.Button(self.toolbar, text="Port Mapping", command=self.show_port_mapping_dialog).pack(side=tk.LEFT, padx=2)
         ttk.Button(self.toolbar, text="Refresh", command=self.refresh_file_list).pack(side=tk.RIGHT, padx=2)
+        
+        # Add S-parameter conversion button
+        self.convert_sparam_btn = ttk.Button(
+            self.toolbar, 
+            text="Convert 2x → 1x S-Param", 
+            command=self.convert_2x_to_1x_sparam
+        )
+        self.convert_sparam_btn.pack(side=tk.LEFT, padx=5)
 
     def open_in_notepadpp(self):
         """Open the selected S-parameter file in Notepad++"""
@@ -1445,18 +1462,14 @@ class SParamBrowser(tk.Tk):
                 if row < len(self.df):
                     filename = self.df.iloc[row]['Name']
                     src_path = os.path.join(self.current_directory, filename)
-                    dst_path = os.path.join(dest_dir, filename)
-                    
-                    # Check if file already exists in destination
-                    if os.path.exists(dst_path):
-                        if not messagebox.askyesno("File Exists", 
-                            f"File {filename} already exists in destination.\nDo you want to overwrite it?"):
-                            continue
-                    
-                    # Copy the file
-                    shutil.copy2(src_path, dst_path)  # copy2 preserves metadata
-                    copied_files.append(filename)
-            
+
+                    try:
+                        # Copy the file
+                        shutil.copy2(src_path, dest_dir)  # copy2 preserves metadata
+                        copied_files.append(filename)
+                    except Exception as e:
+                        messagebox.showerror("Error", f"Failed to copy file {filename}:\n{str(e)}")
+
             if copied_files:
                 messagebox.showinfo("Success", f"Successfully copied {len(copied_files)} file(s) to {dest_dir}")
         except Exception as e:
@@ -1728,13 +1741,12 @@ class SParamBrowser(tk.Tk):
         # Focus only on first 20% of the time domain response
         gate_length = int(len(tdr_raw) * 0.2)
         gate = np.ones(len(tdr_raw))
+        
+        # Apply cosine rolloff from cutoff to end
         for i in range(gate_length, len(tdr_raw)):
-            # Gentle roll-off for gate
-            if i < 2*gate_length:
-                gate[i] = 0.5 * (1 + np.cos(np.pi * (i - gate_length) / gate_length))
-            else:
-                gate[i] = 0
-                
+            # Cosine taper from 1 to 0
+            gate[i] = 0.5 * (1 + np.cos(np.pi * (i - gate_length) / gate_length))
+        
         tdr_gated = tdr_raw * gate
         
         # === Step 8: Extract real part and process for display ===
@@ -2242,33 +2254,29 @@ class SParamBrowser(tk.Tk):
             traceback.print_exc()
 
     def s2sdd(self, s):
-        """Convert single-ended S-parameters to differential S-parameters with port mapping"""
-        # Apply port mapping to the S-matrix
-        mapped_s = np.zeros_like(s)
-        for i in range(4):
-            for j in range(4):
-                mapped_s[:, i, j] = s[:, self.port_mapping[i]-1, self.port_mapping[j]-1]
+        """
+        Convert single-ended S-parameters to differential S-parameters
+        """
+        # Check if input is a 2-port network
+        if s.shape[1] == 2 and s.shape[2] == 2:
+            return s  # Already 2-port, no conversion needed
+            
+        # For 4-port networks, convert to differential
+        nfreqs = s.shape[0]
+        sdd = np.zeros((nfreqs, 2, 2), dtype=complex)
         
-        # Now calculate differential parameters from mapped matrix
-        # Assuming ports are arranged as:
-        # Logical ports 1,3 = differential pair 1 (p,n)
-        # Logical ports 2,4 = differential pair 2 (p,n)
-        sdd = np.zeros((s.shape[0], 2, 2), dtype=complex)
+        # Mixed-mode conversion matrix
+        M = np.array([[1, 0, -1, 0],
+                     [0, 1, 0, -1]]) / np.sqrt(2)
+        M_inv = M.T / 2  # M^-1 = M^T/2 for this specific M
         
-        # Calculate differential S-parameters
-        for f in range(s.shape[0]):
-            # Convert 4x4 single-ended to 2x2 differential
-            # For each differential port pair (i,j):
-            # Sdd = 1/2[(Sij - Si(j+2)) - (S(i+2)j - S(i+2)(j+2))]
-            sdd[f, 0, 0] = 0.5 * ((mapped_s[f, 0, 0] - mapped_s[f, 0, 2]) - 
-                                 (mapped_s[f, 2, 0] - mapped_s[f, 2, 2]))  # SDD11
-            sdd[f, 0, 1] = 0.5 * ((mapped_s[f, 0, 1] - mapped_s[f, 0, 3]) - 
-                                 (mapped_s[f, 2, 1] - mapped_s[f, 2, 3]))  # SDD12
-            sdd[f, 1, 0] = 0.5 * ((mapped_s[f, 1, 0] - mapped_s[f, 1, 2]) - 
-                                 (mapped_s[f, 3, 0] - mapped_s[f, 3, 2]))  # SDD21
-            sdd[f, 1, 1] = 0.5 * ((mapped_s[f, 1, 1] - mapped_s[f, 1, 3]) - 
-                                 (mapped_s[f, 3, 1] - mapped_s[f, 3, 3]))  # SDD22
-        
+        # Convert to differential mode
+        for f in range(nfreqs):
+            # Extract 4x4 single-ended S-parameters at this frequency
+            s_f = s[f]
+            # Convert to differential mode (2x2 matrix)
+            sdd[f] = (M @ s_f @ M_inv)[:2, :2]  # Take only the differential mode quadrant
+            
         return sdd
 
     def update_plot(self):
@@ -2705,15 +2713,25 @@ class SParamBrowser(tk.Tk):
 
     def set_safe_directory(self):
         """Set a safe default directory if the specified one doesn't exist"""
-        # Try user's documents folder first
-        documents = os.path.expanduser("~/Documents")
-        if self.validate_directory(documents):
-            self.current_directory = documents
-        else:
-            # Fall back to the directory containing this script
-            self.current_directory = os.path.dirname(os.path.abspath(__file__))
+        # Try common locations in order of preference
+        possible_dirs = [
+            os.path.join(os.path.expanduser("~"), "OneDrive", "Documents", "MATLAB", "alab"),  # MATLAB/alab directory
+            os.path.join(os.path.expanduser("~"), "OneDrive", "Documents", "LTspiceXVII"),  # LTspice directory
+            os.path.join(os.path.expanduser("~"), "OneDrive", "Documents"),  # Documents directory
+            os.path.expanduser("~"),  # User's home directory
+            os.path.dirname(os.path.abspath(__file__)),  # Script directory
+            os.getcwd()  # Current working directory
+        ]
         
-        print(f"Using directory: {self.current_directory}")
+        for dir in possible_dirs:
+            if self.validate_directory(dir):
+                self.current_directory = dir
+                print(f"Using directory: {dir}")
+                return
+                
+        # If all else fails, use the current directory
+        self.current_directory = os.getcwd()
+        print(f"Using current directory: {self.current_directory}")
 
     def read_data_file(self, file_path):
         """Read data from the specified S-parameter file and return frequency and data points.
@@ -3018,17 +3036,19 @@ class SParamBrowser(tk.Tk):
             deembedded_s = deembedded_s[:, back_idx][:, :, back_idx]
 
             # Create a new network with the de-embedded parameters
-            deembedded = rf.Network()
-            deembedded.frequency = dut_with_fixture.frequency
-            deembedded.s = deembedded_s  # Convert back to S-parameters
-            
+            deembedded = rf.Network(
+                s=deembedded_s,
+                frequency=dut_with_fixture.frequency,
+                name='Left-Deembedded Network'
+            )
+
             # Save the de-embedded network
             base_name = os.path.splitext(dut_with_fixture.name)[0]
             output_filename = os.path.join(self.current_directory, f"{base_name}_deembedded_left.s4p")
             # Normalize path to fix separator issues
             output_filename = os.path.normpath(output_filename)
             deembedded.write_touchstone(output_filename)
-            
+
             # Add to the list of networks with a descriptive name
             deembedded.name = f"{base_name}_deembedded_left"
             self.last_networks = [deembedded]
@@ -3109,10 +3129,12 @@ class SParamBrowser(tk.Tk):
             deembedded_s = deembedded_s[:, back_idx][:, :, back_idx]
 
             # Create a new network with the de-embedded parameters
-            deembedded = rf.Network()
-            deembedded.frequency = dut_with_fixture.frequency
-            deembedded.s = deembedded_s  # Convert back to S-parameters
-            
+            deembedded = rf.Network(
+                s=deembedded_s,
+                frequency=dut_with_fixture.frequency,
+                name='Right-Deembedded Network'
+            )
+
             # Save the de-embedded network
             base_name = os.path.splitext(dut_with_fixture.name)[0]
             output_filename = os.path.join(self.current_directory, f"{base_name}_deembedded_right.s4p")
@@ -3136,6 +3158,122 @@ class SParamBrowser(tk.Tk):
             
         except Exception as e:
             messagebox.showerror("Error", f"Right-side de-embedding failed: {str(e)}")
+            traceback.print_exc()
+
+    def convert_2x_to_1x_sparam(self):
+        """
+        Convert 2x S-parameters to 1x S-parameters using ABCD parameter method.
+        For .s2p files: Converts a 2-port measurement of cascaded devices to single device
+        For .s4p files: Converts a 4-port measurement of cascaded differential pairs to single pair
+        
+        Port mapping for 4-port networks:
+        - Ports 1,3: Input differential pair (P1 positive, P3 negative)
+        - Ports 2,4: Output differential pair (P2 positive, P4 negative)
+        """
+        if not self.current_file:
+            messagebox.showerror("Error", "Please select an S-parameter file first.")
+            return
+            
+        if not self.current_file.endswith(('.s2p', '.s4p')):
+            messagebox.showerror("Error", 
+                "Only .s2p and .s4p files are supported.\n\n"
+                "A 2X S-parameter file represents a cascaded measurement:\n"
+                "- .s2p: Two identical single-ended devices in series\n"
+                "        (e.g., two cables connected end-to-end)\n"
+                "- .s4p: Two identical differential pairs in series\n"
+                "        (e.g., two differential cables connected end-to-end)")
+            return
+        
+        try:
+            # Read the network using scikit-rf
+            network = rf.Network(self.current_file)
+            
+            # Check port count
+            if network.nports == 2:
+                # For 2-port networks (single-ended devices)
+                abcd_matrix = rf.s2t(network.s)  # S to T (ABCD) conversion
+                
+            elif network.nports == 4:
+                # For 4-port networks (differential pairs)
+                # Original port order: [P1+, P2+, P3-, P4-]
+                # We want: Input pair (P1+, P3-) and Output pair (P2+, P4-)
+                
+                # Mixed-mode conversion matrix for differential mode
+                # Maps [P1+, P2+, P3-, P4-] to [Diff1, Diff2]
+                # where Diff1 = (P1+ - P3-)/√2 and Diff2 = (P2+ - P4-)/√2
+                M = np.array([[1, 0, -1, 0],
+                            [0, 1, 0, -1]]) / np.sqrt(2)
+                M_inv = M.T / 2  # M^-1 = M^T/2 for this specific M
+                
+                # Initialize array for differential S-parameters
+                sdd = np.zeros((len(network.f), 2, 2), dtype=complex)
+                
+                # Convert single-ended to differential for each frequency point
+                for f in range(len(network.f)):
+                    # Extract 4x4 single-ended S-parameters at this frequency
+                    s_f = network.s[f]
+                    # Convert to differential mode (2x2 matrix)
+                    sdd[f] = M @ s_f @ M_inv
+                
+                # Convert differential S-parameters to ABCD
+                abcd_matrix = rf.s2t(sdd)
+                
+            else:
+                messagebox.showerror("Error", 
+                    "Invalid port count. This function only works for:\n"
+                    "- 2-port networks (.s2p files)\n"
+                    "- 4-port networks (.s4p files)")
+                return
+            
+            # Calculate matrix square root using NumPy
+            try:
+                abcd_sqrt = np.zeros_like(abcd_matrix)
+                for f in range(len(network.f)):
+                    abcd_sqrt[f] = scipy.linalg.sqrtm(abcd_matrix[f])
+            except Exception as e:
+                messagebox.showerror("Error", 
+                    "Failed to calculate ABCD matrix square root.\n"
+                    "This usually means the file is not a valid 2X measurement.\n\n"
+                    "Make sure the file contains S-parameters of:\n"
+                    "- Two identical devices in series (for .s2p)\n"
+                    "- Two identical differential pairs in series (for .s4p)")
+                return
+            
+            # Convert back to S-parameters
+            s_sqrt = rf.t2s(abcd_sqrt)
+            
+            # Create a new network with the converted S-parameters
+            sqrt_network = rf.Network(s=s_sqrt, frequency=network.frequency)
+            
+            # Save the converted network in the same directory with "_1x" postfix
+            directory = os.path.dirname(self.current_file)
+            filename = os.path.basename(self.current_file)
+            base_name, ext = os.path.splitext(filename)
+            
+            # Determine output filename based on input file type
+            if ext == '.s2p':
+                output_filename = os.path.join(directory, f"{base_name}_1x.s1p")
+                msg_detail = "Extracted single-ended device parameters"
+            elif ext == '.s4p':
+                output_filename = os.path.join(directory, f"{base_name}_1x.s2p")
+                msg_detail = "Extracted differential pair parameters"
+            
+            # Write the converted network
+            sqrt_network.write_touchstone(output_filename)
+            
+            messagebox.showinfo("Success", 
+                f"Converted S-parameters saved to:\n{output_filename}\n\n"
+                f"{msg_detail} from a cascaded measurement\n"
+                "of two identical devices.")
+            
+            # Refresh the file list to show the new file
+            self.update_file_list()
+            
+        except Exception as e:
+            messagebox.showerror("Conversion Error", 
+                f"Failed to convert S-parameters:\n{str(e)}\n\n"
+                "Make sure the file contains valid S-parameters\n"
+                "of two identical devices in series.")
             traceback.print_exc()
 
 if __name__ == "__main__":
