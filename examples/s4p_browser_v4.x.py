@@ -2286,9 +2286,9 @@ class SParamBrowser(tk.Tk):
             # Extract 4x4 single-ended S-parameters at this frequency
             s_f = s[f]
             
-            print(f"\n--- Frequency Point {f} ---")
-            print("Original 4x4 S-parameter matrix:")
-            print(s_f)
+            # print(f"\n--- Frequency Point {f} ---")
+            # print("Original 4x4 S-parameter matrix:")
+            # print(s_f)
             
             # Differential conversion calculation
             # Ports: [P1+, P2+, P3-, P4-]
