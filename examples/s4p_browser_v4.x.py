@@ -2266,27 +2266,45 @@ class SParamBrowser(tk.Tk):
     def s2sdd(self, s):
         """
         Convert single-ended S-parameters to differential S-parameters
+        
+        Detailed debug version with conversion information
         """
+        # print("\n==== S-Parameter to Differential S-Parameter Conversion ====")
+        # print(f"Input S-parameter shape: {s.shape}")
+        
         # Check if input is a 2-port network
         if s.shape[1] == 2 and s.shape[2] == 2:
-            return s  # Already 2-port, no conversion needed
+            print("Already a 2-port network, no conversion needed")
+            return s
             
         # For 4-port networks, convert to differential
         nfreqs = s.shape[0]
         sdd = np.zeros((nfreqs, 2, 2), dtype=complex)
         
-        # Mixed-mode conversion matrix
-        M = np.array([[1, 0, -1, 0],
-                     [0, 1, 0, -1]]) / np.sqrt(2)
-        M_inv = M.T / 2  # M^-1 = M^T/2 for this specific M
-        
-        # Convert to differential mode
+        # Conversion method similar to previous implementation
         for f in range(nfreqs):
             # Extract 4x4 single-ended S-parameters at this frequency
             s_f = s[f]
-            # Convert to differential mode (2x2 matrix)
-            sdd[f] = M @ s_f @ M_inv
             
+            print(f"\n--- Frequency Point {f} ---")
+            print("Original 4x4 S-parameter matrix:")
+            print(s_f)
+            
+            # Differential conversion calculation
+            # Ports: [P1+, P2+, P3-, P4-]
+            # Differential pairs: (P1+ - P3-), (P2+ - P4-)
+            sdd[f, 0, 0] = 0.5 * ((s_f[0, 0] - s_f[0, 2]) - (s_f[2, 0] - s_f[2, 2]))  # SDD11
+            sdd[f, 0, 1] = 0.5 * ((s_f[0, 1] - s_f[0, 3]) - (s_f[2, 1] - s_f[2, 3]))  # SDD12
+            sdd[f, 1, 0] = 0.5 * ((s_f[1, 0] - s_f[1, 2]) - (s_f[3, 0] - s_f[3, 2]))  # SDD21
+            sdd[f, 1, 1] = 0.5 * ((s_f[1, 1] - s_f[1, 3]) - (s_f[3, 1] - s_f[3, 3]))  # SDD22
+            
+            # Debug print for each differential parameter
+            # print("\nDifferential S-parameters:")
+            # for i in range(2):
+            #     for j in range(2):
+            #         print(f"SDD{i+1}{j+1}: Magnitude = {20*np.log10(np.abs(sdd[f, i, j])):.2f} dB, "
+            #               f"Phase = {np.angle(sdd[f, i, j], deg=True):.2f}°")
+        
         return sdd
 
     def update_plot(self):
