@@ -117,9 +117,11 @@ class FileSearchGUI:
         CreateToolTip(pattern_entry,
             "Enter file patterns to filter files:\n" +
             "- Use * as wildcard: *.txt, *.py\n" +
-            "- Multiple patterns: *.txt *.py\n" +
+            "- Space for AND: *.txt *.py (matches files that are both .txt AND .py)\n" +
+            "- | for OR: *.txt|*.py (matches either .txt OR .py)\n" +
+            "- Use ! to exclude: *.txt !test*.txt\n" +
             "- All files: *.*\n" +
-            "- Specific names: test*.py, data.*")
+            "- Examples: test*.py|data*.py !temp*")
         
         # Search keyword row (with case sensitive and search button)
         ttk.Label(input_frame, text="Search inside files:").grid(row=2, column=0, sticky='w', pady=2)
@@ -229,10 +231,38 @@ class FileSearchGUI:
         self.update_filtered_files()
 
     def matches_patterns(self, filename, patterns):
-        """Check if filename matches all space-separated patterns"""
-        patterns = [p.strip().lower() for p in patterns.split()]
+        """Check if filename matches patterns, supporting AND (space), OR (|), and exclusion (!)"""
+        # First split by spaces (AND operator)
+        and_patterns = [p.strip().lower() for p in patterns.split()]
         filename_lower = filename.lower()
-        return all(pattern in filename_lower or fnmatch.fnmatch(filename_lower, pattern) for pattern in patterns)
+        
+        # For each AND pattern, check if it matches (considering OR and exclusion)
+        for pattern_group in and_patterns:
+            # Split by | for OR patterns
+            or_patterns = pattern_group.split('|')
+            
+            # Split into include and exclude OR patterns
+            include_patterns = [p for p in or_patterns if not p.startswith('!')]
+            exclude_patterns = [p[1:] for p in or_patterns if p.startswith('!')]
+            
+            # If no include patterns in this group, treat as match all
+            if not include_patterns:
+                include_patterns = ['*']
+            
+            # Check if matches any include pattern in this OR group
+            matches_include = any(pattern in filename_lower or fnmatch.fnmatch(filename_lower, pattern) 
+                                for pattern in include_patterns)
+            
+            # Check if matches any exclude pattern in this OR group
+            matches_exclude = any(pattern in filename_lower or fnmatch.fnmatch(filename_lower, pattern)
+                                for pattern in exclude_patterns)
+            
+            # If this AND group doesn't match, return False
+            if not (matches_include and not matches_exclude):
+                return False
+        
+        # All AND groups matched
+        return True
 
     def update_filtered_files(self):
         """Update the list of filtered files based on current pattern"""
@@ -516,8 +546,11 @@ class FileSearchGUI:
             # Get the file path and verify it exists
             file_path = self.get_selected_file()
             if file_path and os.path.isfile(file_path):
+                # Get absolute coordinates relative to the screen
+                x = self.filtered_files.winfo_rootx() + event.x
+                y = self.filtered_files.winfo_rooty() + event.y
                 # Position menu at mouse coordinates
-                self.context_menu.tk_popup(event.x_root, event.y_root)
+                self.context_menu.post(x, y)
             
         except Exception as e:
             print(f"Error showing context menu: {str(e)}")
