@@ -8,6 +8,7 @@ import subprocess
 import sys
 import re
 from tkinter import messagebox
+from datetime import datetime
 
 class CreateToolTip(object):
     """
@@ -171,12 +172,33 @@ class FileSearchGUI:
         listbox_frame = ttk.Frame(filtered_frame)
         listbox_frame.pack(fill='both', expand=True)
         
-        self.filtered_files = tk.Listbox(listbox_frame, selectmode=tk.BROWSE, cursor="hand2", height=10)
-        scrollbar = ttk.Scrollbar(listbox_frame, orient="vertical", command=self.filtered_files.yview)
-        self.filtered_files.configure(yscrollcommand=scrollbar.set)
+        # Create treeview with columns
+        columns = ('size', 'date', 'path')
+        self.filtered_files = ttk.Treeview(listbox_frame, columns=columns, show='headings', height=10)
         
-        self.filtered_files.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
+        # Define column headings and widths
+        self.filtered_files.heading('size', text='Size', anchor='e')
+        self.filtered_files.heading('date', text='Modified', anchor='w')
+        self.filtered_files.heading('path', text='File Name', anchor='w')
+        
+        # Configure column properties
+        self.filtered_files.column('size', width=100, anchor='e')
+        self.filtered_files.column('date', width=150, anchor='w')
+        self.filtered_files.column('path', width=400, anchor='w')
+        
+        # Add scrollbars
+        yscrollbar = ttk.Scrollbar(listbox_frame, orient="vertical", command=self.filtered_files.yview)
+        xscrollbar = ttk.Scrollbar(listbox_frame, orient="horizontal", command=self.filtered_files.xview)
+        self.filtered_files.configure(yscrollcommand=yscrollbar.set, xscrollcommand=xscrollbar.set)
+        
+        # Layout with scrollbars
+        self.filtered_files.grid(row=0, column=0, sticky='nsew')
+        yscrollbar.grid(row=0, column=1, sticky='ns')
+        xscrollbar.grid(row=1, column=0, sticky='ew')
+        
+        # Configure grid weights for proper expansion
+        listbox_frame.grid_rowconfigure(0, weight=1)
+        listbox_frame.grid_columnconfigure(0, weight=1)
         
         # Create right-click context menu
         self.context_menu = tk.Menu(self.root, tearoff=0)
@@ -185,7 +207,7 @@ class FileSearchGUI:
         self.context_menu.add_command(label="Show in Explorer", command=self.show_in_explorer)
         self.context_menu.add_command(label="Open with Default App", command=self.open_with_default)
         
-        # Bind events to filtered files listbox
+        # Bind events to filtered files treeview
         self.filtered_files.bind('<Button-3>', self.show_context_menu)
         self.filtered_files.bind('<Double-Button-1>', self.on_double_click)
         
@@ -266,13 +288,26 @@ class FileSearchGUI:
         # All AND groups matched
         return True
 
+    def format_size(self, size):
+        """Format file size in human-readable format"""
+        for unit in ['B', 'KB', 'MB', 'GB']:
+            if size < 1024:
+                return f"{size:6.1f} {unit}"
+            size /= 1024
+        return f"{size:6.1f} TB"
+
+    def format_date(self, timestamp):
+        """Format modification date"""
+        return datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M")
+
     def update_filtered_files(self):
         """Update the list of filtered files based on current pattern"""
         search_path = self.dir_path.get()
         file_pattern = self.file_pattern.get()
         
         # Clear the list
-        self.filtered_files.delete(0, tk.END)
+        for item in self.filtered_files.get_children():
+            self.filtered_files.delete(item)
         
         if not search_path:
             return
@@ -287,31 +322,45 @@ class FileSearchGUI:
                 for filename in matched_files:
                     full_path = os.path.abspath(os.path.join(root, filename))
                     rel_path = os.path.relpath(full_path, search_path)
-                    self.file_paths[rel_path] = full_path
-                    self.filtered_files.insert(tk.END, rel_path)
+                    
+                    # Get file info
+                    try:
+                        stat = os.stat(full_path)
+                        size = self.format_size(stat.st_size)
+                        mtime = self.format_date(stat.st_mtime)
+                        
+                        # Insert into treeview
+                        self.file_paths[rel_path] = full_path
+                        self.filtered_files.insert('', 'end', values=(size, mtime, rel_path))
+                    except (OSError, IOError) as e:
+                        print(f"Error getting file info for {full_path}: {str(e)}")
                     
             # Update status with file count
-            file_count = self.filtered_files.size()
+            file_count = len(self.filtered_files.get_children())
             self.status_var.set(f"Found {file_count} matching file{'s' if file_count != 1 else ''}")
         except (PermissionError, OSError) as e:
             self.status_var.set(f"Error accessing files: {str(e)}")
 
     def get_selected_file(self):
-        """Get the selected file path from the filtered files listbox"""
+        """Get the selected file path from the filtered files treeview"""
         try:
-            selection = self.filtered_files.curselection()
+            selection = self.filtered_files.selection()
             if not selection:
                 return None
-                
-            rel_path = self.filtered_files.get(selection[0])
-            if not rel_path:
+            
+            # Get values from the selected item
+            values = self.filtered_files.item(selection[0])['values']
+            if not values:
                 return None
-                
+            
+            # File path is the third column
+            rel_path = values[2]
+            
             # Get the full path from our stored mapping
             full_path = self.file_paths.get(rel_path)
             if full_path and os.path.isfile(full_path):
                 return full_path
-                
+            
             return None
             
         except Exception as e:
@@ -319,6 +368,7 @@ class FileSearchGUI:
             return None
 
     def browse_directory(self):
+        """Browse for a directory and update the file list"""
         directory = filedialog.askdirectory()
         if directory:
             self.dir_path.set(directory)
@@ -534,25 +584,20 @@ class FileSearchGUI:
     def show_context_menu(self, event):
         """Show the context menu on right click"""
         try:
-            # Get the index of the item under the cursor
-            index = self.filtered_files.nearest(event.y)
-            if index < 0:  # No item under cursor
+            # Identify the item under cursor
+            item = self.filtered_files.identify_row(event.y)
+            if not item:  # No item under cursor
                 return
                 
             # Select the item
-            self.filtered_files.selection_clear(0, tk.END)
-            self.filtered_files.selection_set(index)
-            self.filtered_files.activate(index)
-            self.filtered_files.see(index)  # Ensure item is visible
+            self.filtered_files.selection_set(item)
+            self.filtered_files.focus(item)
             
             # Get the file path and verify it exists
             file_path = self.get_selected_file()
             if file_path and os.path.isfile(file_path):
-                # Get absolute coordinates relative to the screen
-                x = self.filtered_files.winfo_rootx() + event.x
-                y = self.filtered_files.winfo_rooty() + event.y
                 # Position menu at mouse coordinates
-                self.context_menu.post(x, y)
+                self.context_menu.post(event.x_root, event.y_root)
             
         except Exception as e:
             print(f"Error showing context menu: {str(e)}")
