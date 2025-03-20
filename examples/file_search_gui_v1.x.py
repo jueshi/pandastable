@@ -1,0 +1,277 @@
+import tkinter as tk
+from tkinter import ttk, filedialog, scrolledtext
+from pathlib import Path
+import threading
+import fnmatch
+import os
+import subprocess
+import sys
+import re
+
+class FileSearchGUI:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("File Search Tool")
+        self.root.geometry("800x600")
+        
+        # Make the root window resizable
+        self.root.resizable(True, True)
+        
+        # Create main frame with padding and expansion
+        main_frame = ttk.Frame(root)
+        main_frame.grid(row=0, column=0, sticky='nsew', padx=10, pady=10)
+        
+        # Create a frame for input controls
+        input_frame = ttk.Frame(main_frame)
+        input_frame.grid(row=0, column=0, sticky='ew')
+        
+        # Directory selection
+        ttk.Label(input_frame, text="Search Directory:").grid(row=0, column=0, sticky='w', pady=2)
+        self.dir_path = tk.StringVar()
+        dir_entry = ttk.Entry(input_frame, textvariable=self.dir_path)
+        dir_entry.grid(row=0, column=1, sticky='ew', padx=(5, 5))
+        ttk.Button(input_frame, text="Browse", command=self.browse_directory).grid(row=0, column=2, padx=5)
+        
+        # File pattern
+        ttk.Label(input_frame, text="File Pattern:").grid(row=1, column=0, sticky='w', pady=2)
+        self.file_pattern = tk.StringVar(value="*")  # Default to show all files
+        self.file_pattern.trace_add("write", self.on_pattern_change)
+        ttk.Entry(input_frame, textvariable=self.file_pattern).grid(row=1, column=1, sticky='ew', padx=(5, 5))
+        
+        # Search keyword
+        ttk.Label(input_frame, text="Search Keyword:").grid(row=2, column=0, sticky='w', pady=2)
+        self.keyword = tk.StringVar()
+        ttk.Entry(input_frame, textvariable=self.keyword).grid(row=2, column=1, sticky='ew', padx=(5, 5))
+        
+        # Case sensitivity
+        self.case_sensitive = tk.BooleanVar(value=False)
+        ttk.Checkbutton(input_frame, text="Case Sensitive", variable=self.case_sensitive).grid(row=3, column=1, sticky='w', pady=2)
+        
+        # Search button
+        ttk.Button(input_frame, text="Search", command=self.start_search).grid(row=4, column=1, pady=10)
+        
+        # Filtered files frame
+        filtered_frame = ttk.LabelFrame(main_frame, text="Filtered Files", padding=(5, 5, 5, 5))
+        filtered_frame.grid(row=1, column=0, sticky='nsew', pady=(10, 0))
+        
+        # Filtered files listbox with scrollbar
+        self.filtered_files_list = tk.Listbox(filtered_frame, height=10)
+        scrollbar = ttk.Scrollbar(filtered_frame, orient="vertical", command=self.filtered_files_list.yview)
+        self.filtered_files_list.configure(yscrollcommand=scrollbar.set)
+        self.filtered_files_list.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        # Results frame
+        results_frame = ttk.LabelFrame(main_frame, text="Search Results (Click to open file)", padding=(5, 5, 5, 5))
+        results_frame.grid(row=2, column=0, sticky='nsew', pady=(10, 0))
+        
+        # Results area with scrollbars
+        self.results_area = scrolledtext.ScrolledText(results_frame, wrap=tk.WORD, cursor="hand2")
+        self.results_area.pack(fill='both', expand=True)
+        
+        # Bind click event
+        self.results_area.tag_configure("clickable", foreground="blue", underline=1)
+        self.results_area.tag_bind("clickable", "<Button-1>", self.on_click)
+        self.results_area.tag_bind("clickable", "<Enter>", lambda e: self.results_area.configure(cursor="hand2"))
+        self.results_area.tag_bind("clickable", "<Leave>", lambda e: self.results_area.configure(cursor=""))
+        
+        # Status bar
+        self.status_var = tk.StringVar()
+        self.status_bar = ttk.Label(main_frame, textvariable=self.status_var, relief='sunken')
+        self.status_bar.grid(row=3, column=0, sticky='ew', pady=(5, 0))
+        
+        # Configure weights for resizing
+        root.grid_rowconfigure(0, weight=1)
+        root.grid_columnconfigure(0, weight=1)
+        main_frame.grid_rowconfigure(1, weight=1)
+        main_frame.grid_rowconfigure(2, weight=1)
+        main_frame.grid_columnconfigure(0, weight=1)
+        input_frame.grid_columnconfigure(1, weight=1)
+        
+        # Store file locations for clicking
+        self.file_locations = {}
+        self.next_tag_id = 0
+        
+        # Update filtered files on startup
+        self.update_filtered_files()
+
+    def on_pattern_change(self, *args):
+        """Called when the file pattern is changed"""
+        self.update_filtered_files()
+
+    def matches_patterns(self, filename, patterns):
+        """Check if filename matches all space-separated patterns"""
+        patterns = [p.strip().lower() for p in patterns.split()]
+        filename_lower = filename.lower()
+        return all(pattern in filename_lower or fnmatch.fnmatch(filename_lower, pattern) for pattern in patterns)
+
+    def update_filtered_files(self):
+        """Update the filtered files list based on current directory and pattern"""
+        search_path = self.dir_path.get()
+        file_pattern = self.file_pattern.get()
+        
+        # Clear the list
+        self.filtered_files_list.delete(0, tk.END)
+        
+        if not search_path:
+            return
+            
+        try:
+            path = Path(search_path)
+            if not path.exists():
+                return
+                
+            # Find all matching files
+            for root, _, files in os.walk(search_path):
+                matched_files = [f for f in files if self.matches_patterns(f, file_pattern)]
+                for filename in matched_files:
+                    rel_path = os.path.relpath(os.path.join(root, filename), search_path)
+                    self.filtered_files_list.insert(tk.END, rel_path)
+                    
+            # Update status with file count
+            file_count = self.filtered_files_list.size()
+            self.status_var.set(f"Found {file_count} matching file{'s' if file_count != 1 else ''}")
+        except Exception as e:
+            self.status_var.set(f"Error updating file list: {str(e)}")
+
+    def browse_directory(self):
+        directory = filedialog.askdirectory()
+        if directory:
+            self.dir_path.set(directory)
+            self.update_filtered_files()  # Update files when directory changes
+
+    def safe_update_results(self, text, clickable=False, filepath=None, line_number=None):
+        if clickable:
+            tag_name = f"clickable_{self.next_tag_id}"
+            self.next_tag_id += 1
+            self.file_locations[tag_name] = (filepath, line_number)
+            
+            def update():
+                start = self.results_area.index("end-1c")
+                self.results_area.insert("end", text)
+                end = self.results_area.index("end-1c")
+                self.results_area.tag_add(tag_name, start, end)
+                self.results_area.tag_add("clickable", start, end)
+            
+            self.root.after(0, update)
+        else:
+            self.root.after(0, lambda t=text: self.results_area.insert("end", t))
+
+    def open_file(self, filepath, line_number):
+        try:
+            if sys.platform == 'win32':
+                os.startfile(filepath)
+            else:
+                if sys.platform == 'darwin':  # macOS
+                    subprocess.run(['open', filepath])
+                else:  # linux
+                    subprocess.run(['xdg-open', filepath])
+            self.status_var.set(f"Opened {filepath}")
+        except Exception as e:
+            self.status_var.set(f"Error opening file: {str(e)}")
+
+    def on_click(self, event):
+        for tag in self.results_area.tag_names(tk.CURRENT):
+            if tag.startswith("clickable_"):
+                filepath, line_number = self.file_locations[tag]
+                self.open_file(filepath, line_number)
+                break
+
+    def search_files(self, search_path, file_pattern, keyword, case_sensitive=False):
+        try:
+            self.safe_update_results("Starting search...\n")
+            self.safe_update_results(f"Directory: {search_path}\n")
+            self.safe_update_results(f"Pattern: {file_pattern}\n")
+            self.safe_update_results(f"Keyword: {keyword}\n")
+            self.safe_update_results(f"Case sensitive: {case_sensitive}\n\n")
+
+            path = Path(search_path)
+            if not path.exists():
+                self.safe_update_results(f"Error: Path '{search_path}' does not exist\n")
+                return
+
+            # Clear filtered files list
+            self.root.after(0, self.filtered_files_list.delete, 0, tk.END)
+            
+            search_keyword = keyword if case_sensitive else keyword.lower()
+            found_matches = False
+            files_searched = 0
+            
+            for root, _, files in os.walk(search_path):
+                matched_files = [f for f in files if self.matches_patterns(f, file_pattern)]
+                for filename in matched_files:
+                    # Add to filtered files list
+                    rel_path = os.path.relpath(os.path.join(root, filename), search_path)
+                    self.root.after(0, self.filtered_files_list.insert, tk.END, rel_path)
+                    
+                    files_searched += 1
+                    file_path = os.path.join(root, filename)
+                    try:
+                        with open(file_path, 'r', encoding='utf-8') as file:
+                            self.safe_update_results(f"Searching file: {file_path}\n")
+                            for line_num, line in enumerate(file, 1):
+                                line_to_search = line if case_sensitive else line.lower()
+                                if search_keyword in line_to_search:
+                                    found_matches = True
+                                    # Make the file path clickable
+                                    self.safe_update_results(f"\nFound in ", clickable=False)
+                                    self.safe_update_results(f"{file_path}:{line_num}", 
+                                                           clickable=True,
+                                                           filepath=file_path,
+                                                           line_number=line_num)
+                                    self.safe_update_results(f"\n    {line.strip()}\n")
+                    except UnicodeDecodeError:
+                        self.safe_update_results(f"Warning: Could not read {file_path} - not a text file\n")
+                    except Exception as e:
+                        self.safe_update_results(f"Error reading {file_path}: {str(e)}\n")
+            
+            self.safe_update_results(f"\nFiles searched: {files_searched}\n")
+            if not found_matches:
+                self.safe_update_results("No matches found.\n")
+            
+        except Exception as e:
+            self.safe_update_results(f"Error: {str(e)}\n")
+        finally:
+            self.root.after(0, lambda: self.status_var.set("Search completed"))
+
+    def update_results(self, text):
+        self.results_area.insert(tk.END, text)
+        self.results_area.see(tk.END)
+        self.results_area.update_idletasks()
+
+    def start_search(self):
+        # Get search parameters
+        search_path = self.dir_path.get()
+        file_pattern = self.file_pattern.get()
+        keyword = self.keyword.get()
+        case_sensitive = self.case_sensitive.get()
+        
+        if not search_path or not keyword:
+            self.results_area.delete(1.0, tk.END)
+            self.update_results("Error: Please provide both search directory and keyword\n")
+            self.status_var.set("Ready")
+            return
+        
+        # Clear previous results and file locations
+        self.results_area.delete(1.0, tk.END)
+        self.file_locations.clear()
+        self.next_tag_id = 0
+        
+        # Update status
+        self.status_var.set("Searching...")
+        
+        # Start search in a separate thread
+        thread = threading.Thread(
+            target=self.search_files,
+            args=(search_path, file_pattern, keyword, case_sensitive)
+        )
+        thread.daemon = True
+        thread.start()
+
+def main():
+    root = tk.Tk()
+    app = FileSearchGUI(root)
+    root.mainloop()
+
+if __name__ == '__main__':
+    main()
