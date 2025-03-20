@@ -8,9 +8,79 @@ import subprocess
 import sys
 import re
 
+class CreateToolTip(object):
+    """
+    Create a tooltip for a given widget with delayed show/hide
+    """
+    def __init__(self, widget, text='widget info'):
+        self.waittime = 500     # miliseconds
+        self.wraplength = 300   # pixels
+        self.widget = widget
+        self.text = text
+        self.widget.bind('<Enter>', self.enter)
+        self.widget.bind('<Leave>', self.leave)
+        self.widget.bind('<ButtonPress>', self.leave)
+        self.id = None
+        self.tw = None
+
+    def enter(self, event=None):
+        self.schedule()
+
+    def leave(self, event=None):
+        self.unschedule()
+        self.hidetip()
+
+    def schedule(self):
+        self.unschedule()
+        self.id = self.widget.after(self.waittime, self.showtip)
+
+    def unschedule(self):
+        id = self.id
+        self.id = None
+        if id:
+            self.widget.after_cancel(id)
+
+    def showtip(self, event=None):
+        if self.tw:
+            return
+        x = self.widget.winfo_rootx() + self.widget.winfo_width() + 5
+        y = self.widget.winfo_rooty()
+        self.tw = tk.Toplevel(self.widget)
+        self.tw.wm_overrideredirect(True)
+        
+        # Create tooltip content
+        label = ttk.Label(self.tw, text=self.text, justify=tk.LEFT,
+                         wraplength=self.wraplength, padding=(5, 2))
+        label.grid(row=0, column=0)
+        
+        # Style the tooltip
+        self.tw.configure(background='#ffffe0')
+        style = ttk.Style(self.tw)
+        style.configure('Tooltip.TLabel', 
+                      background='#ffffe0',
+                      foreground='black',
+                      font=('Segoe UI', 9))
+        label.configure(style='Tooltip.TLabel')
+        
+        # Position the tooltip
+        self.tw.wm_geometry(f"+{x}+{y}")
+        self.tw.lift()
+
+    def hidetip(self):
+        tw = self.tw
+        self.tw = None
+        if tw:
+            tw.destroy()
+
 class FileSearchGUI:
     def __init__(self, root):
-        self.root = root
+        # Convert root to Tix root if it's not already
+        if not isinstance(root, tk.Tk):
+            self.root = tk.Tk()
+            self.root.geometry(root.geometry())
+        else:
+            self.root = root
+            
         self.root.title("File Search Tool")
         self.root.geometry("800x600")
         
@@ -18,7 +88,7 @@ class FileSearchGUI:
         self.root.resizable(True, True)
         
         # Create main frame with padding and expansion
-        main_frame = ttk.Frame(root)
+        main_frame = ttk.Frame(self.root)
         main_frame.grid(row=0, column=0, sticky='nsew', padx=10, pady=10)
         
         # Create a frame for input controls
@@ -30,19 +100,39 @@ class FileSearchGUI:
         self.dir_path = tk.StringVar()
         dir_entry = ttk.Entry(input_frame, textvariable=self.dir_path)
         dir_entry.grid(row=0, column=1, sticky='ew', padx=(5, 5))
-        ttk.Button(input_frame, text="Browse", command=self.browse_directory).grid(row=0, column=2, padx=5)
+        ttk.Button(input_frame, text="Browse", command=self.browse_directory).grid(row=0, column=2, padx=5, sticky='w')
         
         # File pattern
         ttk.Label(input_frame, text="File Pattern:").grid(row=1, column=0, sticky='w', pady=2)
         self.file_pattern = tk.StringVar(value="*")  # Default to show all files
         self.file_pattern.trace_add("write", self.on_pattern_change)
-        ttk.Entry(input_frame, textvariable=self.file_pattern).grid(row=1, column=1, columnspan=2, sticky='ew', padx=(5, 5))
+        pattern_entry = ttk.Entry(input_frame, textvariable=self.file_pattern, width=200)
+        pattern_entry.grid(row=1, column=1, columnspan=2, sticky='w', padx=(5, 5))
+        
+        # Add tooltips
+        CreateToolTip(pattern_entry,
+            "Enter file patterns to filter files:\n" +
+            "- Use * as wildcard: *.txt, *.py\n" +
+            "- Multiple patterns: *.txt *.py\n" +
+            "- All files: *.*\n" +
+            "- Specific names: test*.py, data.*")
         
         # Search keyword row (with case sensitive and search button)
         ttk.Label(input_frame, text="Search inside files:").grid(row=2, column=0, sticky='w', pady=2)
         self.keyword = tk.StringVar()
         search_entry = ttk.Entry(input_frame, textvariable=self.keyword, width=200)  # Fixed width
-        search_entry.grid(row=2, column=1, sticky='w', padx=(5, 5))
+        search_entry.grid(row=2, column=1, columnspan=2, sticky='w', padx=(5, 5))
+        
+        # Add tooltip for search entry
+        CreateToolTip(search_entry,
+            "Enter search terms to find in files:\n" +
+            "- Single term: error\n" +
+            "- Multiple terms (OR): error OR warning\n" +
+            "- Alternative syntax: error|warning\n" +
+            "- Multiple OR terms: error|warning|fatal\n" +
+            "Use checkboxes below to:\n" +
+            "- Filter case sensitivity\n" +
+            "- Show only first/last matches")
         
         # Create a frame for checkboxes and button
         controls_frame = ttk.Frame(input_frame)
@@ -101,8 +191,8 @@ class FileSearchGUI:
         self.status_bar.grid(row=3, column=0, sticky='ew', pady=(5, 0))
         
         # Configure weights for resizing
-        root.grid_rowconfigure(0, weight=1)
-        root.grid_columnconfigure(0, weight=1)
+        self.root.grid_rowconfigure(0, weight=1)
+        self.root.grid_columnconfigure(0, weight=1)
         main_frame.grid_rowconfigure(1, weight=1)
         main_frame.grid_rowconfigure(2, weight=1)
         main_frame.grid_columnconfigure(0, weight=1)
