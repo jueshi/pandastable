@@ -36,38 +36,58 @@ class FileSearchGUI:
         ttk.Label(input_frame, text="File Pattern:").grid(row=1, column=0, sticky='w', pady=2)
         self.file_pattern = tk.StringVar(value="*")  # Default to show all files
         self.file_pattern.trace_add("write", self.on_pattern_change)
-        ttk.Entry(input_frame, textvariable=self.file_pattern).grid(row=1, column=1, sticky='ew', padx=(5, 5))
+        ttk.Entry(input_frame, textvariable=self.file_pattern).grid(row=1, column=1, columnspan=2, sticky='ew', padx=(5, 5))
         
-        # Search keyword
-        ttk.Label(input_frame, text="Search Keyword:").grid(row=2, column=0, sticky='w', pady=2)
+        # Search keyword row (with case sensitive and search button)
+        ttk.Label(input_frame, text="Search inside files:").grid(row=2, column=0, sticky='w', pady=2)
         self.keyword = tk.StringVar()
-        ttk.Entry(input_frame, textvariable=self.keyword).grid(row=2, column=1, sticky='ew', padx=(5, 5))
+        search_entry = ttk.Entry(input_frame, textvariable=self.keyword, width=200)  # Fixed width
+        search_entry.grid(row=2, column=1, sticky='w', padx=(5, 5))
         
-        # Case sensitivity
+        # Create a frame for checkboxes and button
+        controls_frame = ttk.Frame(input_frame)
+        controls_frame.grid(row=2, column=2, sticky='w')
+        
+        # Case sensitivity checkbox in controls frame
         self.case_sensitive = tk.BooleanVar(value=False)
-        ttk.Checkbutton(input_frame, text="Case Sensitive", variable=self.case_sensitive).grid(row=3, column=1, sticky='w', pady=2)
+        ttk.Checkbutton(controls_frame, text="Case Sensitive", variable=self.case_sensitive).pack(side='left', padx=(0, 5))
         
-        # Search button
-        ttk.Button(input_frame, text="Search", command=self.start_search).grid(row=4, column=1, pady=10)
+        # First/Last result checkboxes
+        self.show_first = tk.BooleanVar(value=False)
+        self.show_last = tk.BooleanVar(value=False)
+        ttk.Checkbutton(controls_frame, text="1st match", variable=self.show_first).pack(side='left', padx=(0, 5))
+        ttk.Checkbutton(controls_frame, text="Last match", variable=self.show_last).pack(side='left', padx=(0, 5))
+        
+        # Search button in controls frame
+        ttk.Button(controls_frame, text="Search", command=self.start_search).pack(side='left')
+        
+        # Configure column weights
+        input_frame.grid_columnconfigure(1, weight=1)
+        
+        # Create paned window for resizable sections
+        paned = ttk.PanedWindow(main_frame, orient=tk.VERTICAL)
+        paned.grid(row=1, column=0, sticky='nsew', pady=(10, 0))
         
         # Filtered files frame
-        filtered_frame = ttk.LabelFrame(main_frame, text="Filtered Files", padding=(5, 5, 5, 5))
-        filtered_frame.grid(row=1, column=0, sticky='nsew', pady=(10, 0))
+        filtered_frame = ttk.LabelFrame(paned, text="Filtered Files", padding=(5, 5, 5, 5))
         
         # Filtered files listbox with scrollbar
-        self.filtered_files_list = tk.Listbox(filtered_frame, height=10)
+        self.filtered_files_list = tk.Listbox(filtered_frame)
         scrollbar = ttk.Scrollbar(filtered_frame, orient="vertical", command=self.filtered_files_list.yview)
         self.filtered_files_list.configure(yscrollcommand=scrollbar.set)
         self.filtered_files_list.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
         
         # Results frame
-        results_frame = ttk.LabelFrame(main_frame, text="Search Results (Click to open file)", padding=(5, 5, 5, 5))
-        results_frame.grid(row=2, column=0, sticky='nsew', pady=(10, 0))
+        results_frame = ttk.LabelFrame(paned, text="Search Results (Click to open file)", padding=(5, 5, 5, 5))
         
         # Results area with scrollbars
         self.results_area = scrolledtext.ScrolledText(results_frame, wrap=tk.WORD, cursor="hand2")
         self.results_area.pack(fill='both', expand=True)
+        
+        # Add frames to paned window
+        paned.add(filtered_frame, weight=1)
+        paned.add(results_frame, weight=2)
         
         # Bind click event
         self.results_area.tag_configure("clickable", foreground="blue", underline=1)
@@ -95,7 +115,7 @@ class FileSearchGUI:
         # Update filtered files on startup
         self.update_filtered_files()
 
-    def on_pattern_change(self, *args):
+    def on_pattern_change(self, *_):
         """Called when the file pattern is changed"""
         self.update_filtered_files()
 
@@ -131,8 +151,8 @@ class FileSearchGUI:
             # Update status with file count
             file_count = self.filtered_files_list.size()
             self.status_var.set(f"Found {file_count} matching file{'s' if file_count != 1 else ''}")
-        except Exception as e:
-            self.status_var.set(f"Error updating file list: {str(e)}")
+        except (PermissionError, OSError) as e:
+            self.status_var.set(f"Error accessing files: {str(e)}")
 
     def browse_directory(self):
         directory = filedialog.askdirectory()
@@ -177,6 +197,26 @@ class FileSearchGUI:
                 self.open_file(filepath, line_number)
                 break
 
+    def matches_search_terms(self, line, search_terms, case_sensitive):
+        """Check if line matches any of the search terms (OR logic) and return matching terms"""
+        matches = []
+        line_to_search = line if case_sensitive else line.lower()
+        for term in search_terms:
+            term_to_search = term if case_sensitive else term.lower()
+            if term_to_search in line_to_search:
+                matches.append(term)
+        return matches
+
+    def split_search_terms(self, keyword):
+        """Split search string into terms using OR or | as delimiters"""
+        # Replace 'OR' with '|' and split on '|'
+        terms = []
+        for term in keyword.replace(' OR ', '|').split('|'):
+            term = term.strip()
+            if term:  # Only add non-empty terms
+                terms.append(term)
+        return terms
+
     def search_files(self, search_path, file_pattern, keyword, case_sensitive=False):
         try:
             self.safe_update_results("Starting search...\n")
@@ -190,12 +230,19 @@ class FileSearchGUI:
                 self.safe_update_results(f"Error: Path '{search_path}' does not exist\n")
                 return
 
+            # Split keyword into search terms
+            search_terms = self.split_search_terms(keyword)
+            if not search_terms:
+                self.safe_update_results("Error: No search terms provided\n")
+                return
+
             # Clear filtered files list
             self.root.after(0, self.filtered_files_list.delete, 0, tk.END)
             
-            search_keyword = keyword if case_sensitive else keyword.lower()
             found_matches = False
             files_searched = 0
+            show_first = self.show_first.get()
+            show_last = self.show_last.get()
             
             for root, _, files in os.walk(search_path):
                 matched_files = [f for f in files if self.matches_patterns(f, file_pattern)]
@@ -209,28 +256,80 @@ class FileSearchGUI:
                     try:
                         with open(file_path, 'r', encoding='utf-8') as file:
                             self.safe_update_results(f"Searching file: {file_path}\n")
-                            for line_num, line in enumerate(file, 1):
-                                line_to_search = line if case_sensitive else line.lower()
-                                if search_keyword in line_to_search:
-                                    found_matches = True
-                                    # Make the file path clickable
-                                    self.safe_update_results(f"\nFound in ", clickable=False)
-                                    self.safe_update_results(f"{file_path}:{line_num}", 
-                                                           clickable=True,
-                                                           filepath=file_path,
-                                                           line_number=line_num)
-                                    self.safe_update_results(f"\n    {line.strip()}\n")
+                            lines = file.readlines()
+                            # Dictionary to store matches for each term
+                            term_matches = {}
+                            
+                            for line_num, line in enumerate(lines, 1):
+                                matching_terms = self.matches_search_terms(line, search_terms, case_sensitive)
+                                if matching_terms:
+                                    for term in matching_terms:
+                                        if term not in term_matches:
+                                            term_matches[term] = []
+                                        term_matches[term].append((line_num, line.strip()))
+                            
+                            if term_matches:
+                                found_matches = True
+                                self.safe_update_results(f"\nFound in {file_path}:\n")
+                                
+                                for term in search_terms:
+                                    if term in term_matches:
+                                        matches = term_matches[term]
+                                        if show_first and not show_last:
+                                            matches = [matches[0]]
+                                        elif show_last and not show_first:
+                                            matches = [matches[-1]]
+                                        elif show_first and show_last and len(matches) > 2:
+                                            matches = [matches[0], matches[-1]]
+                                        
+                                        self.safe_update_results(f"\n  Matches for '{term}':\n")
+                                        for line_num, line_text in matches:
+                                            # Highlight the current term
+                                            highlighted_text = line_text
+                                            if case_sensitive:
+                                                start = 0
+                                                while (pos := highlighted_text.find(term, start)) != -1:
+                                                    highlighted_text = (
+                                                        highlighted_text[:pos] + 
+                                                        "**" + highlighted_text[pos:pos+len(term)] + "**" + 
+                                                        highlighted_text[pos+len(term):]
+                                                    )
+                                                    start = pos + len(term) + 4
+                                            else:
+                                                text_lower = highlighted_text.lower()
+                                                term_lower = term.lower()
+                                                start = 0
+                                                while (pos := text_lower.find(term_lower, start)) != -1:
+                                                    highlighted_text = (
+                                                        highlighted_text[:pos] + 
+                                                        "**" + highlighted_text[pos:pos+len(term)] + "**" + 
+                                                        highlighted_text[pos+len(term):]
+                                                    )
+                                                    start = pos + len(term) + 4
+                                                    text_lower = highlighted_text.lower()
+                                            
+                                            self.safe_update_results("    ", clickable=False)
+                                            self.safe_update_results(f"{file_path}:{line_num}", 
+                                                                   clickable=True,
+                                                                   filepath=file_path,
+                                                                   line_number=line_num)
+                                            self.safe_update_results(f"\n      {highlighted_text}\n")
+                                        
+                                        if len(matches) < len(term_matches[term]):
+                                            remaining = len(term_matches[term]) - len(matches)
+                                            self.safe_update_results(f"      ... {remaining} more matches for '{term}' ...\n")
+                                
                     except UnicodeDecodeError:
                         self.safe_update_results(f"Warning: Could not read {file_path} - not a text file\n")
-                    except Exception as e:
+                    except (PermissionError, OSError) as e:
                         self.safe_update_results(f"Error reading {file_path}: {str(e)}\n")
             
             self.safe_update_results(f"\nFiles searched: {files_searched}\n")
             if not found_matches:
                 self.safe_update_results("No matches found.\n")
             
-        except Exception as e:
-            self.safe_update_results(f"Error: {str(e)}\n")
+        except (PermissionError, OSError) as e:
+            self.safe_update_results(f"Error accessing files: {str(e)}\n")
         finally:
             self.root.after(0, lambda: self.status_var.set("Search completed"))
 
