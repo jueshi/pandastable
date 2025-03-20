@@ -162,7 +162,7 @@ class FileSearchGUI:
         
         # Create paned window for resizable sections
         paned = ttk.PanedWindow(main_frame, orient=tk.VERTICAL)
-        paned.grid(row=1, column=0, sticky='nsew', pady=(10, 0))
+        paned.grid(row=1, column=0, sticky='nsew')
         
         # Filtered files frame
         filtered_frame = ttk.LabelFrame(paned, text="Filtered Files", padding=(5, 5, 5, 5))
@@ -171,7 +171,7 @@ class FileSearchGUI:
         listbox_frame = ttk.Frame(filtered_frame)
         listbox_frame.pack(fill='both', expand=True)
         
-        self.filtered_files = tk.Listbox(listbox_frame, selectmode=tk.BROWSE, cursor="hand2")
+        self.filtered_files = tk.Listbox(listbox_frame, selectmode=tk.BROWSE, cursor="hand2", height=10)
         scrollbar = ttk.Scrollbar(listbox_frame, orient="vertical", command=self.filtered_files.yview)
         self.filtered_files.configure(yscrollcommand=scrollbar.set)
         
@@ -193,12 +193,12 @@ class FileSearchGUI:
         results_frame = ttk.LabelFrame(paned, text="Search Results (Click to open file)", padding=(5, 5, 5, 5))
         
         # Create results text area
-        self.results_text = scrolledtext.ScrolledText(results_frame, wrap=tk.WORD, height=20)
+        self.results_text = scrolledtext.ScrolledText(results_frame, wrap=tk.WORD)
         self.results_text.pack(fill='both', expand=True)
         
-        # Add frames to paned window
+        # Add frames to paned window with adjusted weights
         paned.add(filtered_frame, weight=1)
-        paned.add(results_frame, weight=2)
+        paned.add(results_frame, weight=3)
         
         # Bind click event
         self.results_text.tag_configure("clickable", foreground="blue", underline=1)
@@ -209,15 +209,17 @@ class FileSearchGUI:
         # Status bar
         self.status_var = tk.StringVar()
         self.status_bar = ttk.Label(main_frame, textvariable=self.status_var, relief='sunken')
-        self.status_bar.grid(row=3, column=0, sticky='ew', pady=(5, 0))
+        self.status_bar.grid(row=2, column=0, sticky='ew', pady=(5, 0))
         
         # Configure weights for resizing
         self.root.grid_rowconfigure(0, weight=1)
         self.root.grid_columnconfigure(0, weight=1)
-        main_frame.grid_rowconfigure(1, weight=1)
-        main_frame.grid_rowconfigure(2, weight=1)
+        
+        # Configure main_frame grid weights - only row 1 (paned window) should expand
+        main_frame.grid_rowconfigure(0, weight=0)  # input frame - fixed height
+        main_frame.grid_rowconfigure(1, weight=1)  # paned window - expandable
+        main_frame.grid_rowconfigure(2, weight=0)  # status bar - fixed height
         main_frame.grid_columnconfigure(0, weight=1)
-        input_frame.grid_columnconfigure(1, weight=1)
         
         # Store file locations for clicking
         self.file_locations = {}
