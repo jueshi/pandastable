@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, filedialog, scrolledtext
+from tkinter import ttk, filedialog, scrolledtext, messagebox
 from pathlib import Path
 import threading
 import fnmatch
@@ -7,7 +7,7 @@ import os
 import subprocess
 import sys
 import re
-from tkinter import messagebox
+import shutil
 from datetime import datetime
 
 class CreateToolTip(object):
@@ -174,7 +174,8 @@ class FileSearchGUI:
         
         # Create treeview with columns
         columns = ('size', 'date', 'path')
-        self.filtered_files = ttk.Treeview(listbox_frame, columns=columns, show='headings', height=10)
+        self.filtered_files = ttk.Treeview(listbox_frame, columns=columns, show='headings', height=10,
+                                         selectmode='extended')  # Allow multiple selections
         
         # Define column headings and widths
         self.filtered_files.heading('size', text='Size', anchor='e')
@@ -203,9 +204,18 @@ class FileSearchGUI:
         # Create right-click context menu
         self.context_menu = tk.Menu(self.root, tearoff=0)
         self.context_menu.add_command(label="Open with Notepad++", command=self.open_with_notepadpp)
+        self.context_menu.add_command(label="Open with Default App", command=self.open_with_default)
         self.context_menu.add_separator()
         self.context_menu.add_command(label="Show in Explorer", command=self.show_in_explorer)
-        self.context_menu.add_command(label="Open with Default App", command=self.open_with_default)
+        self.context_menu.add_separator()
+        # Store menu indices for dynamic updates
+        self.copy_menu_index = self.context_menu.index(tk.END) + 1
+        self.context_menu.add_command(label="Copy to...", command=self.copy_file)
+        self.move_menu_index = self.context_menu.index(tk.END) + 1
+        self.context_menu.add_command(label="Move to...", command=self.move_file)
+        self.context_menu.add_separator()
+        self.delete_menu_index = self.context_menu.index(tk.END) + 1
+        self.context_menu.add_command(label="Delete", command=self.delete_file)
         
         # Bind events to filtered files treeview
         self.filtered_files.bind('<Button-3>', self.show_context_menu)
@@ -341,6 +351,34 @@ class FileSearchGUI:
         except (PermissionError, OSError) as e:
             self.status_var.set(f"Error accessing files: {str(e)}")
 
+    def get_selected_files(self):
+        """Get a list of selected file paths from the filtered files treeview"""
+        try:
+            selections = self.filtered_files.selection()
+            if not selections:
+                return []
+            
+            selected_files = []
+            for item in selections:
+                # Get values from the selected item
+                values = self.filtered_files.item(item)['values']
+                if not values:
+                    continue
+                
+                # File path is the third column
+                rel_path = values[2]
+                
+                # Get the full path from our stored mapping
+                full_path = self.file_paths.get(rel_path)
+                if full_path and os.path.isfile(full_path):
+                    selected_files.append(full_path)
+            
+            return selected_files
+            
+        except Exception as e:
+            print(f"Error getting selected files: {str(e)}")
+            return []
+
     def get_selected_file(self):
         """Get the selected file path from the filtered files treeview"""
         try:
@@ -366,13 +404,6 @@ class FileSearchGUI:
         except Exception as e:
             print(f"Error getting selected file: {str(e)}")
             return None
-
-    def browse_directory(self):
-        """Browse for a directory and update the file list"""
-        directory = filedialog.askdirectory()
-        if directory:
-            self.dir_path.set(directory)
-            self.update_filtered_files()  # Update files when directory changes
 
     def safe_update_results(self, text, clickable=False, filepath=None, line_number=None):
         if clickable:
@@ -589,13 +620,32 @@ class FileSearchGUI:
             if not item:  # No item under cursor
                 return
                 
-            # Select the item
-            self.filtered_files.selection_set(item)
+            # If the item under cursor isn't selected, clear selection and select only this item
+            if item not in self.filtered_files.selection():
+                self.filtered_files.selection_set(item)
+            # Otherwise keep the current multiple selection
+            
             self.filtered_files.focus(item)
             
-            # Get the file path and verify it exists
-            file_path = self.get_selected_file()
-            if file_path and os.path.isfile(file_path):
+            # Get the file paths and verify at least one exists
+            if self.get_selected_files():
+                # Update menu labels based on selection count
+                count = len(self.filtered_files.selection())
+                if count > 1:
+                    self.context_menu.entryconfig(self.copy_menu_index, 
+                        label=f"Copy {count} files to...")
+                    self.context_menu.entryconfig(self.move_menu_index, 
+                        label=f"Move {count} files to...")
+                    self.context_menu.entryconfig(self.delete_menu_index, 
+                        label=f"Delete {count} files")
+                else:
+                    self.context_menu.entryconfig(self.copy_menu_index, 
+                        label="Copy to...")
+                    self.context_menu.entryconfig(self.move_menu_index, 
+                        label="Move to...")
+                    self.context_menu.entryconfig(self.delete_menu_index, 
+                        label="Delete")
+                
                 # Position menu at mouse coordinates
                 self.context_menu.post(event.x_root, event.y_root)
             
@@ -642,6 +692,159 @@ class FileSearchGUI:
                 os.startfile(file_path)
             except:
                 messagebox.showerror("Error", "Failed to open file with default application")
+
+    def copy_file(self):
+        """Copy selected files to a chosen destination"""
+        file_paths = self.get_selected_files()
+        if not file_paths:
+            return
+            
+        try:
+            # Ask user for destination directory
+            dest_dir = filedialog.askdirectory(title="Select Destination Directory")
+            if not dest_dir:
+                return
+            
+            # Track success and failures
+            success_count = 0
+            failed_files = []
+            
+            for file_path in file_paths:
+                try:
+                    # Get file name from path
+                    file_name = os.path.basename(file_path)
+                    dest_path = os.path.join(dest_dir, file_name)
+                    
+                    # Check if destination file already exists
+                    if os.path.exists(dest_path):
+                        if not messagebox.askyesno("File Exists", 
+                            f"File '{file_name}' already exists in destination.\nDo you want to replace it?"):
+                            failed_files.append(f"{file_name} (Skipped)")
+                            continue
+                    
+                    # Copy the file
+                    shutil.copy2(file_path, dest_path)
+                    success_count += 1
+                    
+                except Exception as e:
+                    failed_files.append(f"{file_name} ({str(e)})")
+            
+            # Show summary message
+            message = f"Successfully copied {success_count} file(s) to:\n{dest_dir}"
+            if failed_files:
+                message += "\n\nFailed to copy:\n" + "\n".join(failed_files)
+            
+            if success_count > 0:
+                messagebox.showinfo("Copy Complete", message)
+            else:
+                messagebox.showerror("Copy Failed", message)
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to copy files:\n{str(e)}")
+
+    def move_file(self):
+        """Move selected files to a chosen destination"""
+        file_paths = self.get_selected_files()
+        if not file_paths:
+            return
+            
+        try:
+            # Ask user for destination directory
+            dest_dir = filedialog.askdirectory(title="Select Destination Directory")
+            if not dest_dir:
+                return
+            
+            # Track success and failures
+            success_count = 0
+            failed_files = []
+            
+            for file_path in file_paths:
+                try:
+                    # Get file name from path
+                    file_name = os.path.basename(file_path)
+                    dest_path = os.path.join(dest_dir, file_name)
+                    
+                    # Check if destination file already exists
+                    if os.path.exists(dest_path):
+                        if not messagebox.askyesno("File Exists", 
+                            f"File '{file_name}' already exists in destination.\nDo you want to replace it?"):
+                            failed_files.append(f"{file_name} (Skipped)")
+                            continue
+                    
+                    # Move the file
+                    shutil.move(file_path, dest_path)
+                    success_count += 1
+                    
+                except Exception as e:
+                    failed_files.append(f"{file_name} ({str(e)})")
+            
+            # Show summary message
+            message = f"Successfully moved {success_count} file(s) to:\n{dest_dir}"
+            if failed_files:
+                message += "\n\nFailed to move:\n" + "\n".join(failed_files)
+            
+            if success_count > 0:
+                messagebox.showinfo("Move Complete", message)
+            else:
+                messagebox.showerror("Move Failed", message)
+            
+            # Update the file list since we moved files
+            self.update_filtered_files()
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to move files:\n{str(e)}")
+
+    def delete_file(self):
+        """Delete selected files"""
+        file_paths = self.get_selected_files()
+        if not file_paths:
+            return
+            
+        try:
+            # Confirm deletion
+            file_count = len(file_paths)
+            if not messagebox.askyesno("Confirm Delete", 
+                f"Are you sure you want to delete {file_count} file(s)?\nThis cannot be undone."):
+                return
+            
+            # Track success and failures
+            success_count = 0
+            failed_files = []
+            
+            for file_path in file_paths:
+                try:
+                    # Get file name for display
+                    file_name = os.path.basename(file_path)
+                    
+                    # Delete the file
+                    os.remove(file_path)
+                    success_count += 1
+                    
+                except Exception as e:
+                    failed_files.append(f"{file_name} ({str(e)})")
+            
+            # Show summary message
+            message = f"Successfully deleted {success_count} file(s)"
+            if failed_files:
+                message += "\n\nFailed to delete:\n" + "\n".join(failed_files)
+            
+            if success_count > 0:
+                messagebox.showinfo("Delete Complete", message)
+            else:
+                messagebox.showerror("Delete Failed", message)
+            
+            # Update the file list since we deleted files
+            self.update_filtered_files()
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to delete files:\n{str(e)}")
+
+    def browse_directory(self):
+        """Browse for a directory and update the file list"""
+        directory = filedialog.askdirectory()
+        if directory:
+            self.dir_path.set(directory)
+            self.update_filtered_files()  # Update files when directory changes
 
 def main():
     root = tk.Tk()
