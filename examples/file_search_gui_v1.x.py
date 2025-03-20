@@ -7,6 +7,7 @@ import os
 import subprocess
 import sys
 import re
+from tkinter import messagebox
 
 class CreateToolTip(object):
     """
@@ -83,6 +84,9 @@ class FileSearchGUI:
             
         self.root.title("File Search Tool")
         self.root.geometry("800x600")
+        
+        # Initialize file paths dictionary
+        self.file_paths = {}
         
         # Make the root window resizable
         self.root.resizable(True, True)
@@ -161,29 +165,44 @@ class FileSearchGUI:
         # Filtered files frame
         filtered_frame = ttk.LabelFrame(paned, text="Filtered Files", padding=(5, 5, 5, 5))
         
-        # Filtered files listbox with scrollbar
-        self.filtered_files_list = tk.Listbox(filtered_frame)
-        scrollbar = ttk.Scrollbar(filtered_frame, orient="vertical", command=self.filtered_files_list.yview)
-        self.filtered_files_list.configure(yscrollcommand=scrollbar.set)
-        self.filtered_files_list.pack(side="left", fill="both", expand=True)
+        # Create filtered files listbox with scrollbar
+        listbox_frame = ttk.Frame(filtered_frame)
+        listbox_frame.pack(fill='both', expand=True)
+        
+        self.filtered_files = tk.Listbox(listbox_frame, selectmode=tk.BROWSE, cursor="hand2")
+        scrollbar = ttk.Scrollbar(listbox_frame, orient="vertical", command=self.filtered_files.yview)
+        self.filtered_files.configure(yscrollcommand=scrollbar.set)
+        
+        self.filtered_files.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
+        
+        # Create right-click context menu
+        self.context_menu = tk.Menu(self.root, tearoff=0)
+        self.context_menu.add_command(label="Open with Notepad++", command=self.open_with_notepadpp)
+        self.context_menu.add_separator()
+        self.context_menu.add_command(label="Show in Explorer", command=self.show_in_explorer)
+        self.context_menu.add_command(label="Open with Default App", command=self.open_with_default)
+        
+        # Bind events to filtered files listbox
+        self.filtered_files.bind('<Button-3>', self.show_context_menu)
+        self.filtered_files.bind('<Double-Button-1>', self.on_double_click)
         
         # Results frame
         results_frame = ttk.LabelFrame(paned, text="Search Results (Click to open file)", padding=(5, 5, 5, 5))
         
-        # Results area with scrollbars
-        self.results_area = scrolledtext.ScrolledText(results_frame, wrap=tk.WORD, cursor="hand2")
-        self.results_area.pack(fill='both', expand=True)
+        # Create results text area
+        self.results_text = scrolledtext.ScrolledText(results_frame, wrap=tk.WORD, height=20)
+        self.results_text.pack(fill='both', expand=True)
         
         # Add frames to paned window
         paned.add(filtered_frame, weight=1)
         paned.add(results_frame, weight=2)
         
         # Bind click event
-        self.results_area.tag_configure("clickable", foreground="blue", underline=1)
-        self.results_area.tag_bind("clickable", "<Button-1>", self.on_click)
-        self.results_area.tag_bind("clickable", "<Enter>", lambda e: self.results_area.configure(cursor="hand2"))
-        self.results_area.tag_bind("clickable", "<Leave>", lambda e: self.results_area.configure(cursor=""))
+        self.results_text.tag_configure("clickable", foreground="blue", underline=1)
+        self.results_text.tag_bind("clickable", "<Button-1>", self.on_click)
+        self.results_text.tag_bind("clickable", "<Enter>", lambda e: self.results_text.configure(cursor="hand2"))
+        self.results_text.tag_bind("clickable", "<Leave>", lambda e: self.results_text.configure(cursor=""))
         
         # Status bar
         self.status_var = tk.StringVar()
@@ -216,33 +235,56 @@ class FileSearchGUI:
         return all(pattern in filename_lower or fnmatch.fnmatch(filename_lower, pattern) for pattern in patterns)
 
     def update_filtered_files(self):
-        """Update the filtered files list based on current directory and pattern"""
+        """Update the list of filtered files based on current pattern"""
         search_path = self.dir_path.get()
         file_pattern = self.file_pattern.get()
         
         # Clear the list
-        self.filtered_files_list.delete(0, tk.END)
+        self.filtered_files.delete(0, tk.END)
         
         if not search_path:
             return
             
         try:
-            path = Path(search_path)
-            if not path.exists():
-                return
-                
-            # Find all matching files
+            # Store full paths for lookup
+            self.file_paths = {}  # Reset file paths dictionary
+            
+            # Walk through directory and find matching files
             for root, _, files in os.walk(search_path):
                 matched_files = [f for f in files if self.matches_patterns(f, file_pattern)]
                 for filename in matched_files:
-                    rel_path = os.path.relpath(os.path.join(root, filename), search_path)
-                    self.filtered_files_list.insert(tk.END, rel_path)
+                    full_path = os.path.abspath(os.path.join(root, filename))
+                    rel_path = os.path.relpath(full_path, search_path)
+                    self.file_paths[rel_path] = full_path
+                    self.filtered_files.insert(tk.END, rel_path)
                     
             # Update status with file count
-            file_count = self.filtered_files_list.size()
+            file_count = self.filtered_files.size()
             self.status_var.set(f"Found {file_count} matching file{'s' if file_count != 1 else ''}")
         except (PermissionError, OSError) as e:
             self.status_var.set(f"Error accessing files: {str(e)}")
+
+    def get_selected_file(self):
+        """Get the selected file path from the filtered files listbox"""
+        try:
+            selection = self.filtered_files.curselection()
+            if not selection:
+                return None
+                
+            rel_path = self.filtered_files.get(selection[0])
+            if not rel_path:
+                return None
+                
+            # Get the full path from our stored mapping
+            full_path = self.file_paths.get(rel_path)
+            if full_path and os.path.isfile(full_path):
+                return full_path
+                
+            return None
+            
+        except Exception as e:
+            print(f"Error getting selected file: {str(e)}")
+            return None
 
     def browse_directory(self):
         directory = filedialog.askdirectory()
@@ -257,15 +299,15 @@ class FileSearchGUI:
             self.file_locations[tag_name] = (filepath, line_number)
             
             def update():
-                start = self.results_area.index("end-1c")
-                self.results_area.insert("end", text)
-                end = self.results_area.index("end-1c")
-                self.results_area.tag_add(tag_name, start, end)
-                self.results_area.tag_add("clickable", start, end)
+                start = self.results_text.index("end-1c")
+                self.results_text.insert("end", text)
+                end = self.results_text.index("end-1c")
+                self.results_text.tag_add(tag_name, start, end)
+                self.results_text.tag_add("clickable", start, end)
             
             self.root.after(0, update)
         else:
-            self.root.after(0, lambda t=text: self.results_area.insert("end", t))
+            self.root.after(0, lambda t=text: self.results_text.insert("end", t))
 
     def open_file(self, filepath, line_number):
         try:
@@ -281,7 +323,7 @@ class FileSearchGUI:
             self.status_var.set(f"Error opening file: {str(e)}")
 
     def on_click(self, event):
-        for tag in self.results_area.tag_names(tk.CURRENT):
+        for tag in self.results_text.tag_names(tk.CURRENT):
             if tag.startswith("clickable_"):
                 filepath, line_number = self.file_locations[tag]
                 self.open_file(filepath, line_number)
@@ -327,7 +369,7 @@ class FileSearchGUI:
                 return
 
             # Clear filtered files list
-            self.root.after(0, self.filtered_files_list.delete, 0, tk.END)
+            self.root.after(0, self.filtered_files.delete, 0, tk.END)
             
             found_matches = False
             files_searched = 0
@@ -339,7 +381,7 @@ class FileSearchGUI:
                 for filename in matched_files:
                     # Add to filtered files list
                     rel_path = os.path.relpath(os.path.join(root, filename), search_path)
-                    self.root.after(0, self.filtered_files_list.insert, tk.END, rel_path)
+                    self.root.after(0, self.filtered_files.insert, tk.END, rel_path)
                     
                     files_searched += 1
                     file_path = os.path.join(root, filename)
@@ -424,9 +466,9 @@ class FileSearchGUI:
             self.root.after(0, lambda: self.status_var.set("Search completed"))
 
     def update_results(self, text):
-        self.results_area.insert(tk.END, text)
-        self.results_area.see(tk.END)
-        self.results_area.update_idletasks()
+        self.results_text.insert(tk.END, text)
+        self.results_text.see(tk.END)
+        self.results_text.update_idletasks()
 
     def start_search(self):
         # Get search parameters
@@ -436,13 +478,13 @@ class FileSearchGUI:
         case_sensitive = self.case_sensitive.get()
         
         if not search_path or not keyword:
-            self.results_area.delete(1.0, tk.END)
+            self.results_text.delete(1.0, tk.END)
             self.update_results("Error: Please provide both search directory and keyword\n")
             self.status_var.set("Ready")
             return
         
         # Clear previous results and file locations
-        self.results_area.delete(1.0, tk.END)
+        self.results_text.delete(1.0, tk.END)
         self.file_locations.clear()
         self.next_tag_id = 0
         
@@ -456,6 +498,70 @@ class FileSearchGUI:
         )
         thread.daemon = True
         thread.start()
+
+    def show_context_menu(self, event):
+        """Show the context menu on right click"""
+        try:
+            # Get the index of the item under the cursor
+            index = self.filtered_files.nearest(event.y)
+            if index < 0:  # No item under cursor
+                return
+                
+            # Select the item
+            self.filtered_files.selection_clear(0, tk.END)
+            self.filtered_files.selection_set(index)
+            self.filtered_files.activate(index)
+            self.filtered_files.see(index)  # Ensure item is visible
+            
+            # Get the file path and verify it exists
+            file_path = self.get_selected_file()
+            if file_path and os.path.isfile(file_path):
+                # Position menu at mouse coordinates
+                self.context_menu.tk_popup(event.x_root, event.y_root)
+            
+        except Exception as e:
+            print(f"Error showing context menu: {str(e)}")
+        finally:
+            # Make sure to release the grab
+            self.context_menu.grab_release()
+
+    def on_double_click(self, event):
+        """Handle double-click on filtered files listbox"""
+        file_path = self.get_selected_file()
+        if file_path:
+            self.open_with_default()
+
+    def open_with_notepadpp(self):
+        """Open selected file with Notepad++"""
+        file_path = self.get_selected_file()
+        if file_path:
+            try:
+                subprocess.Popen([r"C:\Program Files\Notepad++\notepad++.exe", file_path])
+            except FileNotFoundError:
+                messagebox.showerror("Error", "Notepad++ is not installed or not in PATH")
+                try:
+                    # Try opening with regular Notepad as fallback
+                    subprocess.Popen(['notepad.exe', file_path])
+                except:
+                    messagebox.showerror("Error", "Failed to open file with Notepad")
+
+    def show_in_explorer(self):
+        """Show selected file in Windows Explorer"""
+        file_path = self.get_selected_file()
+        if file_path:
+            try:
+                subprocess.Popen(f'explorer /select,"{file_path}"')
+            except:
+                messagebox.showerror("Error", "Failed to open File Explorer")
+
+    def open_with_default(self):
+        """Open selected file with default application"""
+        file_path = self.get_selected_file()
+        if file_path:
+            try:
+                os.startfile(file_path)
+            except:
+                messagebox.showerror("Error", "Failed to open file with default application")
 
 def main():
     root = tk.Tk()
