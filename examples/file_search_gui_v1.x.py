@@ -346,7 +346,8 @@ class FileSearchGUI:
 
     def format_date(self, timestamp):
         """Format modification date"""
-        return datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M")
+        from datetime import datetime
+        return datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
 
     def update_filtered_files(self):
         """Update the list of filtered files based on current pattern"""
@@ -928,7 +929,7 @@ class FileSearchGUI:
             def date_to_timestamp(date_str):
                 try:
                     from datetime import datetime
-                    return datetime.strptime(date_str, '%Y-%m-%d %H:%M').timestamp()
+                    return datetime.strptime(date_str, '%Y-%m-%d %H:%M:%S').timestamp()
                 except:
                     return 0
             
