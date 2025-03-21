@@ -512,14 +512,21 @@ class FileSearchGUI:
         for term in search_terms:
             term_to_search = term if case_sensitive else term.lower()
             if term_to_search in line_to_search:
-                matches.append(term)
+                matches.append(term)  # Add all matching terms for OR logic
         return matches
 
     def split_search_terms(self, keyword):
         """Split search string into terms using OR or | as delimiters"""
-        # Replace 'OR' with '|' and split on '|'
+        if not keyword:
+            return []
+            
+        # Replace 'OR' with '|' for consistent splitting
+        # Handle both uppercase and mixed case 'OR'
+        keyword = keyword.replace(' OR ', '|').replace(' Or ', '|').replace(' or ', '|')
+        
+        # Split on '|' and clean up terms
         terms = []
-        for term in keyword.replace(' OR ', '|').split('|'):
+        for term in keyword.split('|'):
             term = term.strip()
             if term:  # Only add non-empty terms
                 terms.append(term)
@@ -537,6 +544,10 @@ class FileSearchGUI:
                 return
             
             search_terms = self.split_search_terms(keyword)
+            if not search_terms:
+                self.status_var.set("No search terms provided")
+                return
+                
             files_searched = 0
             matches_found = 0
             
@@ -578,7 +589,8 @@ class FileSearchGUI:
                                 if self.simple_results.get():
                                     self.safe_update_results(f"{line_text}", True, full_path, line_num)
                                 else:
-                                    self.safe_update_results(f"Line {line_num}: {line_text}", True, full_path, line_num)
+                                    term_str = " or ".join(terms)
+                                    self.safe_update_results(f"Line {line_num} (matches: {term_str}): {line_text}", True, full_path, line_num)
                 
                 except Exception as e:
                     if not self.simple_results.get():
