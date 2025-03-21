@@ -117,12 +117,17 @@ class FileSearchGUI:
         # Add tooltips
         CreateToolTip(pattern_entry,
             "Enter file patterns to filter files:\n" +
-            "- Use * as wildcard: *.txt, *.py\n" +
-            "- Space for AND: *.txt *.py (matches files that are both .txt AND .py)\n" +
-            "- | for OR: *.txt|*.py (matches either .txt OR .py)\n" +
-            "- Use ! to exclude: *.txt !test*.txt\n" +
-            "- All files: *.*\n" +
-            "- Examples: test*.py|data*.py !temp*")
+            "- Type text to match anywhere: rx3 (matches files containing 'rx3')\n" +
+            "- Use * for wildcards: *.txt, test.py\n" +
+            "- Space for AND: rx3 tx4 (matches files containing both)\n" +
+            "- | for OR: rx3|tx4 (matches either)\n" +
+            "- ! to exclude: !test (excludes files containing 'test')\n" +
+            "- Exclude directories: !results or !results/\n" +
+            "- Exclude nested directories: !**/results\n" +
+            "Examples:\n" +
+            "- rx3|tx4 !temp\n" +
+            "- data !results\n" +
+            "- rx3 !backup")
         
         # Search keyword row (with case sensitive and search button)
         ttk.Label(input_frame, text="Search inside files:").grid(row=2, column=0, sticky='w', pady=2)
@@ -228,6 +233,11 @@ class FileSearchGUI:
         self.results_text = scrolledtext.ScrolledText(results_frame, wrap=tk.WORD)
         self.results_text.pack(fill='both', expand=True)
         
+        # Add tooltips
+        CreateToolTip(self.results_text,
+            "Search results are displayed here.\n" +
+            "Click on a file path to open the file.")
+        
         # Add frames to paned window with adjusted weights
         paned.add(filtered_frame, weight=1)
         paned.add(results_frame, weight=3)
@@ -275,25 +285,50 @@ class FileSearchGUI:
             # Split by | for OR patterns
             or_patterns = pattern_group.split('|')
             
-            # Split into include and exclude OR patterns
-            include_patterns = [p for p in or_patterns if not p.startswith('!')]
-            exclude_patterns = [p[1:] for p in or_patterns if p.startswith('!')]
+            # Split into include and exclude OR patterns and add wildcards for inclusive matching
+            include_patterns = []
+            exclude_patterns = []
+            for p in or_patterns:
+                if p.startswith('!'):
+                    # For exclusion patterns, add wildcards if not already a wildcard pattern
+                    p = p[1:]  # Remove !
+                    if not any(c in p for c in '*?[]'):
+                        # For directories, match the full path segment
+                        if '/' in p:
+                            exclude_patterns.append(p)
+                        else:
+                            p = f'*{p}*'
+                            exclude_patterns.append(p)
+                    else:
+                        exclude_patterns.append(p)
+                else:
+                    # For inclusion patterns, add wildcards if not already a wildcard pattern
+                    if not any(c in p for c in '*?[]'):
+                        p = f'*{p}*'
+                    include_patterns.append(p)
             
-            # If no include patterns in this group, treat as match all
+            # Check exclusion patterns first
+            for pattern in exclude_patterns:
+                if '/' in pattern:
+                    # For directory patterns, check if it's part of the path
+                    if pattern in filename_lower:
+                        return False
+                elif fnmatch.fnmatch(filename_lower, pattern):
+                    return False  # File matches an exclude pattern
+            
+            # If there are no include patterns in this group, it's implicitly included
             if not include_patterns:
-                include_patterns = ['*']
+                continue
+                
+            # Check if file matches any of the include patterns
+            matches_include = False
+            for pattern in include_patterns:
+                if fnmatch.fnmatch(filename_lower, pattern):
+                    matches_include = True
+                    break
             
-            # Check if matches any include pattern in this OR group
-            matches_include = any(pattern in filename_lower or fnmatch.fnmatch(filename_lower, pattern) 
-                                for pattern in include_patterns)
-            
-            # Check if matches any exclude pattern in this OR group
-            matches_exclude = any(pattern in filename_lower or fnmatch.fnmatch(filename_lower, pattern)
-                                for pattern in exclude_patterns)
-            
-            # If this AND group doesn't match, return False
-            if not (matches_include and not matches_exclude):
-                return False
+            if not matches_include:
+                return False  # File doesn't match any include pattern in this group
         
         # All AND groups matched
         return True
@@ -325,39 +360,48 @@ class FileSearchGUI:
         try:
             # Store full paths for lookup
             self.file_paths = {}  # Reset file paths dictionary
+            error_count = 0
             
             # Walk through directory and find matching files
             for root, _, files in os.walk(search_path):
-                matched_files = [f for f in files if self.matches_patterns(f, file_pattern)]
-                for filename in matched_files:
-                    full_path = os.path.abspath(os.path.join(root, filename))
-                    rel_path = os.path.relpath(full_path, search_path)
-                    
-                    # Get file info
+                for filename in files:
                     try:
-                        stat = os.stat(full_path)
-                        size = self.format_size(stat.st_size)
-                        mtime = self.format_date(stat.st_mtime)
+                        full_path = os.path.abspath(os.path.join(root, filename))
+                        rel_path = os.path.relpath(full_path, search_path)
                         
-                        # Insert into treeview
-                        self.file_paths[rel_path] = full_path
-                        self.filtered_files.insert('', 'end', values=(size, mtime, rel_path))
+                        # Check if the relative path matches the pattern
+                        if self.matches_patterns(rel_path.replace('\\', '/'), file_pattern):
+                            try:
+                                stat = os.stat(full_path)
+                                size = self.format_size(stat.st_size)
+                                mtime = self.format_date(stat.st_mtime)
+                                
+                                # Insert into treeview
+                                self.file_paths[rel_path] = full_path
+                                self.filtered_files.insert('', 'end', values=(size, mtime, rel_path))
+                            except (OSError, IOError) as e:
+                                error_count += 1
                     except (OSError, IOError) as e:
-                        print(f"Error getting file info for {full_path}: {str(e)}")
+                        error_count += 1
                     
-            # Update status with file count
+            # Update status with file count and errors
             file_count = len(self.filtered_files.get_children())
-            self.status_var.set(f"Found {file_count} matching file{'s' if file_count != 1 else ''}")
+            status = f"Found {file_count} matching file{'s' if file_count != 1 else ''}"
+            if error_count > 0:
+                status += f" ({error_count} access error{'s' if error_count != 1 else ''})"
+            self.status_var.set(status)
         except (PermissionError, OSError) as e:
-            self.status_var.set(f"Error accessing files: {str(e)}")
+            self.status_var.set(f"Error accessing directory: {str(e)}")
 
     def get_selected_files(self):
         """Get a list of selected file paths from the filtered files treeview"""
         try:
+            # Get selected items
             selections = self.filtered_files.selection()
             if not selections:
                 return []
             
+            # Get file paths from selected items
             selected_files = []
             for item in selections:
                 # Get values from the selected item
@@ -382,6 +426,7 @@ class FileSearchGUI:
     def get_selected_file(self):
         """Get the selected file path from the filtered files treeview"""
         try:
+            # Get selected item
             selection = self.filtered_files.selection()
             if not selection:
                 return None
@@ -490,7 +535,7 @@ class FileSearchGUI:
             show_last = self.show_last.get()
             
             for root, _, files in os.walk(search_path):
-                matched_files = [f for f in files if self.matches_patterns(f, file_pattern)]
+                matched_files = [f for f in files if self.matches_patterns(os.path.relpath(os.path.join(root, f), search_path).replace('\\', '/'), file_pattern)]
                 for filename in matched_files:
                     # Add to filtered files list
                     rel_path = os.path.relpath(os.path.join(root, filename), search_path)
