@@ -178,14 +178,14 @@ class FileSearchGUI:
                                          selectmode='extended')  # Allow multiple selections
         
         # Define column headings and widths
-        self.filtered_files.heading('size', text='Size', anchor='e')
+        self.filtered_files.heading('size', text='Size', anchor='w')
         self.filtered_files.heading('date', text='Modified', anchor='w')
         self.filtered_files.heading('path', text='File Name', anchor='w')
         
         # Configure column properties
-        self.filtered_files.column('size', width=100, anchor='e')
-        self.filtered_files.column('date', width=150, anchor='w')
-        self.filtered_files.column('path', width=400, anchor='w')
+        self.filtered_files.column('size', width=80, minwidth=80, stretch=False, anchor='w')
+        self.filtered_files.column('date', width=140, minwidth=140, stretch=False, anchor='w')
+        self.filtered_files.column('path', width=400, minwidth=200, stretch=True, anchor='w')
         
         # Add scrollbars
         yscrollbar = ttk.Scrollbar(listbox_frame, orient="vertical", command=self.filtered_files.yview)
