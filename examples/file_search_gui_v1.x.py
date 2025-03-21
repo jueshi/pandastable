@@ -160,6 +160,10 @@ class FileSearchGUI:
         ttk.Checkbutton(controls_frame, text="1st match", variable=self.show_first).pack(side='left', padx=(0, 5))
         ttk.Checkbutton(controls_frame, text="Last match", variable=self.show_last).pack(side='left', padx=(0, 5))
         
+        # Simple results checkbox
+        self.simple_results = tk.BooleanVar(value=False)
+        ttk.Checkbutton(controls_frame, text="Simple Results", variable=self.simple_results).pack(side='left', padx=(0, 5))
+        
         # Search button in controls frame
         ttk.Button(controls_frame, text="Search", command=self.start_search).pack(side='left')
         
@@ -458,21 +462,28 @@ class FileSearchGUI:
             return None
 
     def safe_update_results(self, text, clickable=False, filepath=None, line_number=None):
-        if clickable:
-            tag_name = f"clickable_{self.next_tag_id}"
-            self.next_tag_id += 1
-            self.file_locations[tag_name] = (filepath, line_number)
-            
-            def update():
-                start = self.results_text.index("end-1c")
-                self.results_text.insert("end", text)
-                end = self.results_text.index("end-1c")
-                self.results_text.tag_add(tag_name, start, end)
-                self.results_text.tag_add("clickable", start, end)
-            
-            self.root.after(0, update)
-        else:
-            self.root.after(0, lambda t=text: self.results_text.insert("end", t))
+        """Thread-safe update of results text widget"""
+        def update():
+            if self.simple_results.get():
+                # For simple results, only show the matched line
+                if clickable and text.strip():  # Only show non-empty lines
+                    self.results_text.insert("end", text + "\n")
+            else:
+                # Normal display with all context
+                if clickable:
+                    tag = f"clickable_{self.next_tag_id}"
+                    self.next_tag_id += 1
+                    self.file_locations[tag] = (filepath, line_number)
+                    
+                    start = self.results_text.index("end-1c")
+                    self.results_text.insert("end", text + "\n")
+                    end = self.results_text.index("end-1c")
+                    self.results_text.tag_add(tag, start, end)
+                    self.results_text.tag_add("clickable", start, end)
+                else:
+                    self.results_text.insert("end", text + "\n")
+        
+        self.root.after(0, update)
 
     def open_file(self, filepath, line_number):
         try:
@@ -515,120 +526,70 @@ class FileSearchGUI:
         return terms
 
     def search_files(self, search_path, file_pattern, keyword, case_sensitive=False):
+        """Search for keyword in files"""
         try:
-            self.safe_update_results("Starting search...\n")
-            self.safe_update_results(f"Directory: {search_path}\n")
-            self.safe_update_results(f"Pattern: {file_pattern}\n")
-            self.safe_update_results(f"Keyword: {keyword}\n")
-            self.safe_update_results(f"Case sensitive: {case_sensitive}\n\n")
-
-            path = Path(search_path)
-            if not path.exists():
-                self.safe_update_results(f"Error: Path '{search_path}' does not exist\n")
+            # Clear previous results
+            self.results_text.delete('1.0', tk.END)
+            self.file_locations.clear()
+            self.next_tag_id = 0
+            
+            if not keyword:
                 return
-
-            # Split keyword into search terms
+            
             search_terms = self.split_search_terms(keyword)
-            if not search_terms:
-                self.safe_update_results("Error: No search terms provided\n")
-                return
-
-            # Clear filtered files list
-            self.root.after(0, self.filtered_files.delete, 0, tk.END)
-            
-            found_matches = False
             files_searched = 0
-            show_first = self.show_first.get()
-            show_last = self.show_last.get()
+            matches_found = 0
             
-            for root, _, files in os.walk(search_path):
-                matched_files = [f for f in files if self.matches_patterns(os.path.relpath(os.path.join(root, f), search_path).replace('\\', '/'), file_pattern)]
-                for filename in matched_files:
-                    # Add to filtered files list
-                    rel_path = os.path.relpath(os.path.join(root, filename), search_path)
-                    self.root.after(0, self.filtered_files.insert, tk.END, rel_path)
-                    
-                    files_searched += 1
-                    file_path = os.path.join(root, filename)
-                    try:
-                        with open(file_path, 'r', encoding='utf-8') as file:
-                            self.safe_update_results(f"Searching file: {file_path}\n")
-                            lines = file.readlines()
-                            # Dictionary to store matches for each term
-                            term_matches = {}
+            # Get list of files from treeview
+            for item in self.filtered_files.get_children():
+                rel_path = self.filtered_files.item(item)['values'][2]  # Path is the third column
+                full_path = self.file_paths.get(rel_path)
+                if not full_path:
+                    continue
+                
+                try:
+                    with open(full_path, 'r', encoding='utf-8', errors='ignore') as f:
+                        files_searched += 1
+                        lines = f.readlines()
+                        
+                        # Track matches for first/last options
+                        file_matches = []
+                        
+                        for i, line in enumerate(lines, 1):
+                            matching_terms = self.matches_search_terms(line, search_terms, case_sensitive)
+                            if matching_terms:
+                                matches_found += 1
+                                file_matches.append((i, line.strip(), matching_terms))
+                        
+                        # Process matches based on first/last options
+                        if file_matches:
+                            if not self.simple_results.get():
+                                self.safe_update_results(f"\nIn {rel_path}:")
                             
-                            for line_num, line in enumerate(lines, 1):
-                                matching_terms = self.matches_search_terms(line, search_terms, case_sensitive)
-                                if matching_terms:
-                                    for term in matching_terms:
-                                        if term not in term_matches:
-                                            term_matches[term] = []
-                                        term_matches[term].append((line_num, line.strip()))
+                            matches_to_show = []
+                            if self.show_first.get():
+                                matches_to_show.append(file_matches[0])
+                            if self.show_last.get() and len(file_matches) > 1:
+                                matches_to_show.append(file_matches[-1])
+                            if not self.show_first.get() and not self.show_last.get():
+                                matches_to_show = file_matches
                             
-                            if term_matches:
-                                found_matches = True
-                                self.safe_update_results(f"\nFound in {file_path}:\n")
-                                
-                                for term in search_terms:
-                                    if term in term_matches:
-                                        matches = term_matches[term]
-                                        if show_first and not show_last:
-                                            matches = [matches[0]]
-                                        elif show_last and not show_first:
-                                            matches = [matches[-1]]
-                                        elif show_first and show_last and len(matches) > 2:
-                                            matches = [matches[0], matches[-1]]
-                                        
-                                        self.safe_update_results(f"\n  Matches for '{term}':\n")
-                                        for line_num, line_text in matches:
-                                            # Highlight the current term
-                                            highlighted_text = line_text
-                                            if case_sensitive:
-                                                start = 0
-                                                while (pos := highlighted_text.find(term, start)) != -1:
-                                                    highlighted_text = (
-                                                        highlighted_text[:pos] + 
-                                                        "**" + highlighted_text[pos:pos+len(term)] + "**" + 
-                                                        highlighted_text[pos+len(term):]
-                                                    )
-                                                    start = pos + len(term) + 4
-                                            else:
-                                                text_lower = highlighted_text.lower()
-                                                term_lower = term.lower()
-                                                start = 0
-                                                while (pos := text_lower.find(term_lower, start)) != -1:
-                                                    highlighted_text = (
-                                                        highlighted_text[:pos] + 
-                                                        "**" + highlighted_text[pos:pos+len(term)] + "**" + 
-                                                        highlighted_text[pos+len(term):]
-                                                    )
-                                                    start = pos + len(term) + 4
-                                                    text_lower = highlighted_text.lower()
-                                            
-                                            self.safe_update_results("    ", clickable=False)
-                                            self.safe_update_results(f"{file_path}:{line_num}", 
-                                                                   clickable=True,
-                                                                   filepath=file_path,
-                                                                   line_number=line_num)
-                                            self.safe_update_results(f"\n      {highlighted_text}\n")
-                                        
-                                        if len(matches) < len(term_matches[term]):
-                                            remaining = len(term_matches[term]) - len(matches)
-                                            self.safe_update_results(f"      ... {remaining} more matches for '{term}' ...\n")
-                                
-                    except UnicodeDecodeError:
-                        self.safe_update_results(f"Warning: Could not read {file_path} - not a text file\n")
-                    except (PermissionError, OSError) as e:
-                        self.safe_update_results(f"Error reading {file_path}: {str(e)}\n")
+                            for line_num, line_text, terms in matches_to_show:
+                                if self.simple_results.get():
+                                    self.safe_update_results(f"{line_text}", True, full_path, line_num)
+                                else:
+                                    self.safe_update_results(f"Line {line_num}: {line_text}", True, full_path, line_num)
+                
+                except Exception as e:
+                    if not self.simple_results.get():
+                        self.safe_update_results(f"\nError reading {rel_path}: {str(e)}")
             
-            self.safe_update_results(f"\nFiles searched: {files_searched}\n")
-            if not found_matches:
-                self.safe_update_results("No matches found.\n")
+            # Update status
+            status = f"Searched {files_searched} files, found {matches_found} matches"
+            self.status_var.set(status)
             
-        except (PermissionError, OSError) as e:
-            self.safe_update_results(f"Error accessing files: {str(e)}\n")
-        finally:
-            self.root.after(0, lambda: self.status_var.set("Search completed"))
+        except Exception as e:
+            self.status_var.set(f"Search error: {str(e)}")
 
     def update_results(self, text):
         self.results_text.insert(tk.END, text)
