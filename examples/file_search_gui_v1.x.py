@@ -183,9 +183,9 @@ class FileSearchGUI:
                                          selectmode='extended')  # Allow multiple selections
         
         # Define column headings and widths
-        self.filtered_files.heading('size', text='Size', anchor='w')
-        self.filtered_files.heading('date', text='Modified', anchor='w')
-        self.filtered_files.heading('path', text='File Name', anchor='w')
+        self.filtered_files.heading('size', text='Size', anchor='w', command=lambda: self.sort_treeview('size', False))
+        self.filtered_files.heading('date', text='Modified', anchor='w', command=lambda: self.sort_treeview('date', False))
+        self.filtered_files.heading('path', text='File Name', anchor='w', command=lambda: self.sort_treeview('path', False))
         
         # Configure column properties
         self.filtered_files.column('size', width=80, minwidth=80, stretch=False, anchor='w')
@@ -386,7 +386,10 @@ class FileSearchGUI:
                                 error_count += 1
                     except (OSError, IOError) as e:
                         error_count += 1
-                    
+            
+            # Sort by date by default (newest first)
+            self.sort_treeview('date', True)
+            
             # Update status with file count and errors
             file_count = len(self.filtered_files.get_children())
             status = f"Found {file_count} matching file{'s' if file_count != 1 else ''}"
@@ -893,6 +896,53 @@ class FileSearchGUI:
         if directory:
             self.dir_path.set(directory)
             self.update_filtered_files()  # Update files when directory changes
+
+    def sort_treeview(self, col, reverse):
+        """Sort treeview by column"""
+        # Get all items
+        items = [(self.filtered_files.set(item, col), item) for item in self.filtered_files.get_children('')]
+        
+        # Custom sort for size column
+        if col == 'size':
+            # Convert size strings to bytes for sorting
+            def size_to_bytes(size_str):
+                try:
+                    number = float(''.join(c for c in size_str if c.isdigit() or c == '.'))
+                    unit = size_str.strip('0123456789. ')
+                    multiplier = {
+                        'B': 1,
+                        'KB': 1024,
+                        'MB': 1024**2,
+                        'GB': 1024**3,
+                        'TB': 1024**4
+                    }.get(unit.upper(), 1)
+                    return number * multiplier
+                except:
+                    return 0
+            
+            items = [(size_to_bytes(item[0]), item[1]) for item in items]
+        
+        # Custom sort for date column
+        elif col == 'date':
+            # Convert date strings to timestamps for sorting
+            def date_to_timestamp(date_str):
+                try:
+                    from datetime import datetime
+                    return datetime.strptime(date_str, '%Y-%m-%d %H:%M').timestamp()
+                except:
+                    return 0
+            
+            items = [(date_to_timestamp(item[0]), item[1]) for item in items]
+        
+        # Sort the items
+        items.sort(reverse=reverse)
+        
+        # Rearrange items in sorted positions
+        for index, (val, item) in enumerate(items):
+            self.filtered_files.move(item, '', index)
+        
+        # Reverse sort next time
+        self.filtered_files.heading(col, command=lambda: self.sort_treeview(col, not reverse))
 
 def main():
     root = tk.Tk()
