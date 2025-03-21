@@ -293,12 +293,14 @@ class FileSearchGUI:
                     # For exclusion patterns, add wildcards if not already a wildcard pattern
                     p = p[1:]  # Remove !
                     if not any(c in p for c in '*?[]'):
-                        # For directories, match the full path segment
+                        # For directories, match the path segment
                         if '/' in p:
                             exclude_patterns.append(p)
                         else:
-                            p = f'*{p}*'
-                            exclude_patterns.append(p)
+                            # Add trailing slash to ensure we match directory names
+                            exclude_patterns.append(f"{p}/")
+                            # Also match the pattern in filenames
+                            exclude_patterns.append(f"*{p}*")
                     else:
                         exclude_patterns.append(p)
                 else:
@@ -311,7 +313,8 @@ class FileSearchGUI:
             for pattern in exclude_patterns:
                 if '/' in pattern:
                     # For directory patterns, check if it's part of the path
-                    if pattern in filename_lower:
+                    pattern = pattern.rstrip('/')  # Remove trailing slash for comparison
+                    if f"/{pattern}/" in f"/{filename_lower}/":
                         return False
                 elif fnmatch.fnmatch(filename_lower, pattern):
                     return False  # File matches an exclude pattern
