@@ -1,3 +1,5 @@
+# live monitoring 
+
 import tkinter as tk
 from tkinter import ttk, filedialog, scrolledtext, messagebox
 from pathlib import Path
@@ -163,6 +165,15 @@ class FileSearchGUI:
         # Simple results checkbox
         self.simple_results = tk.BooleanVar(value=False)
         ttk.Checkbutton(controls_frame, text="Simple Results", variable=self.simple_results).pack(side='left', padx=(0, 5))
+        
+        # Auto-refresh controls
+        self.auto_refresh = tk.BooleanVar(value=False)
+        self.auto_refresh_interval = tk.StringVar(value="60")
+        auto_refresh_frame = ttk.Frame(controls_frame)
+        auto_refresh_frame.pack(side='left', padx=(5, 0))
+        ttk.Checkbutton(auto_refresh_frame, text="Auto-refresh", variable=self.auto_refresh, command=self.toggle_auto_refresh).pack(side='left')
+        ttk.Entry(auto_refresh_frame, textvariable=self.auto_refresh_interval, width=4).pack(side='left', padx=(2, 0))
+        ttk.Label(auto_refresh_frame, text="s").pack(side='left')
         
         # Search button in controls frame
         ttk.Button(controls_frame, text="Search", command=self.start_search).pack(side='left')
@@ -636,6 +647,27 @@ class FileSearchGUI:
         )
         thread.daemon = True
         thread.start()
+
+    def toggle_auto_refresh(self):
+        if self.auto_refresh.get():
+            try:
+                interval = int(self.auto_refresh_interval.get())
+                if interval < 1:
+                    raise ValueError("Interval must be positive")
+                self.schedule_auto_refresh()
+            except ValueError:
+                messagebox.showerror("Error", "Please enter a valid positive number for refresh interval")
+                self.auto_refresh.set(False)
+        else:
+            if hasattr(self, '_auto_refresh_id'):
+                self.root.after_cancel(self._auto_refresh_id)
+                self._auto_refresh_id = None
+
+    def schedule_auto_refresh(self):
+        if self.auto_refresh.get():
+            self.start_search()
+            interval = int(self.auto_refresh_interval.get()) * 1000  # Convert to milliseconds
+            self._auto_refresh_id = self.root.after(interval, self.schedule_auto_refresh)
 
     def show_context_menu(self, event):
         """Show the context menu on right click"""
