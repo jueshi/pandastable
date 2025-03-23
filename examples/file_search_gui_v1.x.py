@@ -178,6 +178,9 @@ class FileSearchGUI:
         # Search button in controls frame
         ttk.Button(controls_frame, text="Search", command=self.start_search).pack(side='left')
         
+        # Generate Code button
+        ttk.Button(controls_frame, text="Generate Code", command=self.generate_search_code).pack(side='left', padx=(5, 0))
+        
         # Configure column weights
         input_frame.grid_columnconfigure(1, weight=1)
         
@@ -592,6 +595,7 @@ class FileSearchGUI:
                             if self.show_first.get():
                                 matches_to_show.append(file_matches[0])
                             if self.show_last.get() and len(file_matches) > 1:
+                                # Show only first and last match
                                 matches_to_show.append(file_matches[-1])
                             if not self.show_first.get() and not self.show_last.get():
                                 matches_to_show = file_matches
@@ -949,6 +953,124 @@ class FileSearchGUI:
         
         # Reverse sort next time
         self.filtered_files.heading(col, command=lambda: self.sort_treeview(col, not reverse))
+
+    def generate_search_code(self):
+        """Generate a standalone Python script that reproduces the current search configuration"""
+        search_path = self.dir_path.get()
+        if not search_path:
+            messagebox.showerror("Error", "Please select a search directory first")
+            return
+            
+        file_pattern = self.file_pattern.get()
+        keyword = self.keyword.get()
+        case_sensitive = self.case_sensitive.get()
+        show_first = self.show_first.get()
+        show_last = self.show_last.get()
+        simple_results = self.simple_results.get()
+
+        # Save the generated code in the search directory
+        output_path = os.path.join(search_path, 'generated_code.py')
+
+        code_template = f'''# Generated search script
+import os
+import fnmatch
+import re
+from datetime import datetime
+
+def format_size(size):
+    """Format file size in bytes to human readable format"""
+    for unit in ['B', 'KB', 'MB', 'GB']:
+        if size < 1024:
+            return f"{{size:.1f}} {{unit}}"
+        size /= 1024
+    return f"{{size:.1f}} TB"
+
+def search_files():
+    search_path = r"{search_path}"
+    file_pattern = "{file_pattern}"
+    keyword = "{keyword}"
+    case_sensitive = {case_sensitive}
+    show_first = {show_first}
+    show_last = {show_last}
+    simple_results = {simple_results}
+
+    # Compile regex pattern for keyword if provided
+    if keyword:
+        try:
+            flags = 0 if case_sensitive else re.IGNORECASE
+            pattern = re.compile(keyword, flags)
+        except re.error:
+            print(f"Invalid regex pattern: {{keyword}}")
+            return
+
+    # Walk through directory
+    for root, _, files in os.walk(search_path):
+        for filename in fnmatch.filter(files, file_pattern):
+            filepath = os.path.join(root, filename)
+            
+            try:
+                # Get file info
+                stat = os.stat(filepath)
+                size = format_size(stat.st_size)
+                modified = datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+                
+                if not keyword:
+                    # If no keyword search, just print file info
+                    if simple_results:
+                        print(filepath)
+                    else:
+                        print(f"{{size:>10}} | {{modified}} | {{filepath}}")
+                    continue
+
+                # Search for keyword in file
+                try:
+                    with open(filepath, 'r', encoding='utf-8') as f:
+                        lines = f.readlines()
+                        matches = []
+                        
+                        for i, line in enumerate(lines, 1):
+                            if pattern.search(line):
+                                matches.append((i, line.strip()))
+                        
+                        if matches:
+                            if simple_results:
+                                print(filepath)
+                                continue
+
+                            print(f"\\nFile: {{filepath}}")
+                            print(f"Size: {{size}}, Modified: {{modified}}")
+                            
+                            if show_first and show_last and len(matches) > 2:
+                                # Show only first and last match
+                                print(f"Line {{matches[0][0]}}: {{matches[0][1]}}")
+                                print("...")
+                                print(f"Line {{matches[-1][0]}}: {{matches[-1][1]}}")
+                            elif show_first and matches:
+                                # Show only first match
+                                print(f"Line {{matches[0][0]}}: {{matches[0][1]}}")
+                            elif show_last and matches:
+                                # Show only last match
+                                print(f"Line {{matches[-1][0]}}: {{matches[-1][1]}}")
+                            else:
+                                # Show all matches
+                                for line_num, line in matches:
+                                    print(f"Line {{line_num}}: {{line}}")
+                            
+                except (UnicodeDecodeError, IOError) as e:
+                    print(f"Error reading {{filepath}}: {{e}}")
+                    
+            except OSError as e:
+                print(f"Error accessing {{filepath}}: {{e}}")
+
+if __name__ == '__main__':
+    search_files()
+'''
+        try:
+            with open(output_path, 'w', encoding='utf-8') as f:
+                f.write(code_template)
+            self.status_var.set(f"Search code generated: {output_path}")
+        except IOError as e:
+            messagebox.showerror("Error", f"Failed to save generated code: {e}")
 
 def main():
     root = tk.Tk()
