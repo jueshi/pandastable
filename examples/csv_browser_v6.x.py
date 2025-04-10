@@ -1608,7 +1608,7 @@ class CSVBrowser(tk.Tk):
 
     def save_correlation_analysis(self):
         """Save correlation analysis for the selected CSV file"""
-        if self.current_file is None or not hasattr(self, 'csv_table'):
+        if self.current_csv_file is None or not hasattr(self, 'csv_table'):
             messagebox.showinfo("Info", "Please load a CSV file first")
             return
 
@@ -1679,8 +1679,9 @@ class CSVBrowser(tk.Tk):
                     base_path = filedialog.asksaveasfilename(
                         defaultextension=".csv",
                         filetypes=[("CSV files", "*.csv")],
-                        initialdir=os.path.dirname(self.current_file),
-                        initialfile=f"corr-ana-{os.path.basename(self.current_file)}"
+                        initialdir=os.path.dirname(self.current_csv_file),
+                        # Use a shorter filename by taking first 30 chars of the original name
+                        initialfile=f"corr-{os.path.basename(self.current_csv_file)[:30]}"
                     )
                     
                     if base_path:
@@ -1690,6 +1691,7 @@ class CSVBrowser(tk.Tk):
                         base_path = self.normalize_long_path(base_path)
 
                         # Save correlation results
+                        # Use shorter suffixes for output files
                         corr_path = f"{base_path}_corr.csv"
                         corr_df.to_csv(corr_path, index=False)
                         
