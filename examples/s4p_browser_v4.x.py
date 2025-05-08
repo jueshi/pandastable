@@ -329,6 +329,7 @@ class SParamBrowser(tk.Tk):
                     for term in filter_terms:
                         term = term.strip()
                         if term:  # Skip empty terms
+                            term_mask = None  # Initialize term_mask to avoid UnboundLocalError
                             if term.startswith('!'):  # Exclusion term
                                 exclude_term = term[1:].strip()
                                 if exclude_term:
@@ -337,7 +338,10 @@ class SParamBrowser(tk.Tk):
                             else:  # Inclusion term
                                 term_mask = self.df['Name'].str.contains(term, case=False, na=False)
                                 print(f"Including rows with name containing: '{term}'")  # Debug print
-                            mask = mask & term_mask
+                            
+                            # Only apply the mask if term_mask was properly set
+                            if term_mask is not None:
+                                mask = mask & term_mask
                     
                     filtered_df = self.df[mask].copy()
                     print(f"\nFound {len(filtered_df)} matching files")  # Debug print
@@ -389,8 +393,8 @@ class SParamBrowser(tk.Tk):
                 
                 # Get filename and path directly from the displayed DataFrame
                 displayed_df = self.table.model.df
-                if row < 0 or row >= len(displayed_df): # Add this check
-                    print(f"Row index {row} out of bounds for displayed_df of length {len(displayed_df)}")
+                if new_row < 0 or new_row >= len(displayed_df):
+                    print(f"Row index {new_row} out of bounds for displayed_df of length {len(displayed_df)}")
                     return
                 file_path = str(displayed_df.iloc[new_row]['File_Path'])
 
@@ -918,10 +922,12 @@ class SParamBrowser(tk.Tk):
                 
             networks = []
             for row in selected_rows:
-                if row >= len(self.df):  # Check if row index is valid
+                # Use the displayed DataFrame (filtered) instead of the original DataFrame
+                displayed_df = self.table.model.df
+                if row >= len(displayed_df):  # Check if row index is valid
                     continue
                     
-                file_path = self.df.iloc[row].get('File_Path', os.path.join(self.current_directory, self.df.iloc[row]['Name']))
+                file_path = displayed_df.iloc[row].get('File_Path', os.path.join(self.current_directory, displayed_df.iloc[row]['Name']))
                 # Fix potential path separator inconsistencies
                 file_path = os.path.normpath(file_path.replace('\\', '/'))
                 
@@ -1446,10 +1452,12 @@ class SParamBrowser(tk.Tk):
 
         try:
             copied_files = []
+            # Use the displayed DataFrame (filtered) instead of the original DataFrame
+            displayed_df = self.table.model.df
             for row in selected_rows:
-                if row < len(self.df):
-                    filename = self.df.iloc[row]['Name']
-                    src_path = os.path.join(self.current_directory, filename)
+                if row < len(displayed_df):
+                    filename = displayed_df.iloc[row]['Name']
+                    src_path = displayed_df.iloc[row].get('File_Path', os.path.join(self.current_directory, filename))
 
                     try:
                         # Copy the file
@@ -1482,10 +1490,12 @@ class SParamBrowser(tk.Tk):
 
         try:
             moved_files = []
+            # Use the displayed DataFrame (filtered) instead of the original DataFrame
+            displayed_df = self.table.model.df
             for row in selected_rows:
-                if row < len(self.df):
-                    filename = self.df.iloc[row]['Name']
-                    src_path = os.path.join(self.current_directory, filename)
+                if row < len(displayed_df):
+                    filename = displayed_df.iloc[row]['Name']
+                    src_path = displayed_df.iloc[row].get('File_Path', os.path.join(self.current_directory, filename))
                     dst_path = os.path.join(dest_dir, filename)
                     
                     # Check if file already exists in destination
@@ -1507,11 +1517,11 @@ class SParamBrowser(tk.Tk):
             # Update the DataFrame and table
             if moved_files:
                 self.df = self.df[~self.df['Name'].isin(moved_files)]
-                self.table.model.df = self.df
+                self.table.model.df = displayed_df[~displayed_df['Name'].isin(moved_files)]
                 self.table.redraw()
                 
                 # Update file list
-                self.sparam_files = [f for f in self.sparam_files if f not in moved_files]
+                self.sparam_files = [f for f in self.sparam_files if os.path.basename(f) not in moved_files]
                 
                 messagebox.showinfo("Success", f"Moved {len(moved_files)} files to:\n{dest_dir}")
                 
@@ -1534,10 +1544,12 @@ class SParamBrowser(tk.Tk):
 
         deleted_files = []
         try:
+            # Use the displayed DataFrame (filtered) instead of the original DataFrame
+            displayed_df = self.table.model.df
             for row in selected_rows:
-                if row < len(self.df):
-                    filename = self.df.iloc[row]['Name']
-                    filepath = os.path.join(self.current_directory, filename)
+                if row < len(displayed_df):
+                    filename = displayed_df.iloc[row]['Name']
+                    filepath = displayed_df.iloc[row].get('File_Path', os.path.join(self.current_directory, filename))
 
                     try:
                         # Delete the file
@@ -1556,11 +1568,11 @@ class SParamBrowser(tk.Tk):
             # Update the DataFrame and table
             if deleted_files:
                 self.df = self.df[~self.df['Name'].isin(deleted_files)]
-                self.table.model.df = self.df
+                self.table.model.df = displayed_df[~displayed_df['Name'].isin(deleted_files)]
                 self.table.redraw()
                 
                 # Update file list
-                self.sparam_files = [f for f in self.sparam_files if f not in deleted_files]
+                self.sparam_files = [f for f in self.sparam_files if os.path.basename(f) not in deleted_files]
                 
                 messagebox.showinfo("Success", f"Deleted {len(deleted_files)} files")
                 
@@ -2306,7 +2318,6 @@ class SParamBrowser(tk.Tk):
             #               f"Phase = {np.angle(sdd[f, i, j], deg=True):.2f}°")
         
         return sdd
-
     def update_plot(self):
         """Update the plot based on checkbox states"""
         if self.last_networks:
@@ -3351,9 +3362,19 @@ class SParamBrowser(tk.Tk):
         - Ports 1,3: Input differential pair (P1 positive, P3 negative)
         - Ports 2,4: Output differential pair (P2 positive, P4 negative)
         """
-        if not self.current_file:
-            messagebox.showerror("Error", "Please select an S-parameter file first.")
-            return
+        # Check if a file is selected in the table
+        selected_rows = self.table.multiplerowlist
+        if not selected_rows or len(selected_rows) != 1:
+            if not self.current_file:
+                messagebox.showerror("Error", "Please select an S-parameter file first.")
+                return
+        else:
+            # Get the selected file from the filtered DataFrame
+            displayed_df = self.table.model.df
+            row = selected_rows[0]
+            if row < len(displayed_df):
+                self.current_file = displayed_df.iloc[row].get('File_Path', os.path.join(self.current_directory, displayed_df.iloc[row]['Name']))
+                self.current_file = os.path.normpath(self.current_file.replace('\\', '/'))
             
         if not self.current_file.endswith(('.s2p', '.s4p')):
             messagebox.showerror("Error", 
