@@ -337,8 +337,9 @@ class CSVBrowser(tk.Tk):
                 messagebox.showwarning("Merge CSV", "Please select at least two CSV files to merge.")
                 return
             
-            # Get full paths of selected files
-            selected_files = [self.df.iloc[idx]['File_Path'] for idx in selected_rows]
+            # Get full paths of selected files from the filtered/displayed DataFrame
+            displayed_df = self.table.model.df
+            selected_files = [displayed_df.iloc[idx]['File_Path'] for idx in selected_rows]
             
             # Read the first CSV as the base file with error handling
             try:
@@ -477,11 +478,11 @@ class CSVBrowser(tk.Tk):
                 
                 # Get filename and path directly from the displayed DataFrame
                 displayed_df = self.table.model.df
-                if row < 0 or row >= len(displayed_df): # Add this check
-                    print(f"Row index {row} out of bounds for displayed_df of length {len(displayed_df)}")
+                if new_row < 0 or new_row >= len(displayed_df):  # Fixed variable name from 'row' to 'new_row'
+                    print(f"Row index {new_row} out of bounds for displayed_df of length {len(displayed_df)}")
                     return
                 file_path = str(displayed_df.iloc[new_row]['File_Path'])
-
+    
                 # Load the CSV file
                 self.load_csv_file(file_path)   
             elif event.char and event.char.isprintable():
@@ -1437,11 +1438,14 @@ class CSVBrowser(tk.Tk):
         if not selected_rows:
             messagebox.showinfo("Info", "Please select a file to open in Excel")
             return
-
+    
         try:
+            # Get the filtered/displayed DataFrame
+            displayed_df = self.table.model.df
+            
             for row in selected_rows:
-                if row < len(self.df):
-                    file_path = self.df.iloc[row]['File_Path']
+                if row < len(displayed_df):
+                    file_path = displayed_df.iloc[row]['File_Path']
                     os.startfile(file_path)  # This will open the file with its default application (Excel for CSV)
         except Exception as e:
             messagebox.showerror("Error", f"Failed to open file in Excel:\n{str(e)}")
@@ -1452,7 +1456,7 @@ class CSVBrowser(tk.Tk):
         if not selected_rows:
             messagebox.showinfo("Info", "Please select file(s) to open in Spotfire")
             return
-
+    
         # Create a temporary directory for files
         temp_dir = os.path.join(os.environ.get('TEMP', os.path.expanduser('~')), 'CSVBrowser_temp')
         os.makedirs(temp_dir, exist_ok=True)
@@ -1471,9 +1475,12 @@ class CSVBrowser(tk.Tk):
             file_paths = []
             temp_paths = []  # To store any temporary copies
             
+            # Get the filtered/displayed DataFrame
+            displayed_df = self.table.model.df
+            
             for row in selected_rows:
-                if row < len(self.df):
-                    original_path = self.df.iloc[row]['File_Path']
+                if row < len(displayed_df):
+                    original_path = displayed_df.iloc[row]['File_Path']
                     file_path = self.normalize_long_path(original_path)
                     
                     # If path is too long, create a temporary copy with a shorter name
@@ -2091,7 +2098,6 @@ class CSVBrowser(tk.Tk):
             self.paned.sashpos(0, 300)
 
 
-
     def copy_selected_files(self):
         """Copy selected files to another folder"""
         # Get selected rows from the table's multiplerowlist
@@ -2115,13 +2121,16 @@ class CSVBrowser(tk.Tk):
             copied_files = []
             failed_files = []
             
+            # Get the filtered/displayed DataFrame
+            displayed_df = self.table.model.df
+            
             for row in selected_rows:
-                if row < len(self.df):
-                    filename = self.df.iloc[row]['Name']
+                if row < len(displayed_df):
+                    filename = displayed_df.iloc[row]['Name']
                     
-                    # Use the stored file path from the dataframe if available
-                    if 'File_Path' in self.df.columns and not pd.isna(self.df.iloc[row]['File_Path']):
-                        src_path = self.df.iloc[row]['File_Path']
+                    # Use the stored file path from the displayed DataFrame
+                    if 'File_Path' in displayed_df.columns and not pd.isna(displayed_df.iloc[row]['File_Path']):
+                        src_path = displayed_df.iloc[row]['File_Path']
                     else:
                         # Fall back to constructing the path
                         src_path = os.path.join(self.current_directory, filename)
@@ -2182,7 +2191,6 @@ class CSVBrowser(tk.Tk):
         except Exception as e:
             print(f"Error in copy_selected_files: {e}")
             messagebox.showerror("Error", f"Failed to copy files:\n{str(e)}")
-            traceback.print_exc()
 
     def move_selected_files(self):
         """Move selected files to a new directory"""
@@ -2262,16 +2270,19 @@ class CSVBrowser(tk.Tk):
 
         # Show confirmation dialog with count of files
         if not messagebox.askyesno("Confirm Delete", 
-                                 f"Are you sure you want to delete {len(selected_rows)} selected files?",
-                                 icon='warning'):
+                                f"Are you sure you want to delete {len(selected_rows)} selected files?",
+                                icon='warning'):
             return
 
         deleted_files = []
         failed_files = []
         try:
+            # Get the filtered/displayed DataFrame
+            displayed_df = self.table.model.df
+            
             for row in selected_rows:
-                if row < len(self.df):
-                    file_path = self.df.iloc[row]['File_Path']
+                if row < len(displayed_df):
+                    file_path = displayed_df.iloc[row]['File_Path']
                     
                     # Normalize the path to handle potential issues
                     file_path = os.path.normpath(file_path)
@@ -2314,11 +2325,10 @@ class CSVBrowser(tk.Tk):
                         print(f"Exception during delete: {e}")
                         failed_files.append((file_path, str(e)))
 
-            # Update the DataFrame and table
+            # Update the file list after deletion
             if deleted_files:
-                self.df = self.df[~self.df['Name'].isin([os.path.basename(file) for file in deleted_files])]
-                self.table.model.df = self.df
-                self.table.redraw()
+                # Refresh the file list instead of manually updating the DataFrame
+                self.update_file_list()
                 
                 if len(deleted_files) == 1:
                     messagebox.showinfo("Success", f"Deleted file: {os.path.basename(deleted_files[0])}")
@@ -3376,11 +3386,14 @@ Features:
         if not selected_rows:
             messagebox.showinfo("Info", "Please select a file to reveal in Explorer")
             return
-
+    
         try:
+            # Get the filtered/displayed DataFrame
+            displayed_df = self.table.model.df
+            
             for row in selected_rows:
-                if row < len(self.df):
-                    file_path = self.df.iloc[row]['File_Path']
+                if row < len(displayed_df):
+                    file_path = displayed_df.iloc[row]['File_Path']
                     
                     # Normalize the path to handle potential issues
                     file_path = os.path.normpath(file_path)
@@ -3392,7 +3405,7 @@ Features:
                     
                     # Use Windows-specific command to open and select file
                     subprocess.Popen(f'explorer /select,"{file_path}"', shell=True)
-
+    
         except Exception as e:
             messagebox.showerror("Error", f"Failed to reveal file in Explorer:\n{str(e)}")
 
