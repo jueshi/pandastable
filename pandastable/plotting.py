@@ -656,6 +656,7 @@ class PlotViewer(Frame):
                         d = df.drop(columns=by)
                     axs = self._doplot(d, ax, kind, False, errorbars, useindex,
                                   bw=bw, yerr=None, kwargs=kwargs)
+                    n = (n[0], str(n[1])) if isinstance(n, tuple) else n
                     ax.set_title(n)
                     handles, labels = ax.get_legend_handles_labels()
                     i+=1
@@ -788,7 +789,8 @@ class PlotViewer(Frame):
  
         if isinstance(axs, (list, np.ndarray)): # Apply labels to each subplot
             for ax in axs:
-                self.setAxisLabels(ax, kwds)
+                # self.setAxisLabels(ax, kwds)
+                pass
         else: # Apply labels to single axis
             self.setAxisLabels(axs, kwds)
         return
