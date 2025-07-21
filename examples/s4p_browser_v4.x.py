@@ -22,8 +22,8 @@ import os
 import sys
 
 # Add custom pandastable path to sys.path BEFORE importing pandastable
-custom_pandastable_path = r"C:\Users\juesh\OneDrive\Documents\windsurf\pandastable\pandastable"
-# custom_pandastable_path = r"C:\Users\JueShi\OneDrive - Astera Labs, Inc\Documents\windsurf\pandastable\pandastable"
+# custom_pandastable_path = r"C:\Users\juesh\OneDrive\Documents\windsurf\pandastable\pandastable"
+custom_pandastable_path = r"C:\Users\JueShi\OneDrive - Astera Labs, Inc\Documents\windsurf\pandastable\pandastable"
 if os.path.exists(custom_pandastable_path):
     # Insert at the beginning of sys.path to prioritize this version
     sys.path.insert(0, custom_pandastable_path)
@@ -138,6 +138,7 @@ class SParamBrowser(tk.Tk):
         self.show_tdr_var = tk.BooleanVar(value=False)  # Add TDR control variable
         self.show_pulse_var = tk.BooleanVar(value=False)  # Add pulse response control variable
         self.show_impedance_var = tk.BooleanVar(value=False)  # Add impedance profile control variable
+        self.show_impedance_time_var = tk.BooleanVar(value=False)  # Add impedance profile vs time control variable
         
         # Add zoom control variables
         self.freq_min = tk.StringVar(value='')
@@ -146,16 +147,16 @@ class SParamBrowser(tk.Tk):
         self.mag_max = tk.StringVar(value='')
         self.phase_min = tk.StringVar(value='')
         self.phase_max = tk.StringVar(value='')       
-        self.dist_min = tk.StringVar(value='')  # Add distance control for TDR
-        self.dist_max = tk.StringVar(value='')  # Add distance control for TDR
-        self.time_min = tk.StringVar(value='')  # Add time control for pulse response
-        self.time_max = tk.StringVar(value='')  # Add time control for pulse response
+        self.dist_min = tk.StringVar(value='0')  # Add distance control for TDR
+        self.dist_max = tk.StringVar(value='30')  # Add distance control for TDR
+        self.time_min = tk.StringVar(value='0')  # Add time control for pulse response
+        self.time_max = tk.StringVar(value='5')  # Add time control for pulse response
         self.amp_min = tk.StringVar(value='')   # Add amplitude control for pulse response
         self.amp_max = tk.StringVar(value='')   # Add amplitude control for pulse response
         
         # Add time domain resolution control variables
-        self.padding_factor = tk.StringVar(value='4')  # Zero-padding factor
-        self.window_type = tk.StringVar(value='exponential')  # Window function type
+        self.padding_factor = tk.StringVar(value='2')  # Zero-padding factor
+        self.window_type = tk.StringVar(value='none')  # Window function type
         self.freq_limit = tk.StringVar(value='')  # Add frequency limit variable for TDR
         
         # Add Smith chart window variable
@@ -588,6 +589,8 @@ class SParamBrowser(tk.Tk):
             # Impedance profile control - more compact
             ttk.Checkbutton(controls_frame, text="Z Profile", variable=self.show_impedance_var,
                            command=self.update_plot).pack(side=tk.LEFT)
+            ttk.Checkbutton(controls_frame, text="Z Profile(t)", variable=self.show_impedance_time_var,
+                           command=self.update_plot).pack(side=tk.LEFT)
             
             # Add zoom control frame with compact layout
             zoom_frame = ttk.LabelFrame(self.sparam_view_container, text="Zoom")
@@ -630,7 +633,7 @@ class SParamBrowser(tk.Tk):
             # Time domain controls - more compact
             time_frame = ttk.Frame(zoom_container)
             time_frame.pack(side=tk.LEFT, padx=2)
-            ttk.Label(time_frame, text="t(ps):").pack(side=tk.LEFT)
+            ttk.Label(time_frame, text="t(ns):").pack(side=tk.LEFT)
             ttk.Entry(time_frame, textvariable=self.time_min, width=6).pack(side=tk.LEFT, padx=1)
             ttk.Label(time_frame, text="-").pack(side=tk.LEFT, padx=1)
             ttk.Entry(time_frame, textvariable=self.time_max, width=6).pack(side=tk.LEFT, padx=1)
@@ -640,7 +643,7 @@ class SParamBrowser(tk.Tk):
             # Distance controls - more compact
             dist_frame = ttk.Frame(zoom_container)
             dist_frame.pack(side=tk.LEFT, padx=2)
-            ttk.Label(dist_frame, text="d(mm):").pack(side=tk.LEFT)
+            ttk.Label(dist_frame, text="d(inch):").pack(side=tk.LEFT)
             ttk.Entry(dist_frame, textvariable=self.dist_min, width=6).pack(side=tk.LEFT, padx=1)
             ttk.Label(dist_frame, text="-").pack(side=tk.LEFT, padx=1)
             ttk.Entry(dist_frame, textvariable=self.dist_max, width=6).pack(side=tk.LEFT, padx=1)
@@ -672,10 +675,10 @@ class SParamBrowser(tk.Tk):
             # Padding factor control - more compact
             pad_frame = ttk.Frame(settings_container)
             pad_frame.pack(side=tk.LEFT, padx=2)
-            ttk.Label(pad_frame, text="Pad:").pack(side=tk.LEFT)
+            ttk.Label(pad_frame, text="Pad:2-128").pack(side=tk.LEFT)
             vcmd = (self.register(self._validate_padding_factor), '%P')
             padding_entry = ttk.Entry(pad_frame, textvariable=self.padding_factor, 
-                                    width=5, validate='key', validatecommand=vcmd)
+                                    width=10, validate='key', validatecommand=vcmd)
             padding_entry.pack(side=tk.LEFT, padx=1)
             
             ttk.Separator(settings_container, orient='vertical').pack(side=tk.LEFT, padx=4, fill='y')
@@ -704,7 +707,7 @@ class SParamBrowser(tk.Tk):
             lowpass_frame.pack(side=tk.LEFT, padx=2)
             # Create the variable here to ensure it exists
             if not hasattr(self, 'low_pass_mode'):
-                self.low_pass_mode = tk.BooleanVar(value=True)
+                self.low_pass_mode = tk.BooleanVar(value=False)
             lowpass_check = ttk.Checkbutton(lowpass_frame, text="Low Pass", variable=self.low_pass_mode)
             lowpass_check.pack(side=tk.LEFT, padx=1)
             
@@ -746,7 +749,7 @@ class SParamBrowser(tk.Tk):
             return True
         try:
             factor = int(value)
-            return 2 <= factor <= 128
+            return 1 <= factor <= 128
         except ValueError:
             return False
             
@@ -1683,7 +1686,24 @@ class SParamBrowser(tk.Tk):
         
         # Get frequency points and S-parameters
         f = network.f
-        s11 = network.s[:, 0, 0]  # Get S11 parameter
+        # s11 = network.s[:, 0, 0]  # Get S11 parameter
+        # Check if we have a 4-port network
+        if network.s.shape[1] == 4:  # 4-port network
+            # Extract the S-parameters we need
+            # For a 4-port network with ports ordered as 1,2,3,4
+            # where 1,3 are the input differential pair and 2,4 are the output differential pair
+            # Sdd11 = (S11 - S13 - S31 + S33)/2
+            
+            # Get the individual S-parameters
+            s11 = network.s[:,0,0]  # S11
+            s13 = network.s[:,0,2]  # S13
+            s31 = network.s[:,2,0]  # S31
+            s33 = network.s[:,2,2]  # S33
+            
+            # Calculate differential S-parameter Sdd11
+            sdd11_complex = (s11 - s13 - s31 + s33) / 2.0
+            print(f"Sdd11 data shape: {sdd11_complex.shape}")        
+
         
         # Apply frequency limit if specified
         if freq_limit is not None:
@@ -1692,7 +1712,7 @@ class SParamBrowser(tk.Tk):
             # Find indices where frequency is below limit
             freq_mask = f <= freq_limit
             f = f[freq_mask]
-            s11 = s11[freq_mask]
+            sdd11_complex = sdd11_complex[freq_mask]
             print(f"Applied frequency limit: {len(freq_mask[freq_mask])} of {len(freq_mask)} points kept")
         
         # === Step 1: Preprocessing ===
@@ -1702,15 +1722,18 @@ class SParamBrowser(tk.Tk):
             f = np.insert(f, 0, 0)
             # For DC point, use the complex conjugate of the first point with magnitude of 1
             # This is better than a simple average as it preserves causality
-            dc_value = complex(np.real(s11[0]), 0)  # Real part only for DC
-            s11 = np.insert(s11, 0, dc_value)
-            print(f"Added DC point: {dc_value}")
+            # dc_value = complex(np.real(s11[0]), 0)  # Real part only for DC
+            dc_estimate = 2*abs(sdd11_complex[0]) - abs(sdd11_complex[1])  # Linear extrapolation
+            sdd11_complex = np.insert(sdd11_complex, 0, dc_estimate)
+            print(f"Added DC point: {dc_estimate}")
         
         # === Step 2: Apply windowing ===
         # Use hamming window (more commonly used in MATLAB)
-        window = np.hamming(len(s11))
-        s11_windowed = s11 * window
-        print(f"Applied Hamming window")
+        # window = np.hamming(len(s11))
+        # s11_windowed = s11 * window
+        # print(f"Applied Hamming window")
+        # Apply window function
+        sdd11_complex_windowed = self.apply_window(sdd11_complex)
         
         # === Step 3: Padding with zeros ===
         pad_factor = int(self.padding_factor.get())
@@ -1721,79 +1744,109 @@ class SParamBrowser(tk.Tk):
         # Create padded arrays
         f_step = f[1] - f[0]
         f_padded = np.concatenate([f, np.linspace(f[-1] + f_step, f[-1] + f_step * (n_padded - n_orig), n_padded - n_orig)])
-        s11_padded = np.pad(s11_windowed, (0, n_padded - n_orig), mode='constant')
+        sdd11_complex_padded = np.pad(sdd11_complex_windowed, (0, n_padded - n_orig), mode='constant')
         
         # === Step 4: Force Causality (MATLAB-style) ===
         # MATLAB ensures causality by making the response minimum phase
         # We can approximate this by ensuring the imaginary part has proper Hilbert transform relationship to real part
-        s11_real = np.real(s11_padded)
-        s11_imag = np.imag(s11_padded)
+        sdd11_complex_real = np.real(sdd11_complex_padded)
+        sdd11_complex_imag = np.imag(sdd11_complex_padded)
         
         # Filter higher frequencies (standard in MATLAB implementation)
         cutoff_idx = int(len(f_padded) * 0.8)  # Use 80% of bandwidth as in many MATLAB implementations
         for i in range(cutoff_idx, len(f_padded)):
             # Apply gentle roll-off
             roll_off = 0.5 * (1 + np.cos(np.pi * (i - cutoff_idx) / (len(f_padded) - cutoff_idx)))
-            s11_padded[i] *= roll_off
+            sdd11_complex_padded[i] *= roll_off
         
+        # Create symmetric spectrum for real time-domain signal
+        # Reverse and conjugate the array, excluding the first and last elements
+        sdd11_complex_padded_sym = np.concatenate([sdd11_complex_padded, np.conj(sdd11_complex_padded[::-1][1:-1])])
+        print(f"Symmetric spectrum shape: {sdd11_complex_padded_sym.shape}")
+
         # === Step 5: Compute time-domain response ===
         # Use IFFT for time domain conversion (standard approach)
-        tdr_raw = np.fft.ifft(s11_padded)
+        # tdr_raw = np.fft.ifft(s11_padded_sym)
         
+        # Time-domain TDR (reflection) impulse response
+        tdr_impulse = np.fft.ifft(sdd11_complex_padded_sym).real
+
+        # Time axis (for plotting)
+        n = len(sdd11_complex_padded_sym)
+        # Adjust time resolution due to added DC component
+        # dt = 1 / (2 * 10 * (f_padded[-1] - f_padded[0] + f_step))  # time resolution with DC
+        # t = np.linspace(0, dt * (n - 1), n)
+        dt = 1 / (2 * f_padded[-1])  # Time step
+        t = np.linspace(0, dt * (n - 1), n)
+
+        # rotate_size = round(0.1e-9/dt)
+        rotate_size = 0
+        t_rotate = t-rotate_size*dt
+        tdr_impulse_rotate = np.roll(tdr_impulse, rotate_size)
+
+        # Calculate step response (integral of impulse response)
+        tdr_step = np.cumsum(tdr_impulse_rotate)
+
+
         # === Step 6: Calculate distance ===
         c0 = 299792458  # Speed of light in vacuum (m/s)
         v_rel = 0.66    # Relative velocity (66% of c0)
         c = c0 * v_rel  # Propagation velocity in material
         
-        dt = 1 / (2 * f_padded[-1])  # Time step
         distance_step = c * dt / 2  # Divide by 2 for round-trip
-        distance = np.arange(n_padded) * distance_step * 100  # Convert to cm
+        # Create distance array with the same length as the symmetric spectrum
+        # This ensures distance and tdr arrays will have the same dimensions
+        distance = np.arange(len(sdd11_complex_padded_sym)) * distance_step * 100/2.54  # Convert to inch
         
-        print(f"Time step: {dt*1e12:.2f} ps")
-        print(f"Distance step: {distance_step*100:.4f} cm")
-        print(f"Max distance: {distance[-1]:.2f} cm")
+        print(f"Time step: {dt*1e9:.2f} ns")
+        print(f"Distance step: {distance_step*100/2.54:.4f} inch")
+        print(f"Max distance: {distance[-1]:.2f} inch")
         
         # === Step 7: Time-domain gating (commonly used in MATLAB) ===
         # Apply time-domain gating to remove unwanted reflections
         # Focus only on first 20% of the time domain response
-        gate_length = int(len(tdr_raw) * 0.2)
-        gate = np.ones(len(tdr_raw))
+        # gate_length = int(len(tdr_step) * 0.2)
+        # gate = np.ones(len(tdr_step))
         
-        # Apply cosine rolloff from cutoff to end
-        for i in range(gate_length, len(tdr_raw)):
-            # Cosine taper from 1 to 0
-            gate[i] = 0.5 * (1 + np.cos(np.pi * (i - gate_length) / gate_length))
+        # # Apply cosine rolloff from cutoff to end
+        # for i in range(gate_length, len(tdr_step)):
+        #     # Cosine taper from 1 to 0
+        #     gate[i] = 0.5 * (1 + np.cos(np.pi * (i - gate_length) / gate_length))
         
-        tdr_gated = tdr_raw * gate
-        
+        # tdr_gated = tdr_step * gate
+        tdr_gated = tdr_step
+
         # === Step 8: Extract real part and process for display ===
-        tdr_real = np.real(tdr_gated)
+        # tdr_real = np.real(tdr_gated)
         
-        # Center around mean value (like PLTS)
-        baseline = np.mean(tdr_real)
-        tdr_centered = tdr_real - baseline
-        print(f"Baseline value (mean): {baseline:.4f}")
-        
+        # # Center around mean value (like PLTS)
+        # baseline = np.mean(tdr_real)
+        # tdr_centered = tdr_real - baseline
+        # print(f"Baseline value (mean): {baseline:.4f}")
+        tdr_centered = tdr_gated
+
         # Convert to milli-units
         tdr_mU = tdr_centered * 1000
         
         # Apply smoothing to reduce noise (common in MATLAB)
-        from scipy.ndimage import gaussian_filter1d
-        tdr_smooth = gaussian_filter1d(tdr_mU, sigma=1.0)
+        # from scipy.ndimage import gaussian_filter1d
+        # tdr_smooth = gaussian_filter1d(tdr_mU, sigma=1.0)
+        tdr_smooth = tdr_mU
         
         # === Step 9: Apply non-linear emphasis ===
         # Apply non-linear emphasis to enhance visibility
-        tdr_abs = np.abs(tdr_smooth)
-        tdr_sign = np.sign(tdr_smooth)
+        # tdr_abs = np.abs(tdr_smooth)
+        # tdr_sign = np.sign(tdr_smooth)
         
-        # More standard MATLAB-like emphasis approach
-        emphasis_factor = 5.0
-        # Square root emphasis (commonly used in RF applications)
-        tdr_emphasized = tdr_sign * emphasis_factor * np.sqrt(tdr_abs)
+        # # More standard MATLAB-like emphasis approach
+        # emphasis_factor = 5.0
+        # # Square root emphasis (commonly used in RF applications)
+        # tdr_emphasized = tdr_sign * emphasis_factor * np.sqrt(tdr_abs)
         
-        # Final light smoothing
-        tdr_final = gaussian_filter1d(tdr_emphasized, sigma=0.5)
-        
+        # # Final light smoothing
+        # tdr_final = gaussian_filter1d(tdr_emphasized, sigma=0.5)
+        tdr_final = tdr_smooth
+
         # Print statistics
         tdr_min = np.min(tdr_final)
         tdr_max = np.max(tdr_final)
@@ -1804,9 +1857,141 @@ class SParamBrowser(tk.Tk):
         print(f"  Min: {tdr_min:.2f}mU, Max: {tdr_max:.2f}mU, Mean: {tdr_mean:.2f}mU, Abs Max: {tdr_abs_max:.2f}mU")
         print(f"  Number of samples: {len(tdr_final)}")
         
-        return distance, tdr_final
+        return t_rotate*1e9, distance, tdr_final
 
-    def calculate_pulse_response(self, network=None, use_iczt=True):
+    def calculate_pulse_response(self, network=None, use_iczt=False):
+        """Calculate pulse response with enhanced resolution
+        
+        Args:
+            network: Network object with S-parameters (default: None, uses first network)
+            use_iczt: Whether to use Inverse Chirp Z-Transform instead of IFFT (default: True)
+                    ICZT provides higher resolution but is computationally more expensive
+        """
+        if network is None:
+            network = self.data[0]  # Use first network if none specified
+            
+        # Get frequency points and S-parameters
+        f = network.f
+        # s11 = network.s[:, 0, 0]  # Get S11 parameter
+        # Check if we have a 4-port network
+        if network.s.shape[1] == 4:  # 4-port network
+            # Extract the S-parameters we need
+            # For a 4-port network with ports ordered as 1,2,3,4
+            # where 1,3 are the input differential pair and 2,4 are the output differential pair
+            # Sdd11 = (S11 - S13 - S31 + S33)/2
+            
+            # Get the individual S-parameters
+            s11 = network.s[:,0,0]  # S11
+            s13 = network.s[:,0,2]  # S13
+            s31 = network.s[:,2,0]  # S31
+            s33 = network.s[:,2,2]  # S33
+            
+            # Calculate differential S-parameter Sdd11
+            sdd11_complex = (s11 - s13 - s31 + s33) / 2.0
+            print(f"Sdd11 data shape: {sdd11_complex.shape}")
+        
+        # Apply window function
+        sdd11_complex_windowed = self.apply_window(sdd11_complex)
+        
+        if use_iczt:
+            # Use ICZT method for higher resolution and control
+            print("Using ICZT method for pulse response calculation...")
+            
+            # Calculate appropriate time range based on frequency range
+            t_max = 1 / (f[1] - f[0])  # Maximum time from frequency spacing
+            
+            # Number of points based on padding factor
+            pad_factor = int(self.padding_factor.get())
+            num_points = len(f) * pad_factor
+            
+            # Calculate pulse response using ICZT
+            t, pulse = calculate_tdr_iczt(f, sdd11_complex_windowed, 0, t_max/2, num_points)
+            
+            # Print pulse response diagnostics
+            print(f"ICZT pulse response diagnostics:")
+            print(f"  Time range: {t[0]*1e9:.1f} to {t[-1]*1e9:.1f} ns")
+            print(f"  Time resolution: {(t[1]-t[0])*1e9:.3f} ns")
+            print(f"  Number of points: {len(t)}")
+            
+            # Normalize and enhance pulse response
+            pulse_mag = np.abs(pulse)
+            max_val = np.max(pulse_mag)
+            
+            if max_val > 0 and max_val != 1.0:
+                # Normalize to unity amplitude
+                pulse = pulse / max_val
+                print(f"  Normalized pulse to unity amplitude")
+                
+            # Convert time to picoseconds for easier reading
+            t_ns = t * 1e9
+            
+            return t_ns, pulse
+        else:        
+                    
+            # Zero padding
+            pad_factor = int(self.padding_factor.get())
+            n_orig = len(f)
+            n_padded = n_orig * pad_factor
+            
+            # Pad the frequency domain data
+            sdd11_complex_padded = np.pad(sdd11_complex_windowed, (0, n_padded - n_orig), mode='constant')
+            
+            # Create padded frequency array
+            f_step = f[1] - f[0]  # Original frequency step
+            f_padded = np.linspace(f[0], f[0] + f_step * (n_padded - 1), n_padded)
+            
+            # Create Gaussian pulse in frequency domain
+            sigma = 0.1 / (2 * np.pi * f_padded[-1])  # Adjust pulse width
+            gauss = np.exp(-0.5 * (f_padded * sigma)**2)
+            
+            # Multiply with S-parameters and transform to time domain
+            pulse = np.fft.ifft(sdd11_complex_padded * gauss)
+            
+            # Calculate time array
+            dt = 1 / (2 * f_padded[-1])  # Time step
+            t = np.arange(n_padded) * dt  # Initial time array, may be updated later
+            
+            # Normalize and enhance pulse response for better visualization
+
+            pulse_mag = np.abs(pulse)
+
+            max_val = np.max(pulse_mag)
+
+            
+
+            # Print pulse response diagnostics
+
+            print(f"Pulse response diagnostics:")
+
+            print(f"  Max amplitude: {max_val:.6f}")
+
+            print(f"  Time range: {t[0]*1e9:.1f} to {t[-1]*1e9:.1f} ns")
+
+            print(f"  Time step: {(t[1]-t[0])*1e9:.3f} ns")
+
+            
+
+            # Check if normalization is needed
+
+            if max_val > 0 and max_val != 1.0:
+
+                # Normalize to unity amplitude
+
+                pulse = pulse / max_val
+
+                print(f"  Normalized pulse to unity amplitude")
+
+            
+
+            # Convert time to picoseconds for easier reading
+
+            t_ns = t * 1e9  # Convert to picoseconds
+
+            
+
+            return t_ns, pulse
+    
+    def calculate_s21_pulse_response(self, network=None, use_iczt=False):
         """Calculate pulse response with enhanced resolution
         
         Args:
@@ -1840,8 +2025,8 @@ class SParamBrowser(tk.Tk):
             
             # Print pulse response diagnostics
             print(f"ICZT pulse response diagnostics:")
-            print(f"  Time range: {t[0]*1e12:.1f} to {t[-1]*1e12:.1f} ps")
-            print(f"  Time resolution: {(t[1]-t[0])*1e12:.3f} ps")
+            print(f"  Time range: {t[0]*1e9:.1f} to {t[-1]*1e9:.1f} ns")
+            print(f"  Time resolution: {(t[1]-t[0])*1e9:.3f} ns")
             print(f"  Number of points: {len(t)}")
             
             # Normalize and enhance pulse response
@@ -1854,9 +2039,9 @@ class SParamBrowser(tk.Tk):
                 print(f"  Normalized pulse to unity amplitude")
                 
             # Convert time to picoseconds for easier reading
-            t_ps = t * 1e12
+            t_ns = t * 1e9
             
-            return t_ps, pulse
+            return t_ns, pulse
         else:        
                     
             # Zero padding
@@ -1896,9 +2081,9 @@ class SParamBrowser(tk.Tk):
 
             print(f"  Max amplitude: {max_val:.6f}")
 
-            print(f"  Time range: {t[0]*1e12:.1f} to {t[-1]*1e12:.1f} ps")
+            print(f"  Time range: {t[0]*1e9:.1f} to {t[-1]*1e9:.1f} ns")
 
-            print(f"  Time step: {(t[1]-t[0])*1e12:.3f} ps")
+            print(f"  Time step: {(t[1]-t[0])*1e9:.3f} ns")
 
             
 
@@ -1916,11 +2101,11 @@ class SParamBrowser(tk.Tk):
 
             # Convert time to picoseconds for easier reading
 
-            t_ps = t * 1e12  # Convert to picoseconds
+            t_ns = t * 1e9  # Convert to picoseconds
 
             
 
-            return t_ps, pulse
+            return t_ns, pulse
 
     def apply_window(self, freq_data):
         """Apply window function to frequency domain data with optional low pass filtering"""
@@ -1983,7 +2168,7 @@ class SParamBrowser(tk.Tk):
         if low_pass:
             # Create a low pass filter that gradually rolls off the high frequencies
             # Use a half-cosine rolloff for the upper half of the frequency range
-            cutoff_idx = n // 3  # Cut off at 1/3 of the frequency range
+            cutoff_idx = n*2 // 3  # Cut off at 1/3 of the frequency range
             lp_filter = np.ones(n)
             
             # Apply cosine rolloff from cutoff to end
@@ -2012,6 +2197,7 @@ class SParamBrowser(tk.Tk):
             show_tdr = self.show_tdr_var.get()
             show_pulse = self.show_pulse_var.get()
             show_impedance = self.show_impedance_var.get()
+            show_impedance_time = self.show_impedance_time_var.get()
             
             # Get frequency limit if specified
             try:
@@ -2019,57 +2205,97 @@ class SParamBrowser(tk.Tk):
             except ValueError:
                 freq_limit = None
             
-            if show_tdr or show_pulse or show_impedance:
-                if show_tdr and show_pulse and show_impedance:
-                    # Create three subplots for TDR, pulse response, and impedance profile
-                    ax_tdr = self.figure.add_subplot(131)
-                    ax_pulse = self.figure.add_subplot(132)
-                    ax_imp = self.figure.add_subplot(133)
-                elif show_tdr and show_pulse:
-                    # Create two subplots for TDR and pulse response
-                    ax_tdr = self.figure.add_subplot(121)
-                    ax_pulse = self.figure.add_subplot(122)
-                elif show_tdr and show_impedance:
-                    # Create two subplots for TDR and impedance profile
-                    ax_tdr = self.figure.add_subplot(121)
-                    ax_imp = self.figure.add_subplot(122)
-                elif show_pulse and show_impedance:
-                    # Create two subplots for pulse response and impedance profile
-                    ax_pulse = self.figure.add_subplot(121)
-                    ax_imp = self.figure.add_subplot(122)
+            if show_tdr or show_pulse or show_impedance or show_impedance_time:
+                # Count active plots
+                active_plots = sum([show_tdr, show_pulse, show_impedance, show_impedance_time])
+                
+                if active_plots == 4:
+                    # Create four subplots
+                    ax_tdr = self.figure.add_subplot(221)
+                    ax_pulse = self.figure.add_subplot(222)
+                    ax_imp = self.figure.add_subplot(223)
+                    ax_imp_time = self.figure.add_subplot(224)
+                elif active_plots == 3:
+                    # Create three subplots
+                    if show_tdr and show_pulse and show_impedance:
+                        ax_tdr = self.figure.add_subplot(131)
+                        ax_pulse = self.figure.add_subplot(132)
+                        ax_imp = self.figure.add_subplot(133)
+                    elif show_tdr and show_pulse and show_impedance_time:
+                        ax_tdr = self.figure.add_subplot(131)
+                        ax_pulse = self.figure.add_subplot(132)
+                        ax_imp_time = self.figure.add_subplot(133)
+                    elif show_tdr and show_impedance and show_impedance_time:
+                        ax_tdr = self.figure.add_subplot(131)
+                        ax_imp = self.figure.add_subplot(132)
+                        ax_imp_time = self.figure.add_subplot(133)
+                    elif show_pulse and show_impedance and show_impedance_time:
+                        ax_pulse = self.figure.add_subplot(131)
+                        ax_imp = self.figure.add_subplot(132)
+                        ax_imp_time = self.figure.add_subplot(133)
+                elif active_plots == 2:
+                    # Create two subplots
+                    if show_tdr and show_pulse:
+                        ax_tdr = self.figure.add_subplot(121)
+                        ax_pulse = self.figure.add_subplot(122)
+                    elif show_tdr and show_impedance:
+                        ax_tdr = self.figure.add_subplot(121)
+                        ax_imp = self.figure.add_subplot(122)
+                    elif show_tdr and show_impedance_time:
+                        ax_tdr = self.figure.add_subplot(121)
+                        ax_imp_time = self.figure.add_subplot(122)
+                    elif show_pulse and show_impedance:
+                        ax_pulse = self.figure.add_subplot(121)
+                        ax_imp = self.figure.add_subplot(122)
+                    elif show_pulse and show_impedance_time:
+                        ax_pulse = self.figure.add_subplot(121)
+                        ax_imp_time = self.figure.add_subplot(122)
+                    elif show_impedance and show_impedance_time:
+                        ax_imp = self.figure.add_subplot(121)
+                        ax_imp_time = self.figure.add_subplot(122)
                 else:
-                    # Create single plot for either TDR, pulse response, or impedance profile
+                    # Create single plot
                     ax = self.figure.add_subplot(111)
                 
                 for i, net in enumerate(networks):
                     label = f'Net{i+1}' if len(net.name) == 0 else net.name
                     
                     if show_tdr:
-                        distance, tdr = self.calculate_tdr(net, freq_limit=freq_limit)
-                        ax_plot = ax_tdr if show_pulse or show_impedance else ax
+                        t_ns, distance, tdr = self.calculate_tdr(net, freq_limit=freq_limit)
+                        if active_plots > 1:
+                            ax_plot = ax_tdr
+                        else:
+                            ax_plot = ax
                         # Use PLTS-style plotting
-                        self.plot_tdr_and_impedance(ax_plot, distance, tdr, label)
+                        self.plot_tdr_and_impedance(ax_plot, t_ns, tdr, label)
                     
                     if show_pulse:
                         time, pulse = self.calculate_pulse_response(net)
-                        ax_plot = ax_pulse if show_tdr or show_impedance else ax
+                        if active_plots > 1:
+                            ax_plot = ax_pulse
+                        else:
+                            ax_plot = ax
                         # Plot magnitude of pulse response
                         ax_plot.plot(time, np.abs(pulse), label=label)
-                        ax_plot.set_xlabel('Time (ps)')
+                        ax_plot.set_xlabel('Time (ns)')
                         ax_plot.set_ylabel('Amplitude')
                         ax_plot.set_title('Pulse Response')
                         # Set appropriate y-axis formatting
                         ax_plot.ticklabel_format(axis='y', style='plain', useOffset=False)
                         ax_plot.grid(True)
-                        ax_plot.legend()
+                        ax_plot.legend(loc='upper right')
                     
                     if show_impedance:
-                        distance, tdr = self.calculate_tdr(net, freq_limit=freq_limit)
+                        t_ns, distance, tdr = self.calculate_tdr(net, freq_limit=freq_limit)
+
                         impedance = self.calculate_impedance_profile(tdr)
-                        ax_plot = ax_imp if show_tdr or show_pulse else ax
+                        if active_plots > 1:
+                            ax_plot = ax_imp
+                        else:
+                            ax_plot = ax
                         # Plot impedance vs. distance
-                        ax_plot.plot(distance * 1000, np.real(impedance), label=label)
-                        ax_plot.set_xlabel('Distance (mm)')
+                        ax_plot.plot(distance, np.real(impedance), label=label)
+                        ax_plot.set_xlabel('Distance (inch)')
                         ax_plot.set_ylabel('Impedance (Ω)')
                         ax_plot.set_title('Impedance Profile')
                         # Explicitly set y-axis limits to avoid scientific notation
@@ -2081,11 +2307,37 @@ class SParamBrowser(tk.Tk):
                         # Use simple, non-scientific notation for y-axis
                         ax_plot.ticklabel_format(axis='y', style='plain', useOffset=False)
                         ax_plot.grid(True)
-                        ax_plot.legend()
                         
                         # Add reference line at Z0=100Ω
                         ax_plot.axhline(y=100, color='r', linestyle='--', alpha=0.5, label='Z0=100Ω')
-                        ax_plot.legend()
+                        ax_plot.legend(loc='upper right')
+                    
+                    if show_impedance_time:
+                        t_ns, distance, tdr = self.calculate_tdr(net, freq_limit=freq_limit)
+
+                        impedance = self.calculate_impedance_profile(tdr)
+                        if active_plots > 1:
+                            ax_plot = ax_imp_time
+                        else:
+                            ax_plot = ax
+                        # Plot impedance vs. time
+                        ax_plot.plot(t_ns, np.real(impedance), label=label)
+                        ax_plot.set_xlabel('Time (ns)')
+                        ax_plot.set_ylabel('Impedance (Ω)')
+                        ax_plot.set_title('Impedance Profile vs Time')
+                        # Explicitly set y-axis limits to avoid scientific notation
+                        y_min = max(10, np.min(np.real(impedance)))
+                        y_max = min(200, np.max(np.real(impedance)))
+                        # Set reasonable limits with some margin
+                        margin = (y_max - y_min) * 0.1
+                        ax_plot.set_ylim([y_min - margin, y_max + margin])
+                        # Use simple, non-scientific notation for y-axis
+                        ax_plot.ticklabel_format(axis='y', style='plain', useOffset=False)
+                        ax_plot.grid(True)
+                        
+                        # Add reference line at Z0=100Ω
+                        ax_plot.axhline(y=100, color='r', linestyle='--', alpha=0.5, label='Z0=100Ω')
+                        ax_plot.legend(loc='upper right')
                 
             else:
                 # Original frequency domain plotting code continues here...
@@ -2270,6 +2522,7 @@ class SParamBrowser(tk.Tk):
             # Adjust layout and redraw
             self.figure.tight_layout()
             self.canvas.draw()
+            self.apply_zoom()  #update based on the checkbox selection
             
         except Exception as e:
             print(f"Error plotting networks: {str(e)}")
@@ -2344,8 +2597,8 @@ class SParamBrowser(tk.Tk):
             for ax in self.figure.get_axes():
                 title = ax.get_title()
                 if 'TDR' in title:
-                    if dist_min is not None and dist_max is not None:
-                        ax.set_xlim(dist_min, dist_max)
+                    if time_min is not None and time_max is not None:
+                        ax.set_xlim(time_min, time_max)
                     if mag_min is not None and mag_max is not None:
                         ax.set_ylim([-max(abs(mag_min), abs(mag_max))*1.2, max(abs(mag_min), abs(mag_max))*1.2])
                 elif 'Pulse Response' in title:
@@ -2353,6 +2606,11 @@ class SParamBrowser(tk.Tk):
                         ax.set_xlim(time_min, time_max)
                     if amp_min is not None and amp_max is not None:
                         ax.set_ylim(amp_min, amp_max)
+                elif 'Impedance Profile vs Time' in title:
+                    if time_min is not None and time_max is not None:
+                        ax.set_xlim(time_min, time_max)
+                    if mag_min is not None and mag_max is not None:
+                        ax.set_ylim(mag_min, mag_max)
                 elif 'Impedance Profile' in title:
                     if dist_min is not None and dist_max is not None:
                         ax.set_xlim(dist_min, dist_max)
@@ -2862,11 +3120,11 @@ class SParamBrowser(tk.Tk):
     
         return Z_smooth
 
-    def plot_tdr_and_impedance(self, ax_plot, distance, tdr, label):
+    def plot_tdr_and_impedance(self, ax_plot, t_ns, tdr, label):
         """Plot TDR response in PLTS style"""
-        # Plot TDR response in millimeters
-        ax_plot.plot(distance * 1000, np.real(tdr), label=label)
-        ax_plot.set_xlabel('Distance (mm)')
+        # Plot TDR response in nanoseconds
+        ax_plot.plot(t_ns, np.real(tdr), label=label)
+        ax_plot.set_xlabel('Time (ns)')
         ax_plot.set_ylabel('Reflection Coefficient (mU)')
         ax_plot.set_title('Time Domain Reflectometry (TDR)')
     
