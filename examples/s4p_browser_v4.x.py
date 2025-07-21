@@ -152,10 +152,12 @@ class SParamBrowser(tk.Tk):
         self.phase_max = tk.StringVar(value='')       
         self.dist_min = tk.StringVar(value='0')  # Add distance control for TDR
         self.dist_max = tk.StringVar(value='30')  # Add distance control for TDR
-        self.time_min = tk.StringVar(value='0')  # Add time control for pulse response
+        self.time_min = tk.StringVar(value='-0.1')  # Add time control for pulse response
         self.time_max = tk.StringVar(value='5')  # Add time control for pulse response
         self.amp_min = tk.StringVar(value='')   # Add amplitude control for pulse response
         self.amp_max = tk.StringVar(value='')   # Add amplitude control for pulse response
+        self.imp_min = tk.StringVar(value='')   # Add impedance control for impedance profile
+        self.imp_max = tk.StringVar(value='')   # Add impedance control for impedance profile
         
         # Add time domain resolution control variables
         self.padding_factor = tk.StringVar(value='2')  # Zero-padding factor
@@ -671,6 +673,16 @@ class SParamBrowser(tk.Tk):
             ttk.Entry(amp_frame, textvariable=self.amp_min, width=6).pack(side=tk.LEFT, padx=1)
             ttk.Label(amp_frame, text="-").pack(side=tk.LEFT, padx=1)
             ttk.Entry(amp_frame, textvariable=self.amp_max, width=6).pack(side=tk.LEFT, padx=1)
+            
+            ttk.Separator(zoom_container, orient='vertical').pack(side=tk.LEFT, padx=4, fill='y')
+            
+            # Impedance controls - more compact
+            imp_frame = ttk.Frame(zoom_container)
+            imp_frame.pack(side=tk.LEFT, padx=2)
+            ttk.Label(imp_frame, text="Z(Ω):").pack(side=tk.LEFT)
+            ttk.Entry(imp_frame, textvariable=self.imp_min, width=6).pack(side=tk.LEFT, padx=1)
+            ttk.Label(imp_frame, text="-").pack(side=tk.LEFT, padx=1)
+            ttk.Entry(imp_frame, textvariable=self.imp_max, width=6).pack(side=tk.LEFT, padx=1)
             
             # Zoom buttons - more compact
             btn_frame = ttk.Frame(zoom_container)
@@ -1800,27 +1812,15 @@ class SParamBrowser(tk.Tk):
 
         # Time axis (for plotting)
         n = len(sdd11_complex_padded_sym)
-        
-        # === CORRECTED TIME STEP CALCULATION ===
-        # For IFFT with symmetric spectrum, the correct time step is:
-        # dt = 1 / (2 * f_max) where f_max is the maximum frequency
-        # This is the standard formula used in PLTS and other industry tools
-        
-        f_max = f_padded[-1]  # Maximum frequency in Hz
-        dt = 1 / (2 * f_max)  # Time step in seconds
-        
-        # Convert to nanoseconds for display
-        dt_ns = dt * 1e9
-        
-        # Create time array
+        # Correct time step calculation based on frequency span and number of points
+        # For IFFT, the time step should be based on the frequency resolution
+        df = (f_padded[-1] - f_padded[0]) / (len(f_padded) - 1)  # Frequency resolution
+        dt = 1 / (2 * len(f_padded) * df)  # Correct time step for IFFT
+        # Alternative: dt = 1 / (2 * (f_padded[-1] - f_padded[0]))  # Based on frequency span
         t = np.linspace(0, dt * (n - 1), n)
-        t_ns = t * 1e9  # Convert to nanoseconds
-        
-        print(f"Time calculation: f_max = {f_max/1e9:.2f} GHz, dt = {dt_ns:.3f} ns")
-        print(f"Time range: 0 to {t_ns[-1]:.1f} ns ({len(t)} points)")
 
-        # rotate_size = round(0.1e-9/dt)
-        rotate_size = 0
+        rotate_size = round(0.1e-9/dt)
+        # rotate_size = 0
         t_rotate = t-rotate_size*dt
         tdr_impulse_rotate = np.roll(tdr_impulse, rotate_size)
 
@@ -1848,6 +1848,7 @@ class SParamBrowser(tk.Tk):
         # Use the actual length of the final TDR result for consistency
         distance = np.arange(n) * distance_step * 39.3701  # Convert meters to inches (1m = 39.3701 inches)
         
+        print(f"Time step: {dt*1e9:.2f} ns")
         print(f"Distance step: {distance_step*39.3701:.4f} inch")
         print(f"Max distance: {distance[-1]:.2f} inch")
         
@@ -1906,7 +1907,7 @@ class SParamBrowser(tk.Tk):
         print(f"  Min: {tdr_min:.2f}mU, Max: {tdr_max:.2f}mU, Mean: {tdr_mean:.2f}mU, Abs Max: {tdr_abs_max:.2f}mU")
         print(f"  Number of samples: {len(tdr_final)}")
         
-        return t_ns, distance, tdr_final
+        return t_rotate*1e9, distance, tdr_final
 
     def calculate_pulse_response(self, network=None, use_iczt=False):
         """Calculate pulse response with enhanced resolution
@@ -2641,6 +2642,8 @@ class SParamBrowser(tk.Tk):
             time_max = float(self.time_max.get()) if self.time_max.get() else None
             amp_min = float(self.amp_min.get()) if self.amp_min.get() else None
             amp_max = float(self.amp_max.get()) if self.amp_max.get() else None
+            imp_min = float(self.imp_min.get()) if self.imp_min.get() else None
+            imp_max = float(self.imp_max.get()) if self.imp_max.get() else None
             
             # Update all subplot axes limits
             for ax in self.figure.get_axes():
@@ -2658,13 +2661,13 @@ class SParamBrowser(tk.Tk):
                 elif 'Impedance Profile vs Time' in title:
                     if time_min is not None and time_max is not None:
                         ax.set_xlim(time_min, time_max)
-                    if mag_min is not None and mag_max is not None:
-                        ax.set_ylim(mag_min, mag_max)
+                    if imp_min is not None and imp_max is not None:
+                        ax.set_ylim(imp_min, imp_max)
                 elif 'Impedance Profile' in title:
                     if dist_min is not None and dist_max is not None:
                         ax.set_xlim(dist_min, dist_max)
-                    if mag_min is not None and mag_max is not None:
-                        ax.set_ylim(mag_min, mag_max)
+                    if imp_min is not None and imp_max is not None:
+                        ax.set_ylim(imp_min, imp_max)
                 elif 'Magnitude' in title:
                     if freq_min is not None and freq_max is not None:
                         ax.set_xlim(freq_min, freq_max)
@@ -2697,6 +2700,8 @@ class SParamBrowser(tk.Tk):
         self.time_max.set('')
         self.amp_min.set('')
         self.amp_max.set('')
+        self.imp_min.set('')
+        self.imp_max.set('')
         
         # Auto-scale all axes
         for ax in self.figure.get_axes():
@@ -3201,31 +3206,16 @@ class SParamBrowser(tk.Tk):
         # Apply light smoothing to impedance profile
         from scipy.ndimage import gaussian_filter1d
         Z_smooth = gaussian_filter1d(Z, sigma=0.8)
-        
-        # === Baseline Correction (Industry Standard) ===
-        # Center the impedance at Z0 (100Ω) to match PLTS and other industry tools
-        # Calculate the baseline offset from the expected reference
-        baseline_mean = np.mean(Z_smooth)
-        baseline_offset = Z0 - baseline_mean
-        
-        print(f"Before baseline correction - min: {np.min(Z_smooth):.1f} ohm, max: {np.max(Z_smooth):.1f} ohm, mean: {baseline_mean:.1f} ohm")
-        print(f"Baseline offset: {baseline_offset:.2f} ohm (centering at {Z0} ohm)")
-        
-        # Apply baseline correction
-        Z_corrected = Z_smooth + baseline_offset
-        
-        # Apply final clipping after baseline correction to maintain reasonable bounds
-        Z_corrected = np.clip(Z_corrected, 20, 200)
     
-        print(f"After baseline correction - min: {np.min(Z_corrected):.1f} ohm, max: {np.max(Z_corrected):.1f} ohm, mean: {np.mean(Z_corrected):.1f} ohm")
+        print(f"Final impedance range - min: {np.min(Z_smooth):.1f} ohm, max: {np.max(Z_smooth):.1f} ohm, mean: {np.mean(Z_smooth):.1f} ohm")
     
         # Display samples that produce max and min impedance
-        max_Z_idx = np.argmax(Z_corrected)
-        min_Z_idx = np.argmin(Z_corrected)
-        print(f"  Max Z at index {max_Z_idx}: Z = {Z_corrected[max_Z_idx]:.1f} ohm")
-        print(f"  Min Z at index {min_Z_idx}: Z = {Z_corrected[min_Z_idx]:.1f} ohm")
+        max_Z_idx = np.argmax(Z_smooth)
+        min_Z_idx = np.argmin(Z_smooth)
+        print(f"  Max Z at index {max_Z_idx}: Z = {Z_smooth[max_Z_idx]:.1f} ohm")
+        print(f"  Min Z at index {min_Z_idx}: Z = {Z_smooth[min_Z_idx]:.1f} ohm")
     
-        return Z_corrected
+        return Z_smooth
 
     def plot_tdr_and_impedance(self, ax_plot, t_ns, tdr, label):
         """Plot TDR response in PLTS style"""
