@@ -1734,12 +1734,25 @@ class SParamBrowser(tk.Tk):
         if f[0] > 0:
             # Insert DC point by extrapolating from first few points
             f = np.insert(f, 0, 0)
-            # For DC point, use the complex conjugate of the first point with magnitude of 1
-            # This is better than a simple average as it preserves causality
-            # dc_value = complex(np.real(s11[0]), 0)  # Real part only for DC
-            dc_estimate = 2*abs(sdd11_complex[0]) - abs(sdd11_complex[1])  # Linear extrapolation
+            
+            # Use complex extrapolation to preserve both magnitude and phase
+            # Linear extrapolation: DC = 2*S(f1) - S(f2)
+            dc_complex = 2*sdd11_complex[0] - sdd11_complex[1]
+            
+            # Apply physical constraints for passive network (|S| <= 1)
+            dc_magnitude = np.abs(dc_complex)
+            if dc_magnitude > 0.99:
+                # Scale down to stay within physical bounds
+                dc_complex = dc_complex * (0.99 / dc_magnitude)
+            
+            # For differential pairs, DC component should be real-dominated
+            # but preserve some phase information for causality
+            dc_real = np.clip(np.real(dc_complex), -0.99, 0.99)
+            dc_imag = np.clip(np.imag(dc_complex), -0.1, 0.1)  # Small imaginary part
+            dc_estimate = complex(dc_real, dc_imag)
+            
             sdd11_complex = np.insert(sdd11_complex, 0, dc_estimate)
-            print(f"Added DC point: {dc_estimate}")
+            print(f"Added DC point: {dc_estimate:.6f} (mag: {np.abs(dc_estimate):.6f}, phase: {np.angle(dc_estimate)*180/np.pi:.2f}°)")
         
         # === Step 2: Apply windowing ===
         # Use hamming window (more commonly used in MATLAB)
@@ -3177,16 +3190,31 @@ class SParamBrowser(tk.Tk):
         # Apply light smoothing to impedance profile
         from scipy.ndimage import gaussian_filter1d
         Z_smooth = gaussian_filter1d(Z, sigma=0.8)
+        
+        # === Baseline Correction (Industry Standard) ===
+        # Center the impedance at Z0 (100Ω) to match PLTS and other industry tools
+        # Calculate the baseline offset from the expected reference
+        baseline_mean = np.mean(Z_smooth)
+        baseline_offset = Z0 - baseline_mean
+        
+        print(f"Before baseline correction - min: {np.min(Z_smooth):.1f} ohm, max: {np.max(Z_smooth):.1f} ohm, mean: {baseline_mean:.1f} ohm")
+        print(f"Baseline offset: {baseline_offset:.2f} ohm (centering at {Z0} ohm)")
+        
+        # Apply baseline correction
+        Z_corrected = Z_smooth + baseline_offset
+        
+        # Apply final clipping after baseline correction to maintain reasonable bounds
+        Z_corrected = np.clip(Z_corrected, 20, 200)
     
-        print(f"Final impedance range - min: {np.min(Z_smooth):.1f} ohm, max: {np.max(Z_smooth):.1f} ohm, mean: {np.mean(Z_smooth):.1f} ohm")
+        print(f"After baseline correction - min: {np.min(Z_corrected):.1f} ohm, max: {np.max(Z_corrected):.1f} ohm, mean: {np.mean(Z_corrected):.1f} ohm")
     
         # Display samples that produce max and min impedance
-        max_Z_idx = np.argmax(Z_smooth)
-        min_Z_idx = np.argmin(Z_smooth)
-        print(f"  Max Z at index {max_Z_idx}: Z = {Z_smooth[max_Z_idx]:.1f} ohm")
-        print(f"  Min Z at index {min_Z_idx}: Z = {Z_smooth[min_Z_idx]:.1f} ohm")
+        max_Z_idx = np.argmax(Z_corrected)
+        min_Z_idx = np.argmin(Z_corrected)
+        print(f"  Max Z at index {max_Z_idx}: Z = {Z_corrected[max_Z_idx]:.1f} ohm")
+        print(f"  Min Z at index {min_Z_idx}: Z = {Z_corrected[min_Z_idx]:.1f} ohm")
     
-        return Z_smooth
+        return Z_corrected
 
     def plot_tdr_and_impedance(self, ax_plot, t_ns, tdr, label):
         """Plot TDR response in PLTS style"""
