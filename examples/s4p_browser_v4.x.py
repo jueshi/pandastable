@@ -1800,12 +1800,24 @@ class SParamBrowser(tk.Tk):
 
         # Time axis (for plotting)
         n = len(sdd11_complex_padded_sym)
-        # Correct time step calculation based on frequency span and number of points
-        # For IFFT, the time step should be based on the frequency resolution
-        df = (f_padded[-1] - f_padded[0]) / (len(f_padded) - 1)  # Frequency resolution
-        dt = 1 / (2 * len(f_padded) * df)  # Correct time step for IFFT
-        # Alternative: dt = 1 / (2 * (f_padded[-1] - f_padded[0]))  # Based on frequency span
+        
+        # === CORRECTED TIME STEP CALCULATION ===
+        # For IFFT with symmetric spectrum, the correct time step is:
+        # dt = 1 / (2 * f_max) where f_max is the maximum frequency
+        # This is the standard formula used in PLTS and other industry tools
+        
+        f_max = f_padded[-1]  # Maximum frequency in Hz
+        dt = 1 / (2 * f_max)  # Time step in seconds
+        
+        # Convert to nanoseconds for display
+        dt_ns = dt * 1e9
+        
+        # Create time array
         t = np.linspace(0, dt * (n - 1), n)
+        t_ns = t * 1e9  # Convert to nanoseconds
+        
+        print(f"Time calculation: f_max = {f_max/1e9:.2f} GHz, dt = {dt_ns:.3f} ns")
+        print(f"Time range: 0 to {t_ns[-1]:.1f} ns ({len(t)} points)")
 
         # rotate_size = round(0.1e-9/dt)
         rotate_size = 0
@@ -1836,7 +1848,6 @@ class SParamBrowser(tk.Tk):
         # Use the actual length of the final TDR result for consistency
         distance = np.arange(n) * distance_step * 39.3701  # Convert meters to inches (1m = 39.3701 inches)
         
-        print(f"Time step: {dt*1e9:.2f} ns")
         print(f"Distance step: {distance_step*39.3701:.4f} inch")
         print(f"Max distance: {distance[-1]:.2f} inch")
         
@@ -1895,7 +1906,7 @@ class SParamBrowser(tk.Tk):
         print(f"  Min: {tdr_min:.2f}mU, Max: {tdr_max:.2f}mU, Mean: {tdr_mean:.2f}mU, Abs Max: {tdr_abs_max:.2f}mU")
         print(f"  Number of samples: {len(tdr_final)}")
         
-        return t_rotate*1e9, distance, tdr_final
+        return t_ns, distance, tdr_final
 
     def calculate_pulse_response(self, network=None, use_iczt=False):
         """Calculate pulse response with enhanced resolution
