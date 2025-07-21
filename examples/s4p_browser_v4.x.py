@@ -140,6 +140,9 @@ class SParamBrowser(tk.Tk):
         self.show_impedance_var = tk.BooleanVar(value=False)  # Add impedance profile control variable
         self.show_impedance_time_var = tk.BooleanVar(value=False)  # Add impedance profile vs time control variable
         
+        # Add velocity factor control variable
+        self.velocity_factor = tk.StringVar(value='0.5')  # Default velocity factor for PCB materials
+        
         # Add zoom control variables
         self.freq_min = tk.StringVar(value='')
         self.freq_max = tk.StringVar(value='')
@@ -591,6 +594,17 @@ class SParamBrowser(tk.Tk):
                            command=self.update_plot).pack(side=tk.LEFT)
             ttk.Checkbutton(controls_frame, text="Z Profile(t)", variable=self.show_impedance_time_var,
                            command=self.update_plot).pack(side=tk.LEFT)
+            
+            ttk.Separator(controls_frame, orient='vertical').pack(side=tk.LEFT, padx=4, fill='y')
+            
+            # Velocity factor control for TDR distance calculation
+            ttk.Label(controls_frame, text="v_rel:").pack(side=tk.LEFT, padx=2)
+            velocity_entry = ttk.Entry(controls_frame, textvariable=self.velocity_factor, width=6)
+            velocity_entry.pack(side=tk.LEFT, padx=2)
+            velocity_entry.bind('<Return>', lambda e: self.update_plot())
+            
+            # Add tooltip for velocity factor guidance
+            self.create_velocity_tooltip(velocity_entry)
             
             # Add zoom control frame with compact layout
             zoom_frame = ttk.LabelFrame(self.sparam_view_container, text="Zoom")
@@ -1773,10 +1787,11 @@ class SParamBrowser(tk.Tk):
 
         # Time axis (for plotting)
         n = len(sdd11_complex_padded_sym)
-        # Adjust time resolution due to added DC component
-        # dt = 1 / (2 * 10 * (f_padded[-1] - f_padded[0] + f_step))  # time resolution with DC
-        # t = np.linspace(0, dt * (n - 1), n)
-        dt = 1 / (2 * f_padded[-1])  # Time step
+        # Correct time step calculation based on frequency span and number of points
+        # For IFFT, the time step should be based on the frequency resolution
+        df = (f_padded[-1] - f_padded[0]) / (len(f_padded) - 1)  # Frequency resolution
+        dt = 1 / (2 * len(f_padded) * df)  # Correct time step for IFFT
+        # Alternative: dt = 1 / (2 * (f_padded[-1] - f_padded[0]))  # Based on frequency span
         t = np.linspace(0, dt * (n - 1), n)
 
         # rotate_size = round(0.1e-9/dt)
@@ -1790,16 +1805,26 @@ class SParamBrowser(tk.Tk):
 
         # === Step 6: Calculate distance ===
         c0 = 299792458  # Speed of light in vacuum (m/s)
-        v_rel = 0.66    # Relative velocity (66% of c0)
+        # Get velocity factor from user input (with fallback to default)
+        try:
+            v_rel = float(self.velocity_factor.get())
+            if v_rel <= 0 or v_rel > 1:
+                print(f"Warning: Invalid velocity factor {v_rel}, using default 0.5")
+                v_rel = 0.5
+        except (ValueError, AttributeError):
+            print("Warning: Could not read velocity factor, using default 0.5")
+            v_rel = 0.5
+        
         c = c0 * v_rel  # Propagation velocity in material
+        print(f"Using velocity factor: {v_rel} (v = {v_rel*100:.1f}% of c)")
         
         distance_step = c * dt / 2  # Divide by 2 for round-trip
-        # Create distance array with the same length as the symmetric spectrum
-        # This ensures distance and tdr arrays will have the same dimensions
-        distance = np.arange(len(sdd11_complex_padded_sym)) * distance_step * 100/2.54  # Convert to inch
+        # Create distance array with the same length as the time array
+        # Use the actual length of the final TDR result for consistency
+        distance = np.arange(n) * distance_step * 39.3701  # Convert meters to inches (1m = 39.3701 inches)
         
         print(f"Time step: {dt*1e9:.2f} ns")
-        print(f"Distance step: {distance_step*100/2.54:.4f} inch")
+        print(f"Distance step: {distance_step*39.3701:.4f} inch")
         print(f"Max distance: {distance[-1]:.2f} inch")
         
         # === Step 7: Time-domain gating (commonly used in MATLAB) ===
@@ -2655,6 +2680,49 @@ class SParamBrowser(tk.Tk):
         
         # Redraw the canvas
         self.canvas.draw()
+    
+    def create_velocity_tooltip(self, widget):
+        """Create a tooltip for the velocity factor input box"""
+        def show_tooltip(event):
+            # Create tooltip window
+            tooltip = tk.Toplevel()
+            tooltip.wm_overrideredirect(True)
+            tooltip.wm_geometry(f"+{event.x_root+10}+{event.y_root+10}")
+            
+            # Create tooltip content
+            tooltip_text = (
+                "Velocity Factor (v_rel) Guidelines:\n\n"
+                "FR4 PCB: εᵣ ≈ 4.0-4.5, so v = c/√εᵣ ≈ 0.5c to 0.47c\n"
+                "Low-loss PCB: εᵣ ≈ 3.0-3.5, so v ≈ 0.58c to 0.53c\n"
+                "0.66c is more typical for coaxial cables or low dielectric materials\n\n"
+                "Default: 0.5 (suitable for most FR4 PCBs)"
+            )
+            
+            label = tk.Label(tooltip, text=tooltip_text, 
+                           background="lightyellow", 
+                           foreground="black",
+                           font=("Arial", "9"),
+                           justify="left",
+                           padx=10, pady=5,
+                           relief="solid", borderwidth=1)
+            label.pack()
+            
+            # Auto-hide tooltip after 5 seconds
+            tooltip.after(5000, tooltip.destroy)
+            
+            # Hide tooltip when clicking elsewhere
+            def hide_tooltip(event=None):
+                try:
+                    tooltip.destroy()
+                except:
+                    pass
+            
+            # Bind click outside to hide tooltip
+            tooltip.bind("<Button-1>", hide_tooltip)
+            tooltip.bind("<FocusOut>", hide_tooltip)
+        
+        # Bind right-click to show tooltip
+        widget.bind("<Button-3>", show_tooltip)
 
     def toggle_plot_fullscreen(self, event=None):
         """Toggle the plot area between normal and fullscreen mode using Escape key"""
