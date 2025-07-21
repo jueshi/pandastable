@@ -786,15 +786,17 @@ class PlotViewer(Frame):
  
         self.fig.suptitle(kwds['title'], fontsize=kwds['fontsize']*1.2)
         layout = self.globalopts['grid layout']
- 
+
         if isinstance(axs, (list, np.ndarray)): # Apply labels to each subplot
             for ax in axs:
-                # self.setAxisLabels(ax, kwds)
-                pass
+                # Create a copy of kwds without title to preserve original subplot titles
+                kwds_no_title = kwds.copy()
+                kwds_no_title['title'] = ''  # Don't override subplot titles with user input
+                self.setAxisLabels(ax, kwds_no_title)
         else: # Apply labels to single axis
             self.setAxisLabels(axs, kwds)
         return
- 
+
     def setAxisLabels(self, ax, kwds):
         """Set axis labels for a single axis"""
  
