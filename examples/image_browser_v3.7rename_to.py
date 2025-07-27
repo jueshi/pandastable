@@ -1037,7 +1037,7 @@ class ImageBrowser(tk.Tk):
             for row in selected_rows:
                 if row < len(self.df):
                     filename = self.df.iloc[row]['Name']
-                    src_path = os.path.join(self.current_directory, filename)
+                    src_path = self.df.iloc[row]['File_Path']  # Use full file path from DataFrame
                     dst_path = os.path.join(dest_dir, filename)
                     
                     # Check if file already exists in destination
