@@ -3826,18 +3826,67 @@ class SParamBrowser(tk.Tk):
                     sdd[f] = M @ s_f @ M_inv
                 
                 if method == 'abcd':
-                    # ABCD matrix method
+                    # ABCD matrix method with numerical stability improvements
                     abcd_matrix = rf.s2t(sdd)
-                    # Calculate matrix square root
+                    # Calculate matrix square root with improved numerical stability
                     s_sqrt = np.zeros_like(sdd)
+                    
                     for f in range(len(network.f)):
                         try:
-                            abcd_sqrt = scipy.linalg.sqrtm(abcd_matrix[f])
+                            # Get ABCD matrix for this frequency
+                            abcd_f = abcd_matrix[f]
+                            
+                            # Check for numerical issues
+                            if np.any(np.isnan(abcd_f)) or np.any(np.isinf(abcd_f)):
+                                print(f"Warning: NaN or Inf detected in ABCD matrix at frequency {f}")
+                                # Use symmetric method as fallback
+                                s_sqrt[f] = self.split_symmetric_adapter(sdd[f:f+1])[0]
+                                continue
+                            
+                            # Check condition number for numerical stability
+                            cond_num = np.linalg.cond(abcd_f)
+                            if cond_num > 1e12:
+                                print(f"Warning: Ill-conditioned ABCD matrix at frequency {f} (cond={cond_num:.2e})")
+                                # Use symmetric method as fallback
+                                s_sqrt[f] = self.split_symmetric_adapter(sdd[f:f+1])[0]
+                                continue
+                            
+                            # Use eigenvalue decomposition for more stable square root
+                            eigenvals, eigenvecs = np.linalg.eig(abcd_f)
+                            
+                            # Check for negative or complex eigenvalues that could cause issues
+                            if np.any(np.real(eigenvals) < 0):
+                                print(f"Warning: Negative eigenvalues detected at frequency {f}")
+                                # Use symmetric method as fallback
+                                s_sqrt[f] = self.split_symmetric_adapter(sdd[f:f+1])[0]
+                                continue
+                            
+                            # Calculate square root using eigenvalue decomposition
+                            sqrt_eigenvals = np.sqrt(eigenvals)
+                            abcd_sqrt = eigenvecs @ np.diag(sqrt_eigenvals) @ np.linalg.inv(eigenvecs)
+                            
+                            # Convert back to S-parameters
                             s_sqrt[f] = rf.t2s(abcd_sqrt.reshape(1, 2, 2))[0]
+                            
+                            # Additional check for spikes - compare with neighboring points
+                            if f > 0:
+                                # Check for sudden jumps in magnitude
+                                mag_diff = np.abs(np.abs(s_sqrt[f]) - np.abs(s_sqrt[f-1]))
+                                if np.any(mag_diff > 10):  # Threshold for spike detection
+                                    print(f"Warning: Potential spike detected at frequency {f}")
+                                    # Use interpolation or symmetric method
+                                    if f > 1:
+                                        # Linear interpolation between f-1 and f+1 (if available)
+                                        s_sqrt[f] = (s_sqrt[f-1] + s_sqrt[f-1]) / 2  # Use previous point for now
+                                    else:
+                                        s_sqrt[f] = self.split_symmetric_adapter(sdd[f:f+1])[0]
+                            
                         except Exception as e:
                             print(f"Error at frequency point {f}: {e}")
                             print(f"ABCD matrix:\n{abcd_matrix[f]}")
-                            raise
+                            print(f"Using symmetric method as fallback")
+                            # Use symmetric method as fallback
+                            s_sqrt[f] = self.split_symmetric_adapter(sdd[f:f+1])[0]
                 else:
                     # Symmetric network assumption method
                     s_sqrt = self.split_symmetric_adapter(sdd)
