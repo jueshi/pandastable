@@ -2445,49 +2445,139 @@ class ImageBrowser(tk.Tk):
             from PIL import ImageDraw, ImageFont
             draw = ImageDraw.Draw(image)
             
-            # Draw all annotations on the image
+            # Calculate scaling factors between displayed image and original image
+            # Get the selected cell dimensions
+            row, col = self.selected_cell
+            frame, label = self.grid_cells[row][col]
+            
+            # Get cell dimensions
+            cell_width = frame.winfo_width() - 8  # Account for padding
+            cell_height = frame.winfo_height() - 8
+            
+            # Get original image dimensions
+            orig_width, orig_height = self.original_image.size
+            
+            # Calculate the dimensions of the displayed image (preserving aspect ratio)
+            aspect_ratio = orig_width / orig_height
+            
+            if aspect_ratio > 1:
+                # Image is wider than tall
+                display_width = cell_width
+                display_height = int(cell_width / aspect_ratio)
+                if display_height > cell_height:
+                    display_height = cell_height
+                    display_width = int(cell_height * aspect_ratio)
+            else:
+                # Image is taller than wide
+                display_height = cell_height
+                display_width = int(cell_height * aspect_ratio)
+                if display_width > cell_width:
+                    display_width = cell_width
+                    display_height = int(display_width / aspect_ratio)
+            
+            # Calculate the position offset (where the image is positioned in the cell)
+            x_offset = (cell_width - display_width) // 2
+            y_offset = (cell_height - display_height) // 2
+            
+            # Calculate scaling factors
+            x_scale = orig_width / display_width
+            y_scale = orig_height / display_height
+            
+            print(f"Scaling factors: x_scale={x_scale}, y_scale={y_scale}")
+            print(f"Offsets: x_offset={x_offset}, y_offset={y_offset}")
+            
+            # Draw all annotations on the image with scaled coordinates
             if self.current_image_path in self.annotations:
                 for annotation in self.annotations[self.current_image_path]:
                     color = annotation["color"]
                     
                     if annotation["type"] == "text":
-                        # Draw text annotation
+                        # Scale text annotation coordinates
+                        x = int((annotation["x"] - x_offset) * x_scale)
+                        y = int((annotation["y"] - y_offset) * y_scale)
+                        
+                        # Ensure coordinates are within image bounds
+                        x = max(0, min(x, orig_width - 1))
+                        y = max(0, min(y, orig_height - 1))
+                        
+                        # Draw text annotation with scaled coordinates
                         try:
-                            font = ImageFont.truetype("arial.ttf", 16)
+                            # Scale font size based on image size
+                            font_size = max(16, int(16 * min(x_scale, y_scale)))
+                            font = ImageFont.truetype("arial.ttf", font_size)
                         except IOError:
                             font = ImageFont.load_default()
                         
-                        draw.text((annotation["x"], annotation["y"]), annotation["text"], 
-                                fill=color, font=font)
+                        draw.text((x, y), annotation["text"], fill=color, font=font)
                                 
                     elif annotation["type"] == "arrow":
-                        # Draw arrow annotation
-                        draw.line([(annotation["start_x"], annotation["start_y"]), 
-                                  (annotation["end_x"], annotation["end_y"])], 
-                                 fill=color, width=2)
-                        # Draw arrowhead
-                        self._draw_arrowhead(draw, annotation["start_x"], annotation["start_y"],
-                                           annotation["end_x"], annotation["end_y"], color)
+                        # Scale arrow coordinates
+                        start_x = int((annotation["start_x"] - x_offset) * x_scale)
+                        start_y = int((annotation["start_y"] - y_offset) * y_scale)
+                        end_x = int((annotation["end_x"] - x_offset) * x_scale)
+                        end_y = int((annotation["end_y"] - y_offset) * y_scale)
+                        
+                        # Ensure coordinates are within image bounds
+                        start_x = max(0, min(start_x, orig_width - 1))
+                        start_y = max(0, min(start_y, orig_height - 1))
+                        end_x = max(0, min(end_x, orig_width - 1))
+                        end_y = max(0, min(end_y, orig_height - 1))
+                        
+                        # Calculate line width based on image size
+                        line_width = max(2, int(2 * min(x_scale, y_scale)))
+                        
+                        # Draw arrow with scaled coordinates
+                        draw.line([(start_x, start_y), (end_x, end_y)], fill=color, width=line_width)
+                        
+                        # Draw arrowhead with scaled coordinates
+                        arrow_size = max(10, int(10 * min(x_scale, y_scale)))
+                        self._draw_arrowhead(draw, start_x, start_y, end_x, end_y, color, arrow_size)
                                 
                     elif annotation["type"] == "rectangle":
-                        # Draw rectangle - ensure coordinates are properly ordered
-                        x1, y1 = annotation["start_x"], annotation["start_y"]
-                        x2, y2 = annotation["end_x"], annotation["end_y"]
+                        # Scale rectangle coordinates
+                        x1 = int((annotation["start_x"] - x_offset) * x_scale)
+                        y1 = int((annotation["start_y"] - y_offset) * y_scale)
+                        x2 = int((annotation["end_x"] - x_offset) * x_scale)
+                        y2 = int((annotation["end_y"] - y_offset) * y_scale)
+                        
+                        # Ensure coordinates are within image bounds
+                        x1 = max(0, min(x1, orig_width - 1))
+                        y1 = max(0, min(y1, orig_height - 1))
+                        x2 = max(0, min(x2, orig_width - 1))
+                        y2 = max(0, min(y2, orig_height - 1))
+                        
                         # Sort coordinates to ensure x1 <= x2 and y1 <= y2
                         x1, x2 = min(x1, x2), max(x1, x2)
                         y1, y2 = min(y1, y2), max(y1, y2)
-                        draw.rectangle([(x1, y1), (x2, y2)],
-                                     outline=color, width=2)
+                        
+                        # Calculate line width based on image size
+                        line_width = max(2, int(2 * min(x_scale, y_scale)))
+                        
+                        # Draw rectangle with scaled coordinates
+                        draw.rectangle([(x1, y1), (x2, y2)], outline=color, width=line_width)
                                 
                     elif annotation["type"] == "circle":
-                        # Draw circle - ensure coordinates are properly ordered
-                        x1, y1 = annotation["start_x"], annotation["start_y"]
-                        x2, y2 = annotation["end_x"], annotation["end_y"]
+                        # Scale circle coordinates
+                        x1 = int((annotation["start_x"] - x_offset) * x_scale)
+                        y1 = int((annotation["start_y"] - y_offset) * y_scale)
+                        x2 = int((annotation["end_x"] - x_offset) * x_scale)
+                        y2 = int((annotation["end_y"] - y_offset) * y_scale)
+                        
+                        # Ensure coordinates are within image bounds
+                        x1 = max(0, min(x1, orig_width - 1))
+                        y1 = max(0, min(y1, orig_height - 1))
+                        x2 = max(0, min(x2, orig_width - 1))
+                        y2 = max(0, min(y2, orig_height - 1))
+                        
                         # Sort coordinates to ensure x1 <= x2 and y1 <= y2
                         x1, x2 = min(x1, x2), max(x1, x2)
                         y1, y2 = min(y1, y2), max(y1, y2)
-                        draw.ellipse([(x1, y1), (x2, y2)],
-                                   outline=color, width=2)
+                        
+                        # Calculate line width based on image size
+                        line_width = max(2, int(2 * min(x_scale, y_scale)))
+                        
+                        # Draw ellipse with scaled coordinates
+                        draw.ellipse([(x1, y1), (x2, y2)], outline=color, width=line_width)
             
             # Save the image
             image.save(file_path)
