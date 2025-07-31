@@ -2099,11 +2099,33 @@ class AnnotationOptions(TkOptions):
         if kwds == None:
             kwds = self.kwds
             kwds['xycoords'] = self.coordsvar.get()
+        
         fig = self.parent.fig
-        #ax = self.parent.ax
-        ax = fig.get_axes()[0]
         canvas = self.parent.canvas
+        
+        # For multiple subplots, try to use the current axis or default to last axis
+        axes = fig.get_axes()
+        if len(axes) == 0:
+            print("DEBUG: No axes available for annotation")
+            return
+        
+        # Try to use the current axis if available
+        if hasattr(self.parent, 'ax') and self.parent.ax is not None:
+            ax = self.parent.ax
+            print(f"DEBUG: Using current axis: {ax}")
+        else:
+            # For multiple subplots, use the last axis (most recently created)
+            # This is more intuitive as users typically want to annotate the last plot they created
+            ax = axes[-1]
+            print(f"DEBUG: Using last axis ({len(axes)} total axes): {ax}")
         text = kwds['text'].strip('\n')
+        
+        # Debug: Check if text is empty
+        if not text or text.strip() == '':
+            print("DEBUG: Text is empty, cannot create annotation")
+            return
+            
+        print(f"DEBUG: Creating annotation with text='{text}', axes={ax}")
         fc = kwds['facecolor']
         ec = kwds['linecolor']
         bstyle = kwds['boxstyle']
@@ -2120,8 +2142,20 @@ class AnnotationOptions(TkOptions):
             xy = kwds['xy']
             #print (text, xycoords, xy)
         else:
-            xy=(.1, .8)
-            xycoords='axes fraction'
+            # Enable interactive placement - wait for user click
+            print("Click anywhere on the plot to place the annotation...")
+            result = self._waitForClick(ax)
+            if len(result) == 3:
+                xy, xycoords, clicked_ax = result
+                if clicked_ax is not None:
+                    ax = clicked_ax  # Use the clicked axis for annotation placement
+                    print(f"DEBUG: Using clicked axis: {ax}")
+            else:
+                xy, xycoords = result
+            
+            if xy is None:
+                print("Annotation placement cancelled")
+                return
  
         an = ax.annotate(text, xy=xy, xycoords=xycoords,
                    ha=kwds['align'], va="center",
@@ -2132,6 +2166,9 @@ class AnnotationOptions(TkOptions):
                    #textcoords='offset points',
                    zorder=10,
                    bbox=bbox_args)
+        
+        print(f"DEBUG: Annotation created: {an}, xy={xy}, xycoords={xycoords}")
+        
         an.draggable()
         if key == None:
             import uuid
@@ -2141,10 +2178,61 @@ class AnnotationOptions(TkOptions):
         an._id = key
         if key not in self.textboxes:
             self.textboxes[key] = kwds
-            print(kwds)
+            print(f"DEBUG: Added textbox to storage with key={key}")
         #canvas.show()
         canvas.draw()
+        print(f"DEBUG: Canvas draw() called, annotation should be visible")
         return
+
+    def _waitForClick(self, ax):
+        """Wait for user to click on the plot to determine annotation position"""
+        
+        click_coords = {'xy': None, 'xycoords': None}
+        
+        def on_click(event):
+            print(f"DEBUG: Click detected - event.inaxes={event.inaxes}, target_ax={ax}")
+            print(f"DEBUG: event.xdata={event.xdata}, event.ydata={event.ydata}")
+            
+            # Check if click is within any valid axes
+            if event.inaxes is not None and event.xdata is not None and event.ydata is not None:
+                # Use the clicked axis instead of the predetermined target axis
+                click_coords['xy'] = (event.xdata, event.ydata)
+                click_coords['xycoords'] = 'data'
+                click_coords['clicked_ax'] = event.inaxes  # Store the clicked axis
+                print(f"Annotation will be placed at: ({event.xdata:.3f}, {event.ydata:.3f}) on axis {event.inaxes}")
+                # Disconnect the event handler
+                self.parent.canvas.mpl_disconnect(cid)
+            else:
+                print("Please click within the plot area")
+                print(f"DEBUG: Click rejected - inaxes={event.inaxes}, xdata={event.xdata}, ydata={event.ydata}")
+        
+        # Connect the click event
+        cid = self.parent.canvas.mpl_connect('button_press_event', on_click)
+        
+        # Wait for click (this is a simplified approach)
+        # In a real implementation, you might want to use a more sophisticated event loop
+        import time
+        timeout = 30  # 30 second timeout
+        start_time = time.time()
+        
+        while click_coords['xy'] is None and (time.time() - start_time) < timeout:
+            self.parent.canvas.get_tk_widget().update()
+            time.sleep(0.05)
+        
+        # Clean up if timeout
+        if click_coords['xy'] is None:
+            try:
+                self.parent.canvas.mpl_disconnect(cid)
+            except:
+                pass
+            print("Timeout waiting for click - using default position")
+            return (0.1, 0.8), 'axes fraction'
+        
+        # Return both coordinates and the clicked axis
+        if 'clicked_ax' in click_coords:
+            return click_coords['xy'], click_coords['xycoords'], click_coords['clicked_ax']
+        else:
+            return click_coords['xy'], click_coords['xycoords'], None
  
     def addArrow(self, kwds=None, key=None):
         """Add line/arrow"""
