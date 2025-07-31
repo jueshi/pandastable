@@ -935,6 +935,13 @@ class SParamBrowser(tk.Tk):
                     return old_filepath  # Return original path if user cancels
                 else:
                     print(f"User confirmed overwrite of existing file")
+                    # On Windows, os.rename() cannot overwrite existing files
+                    # So we need to delete the target file first
+                    try:
+                        os.remove(new_filepath)
+                        print(f"Deleted existing target file: {new_filepath}")
+                    except Exception as delete_error:
+                        print(f"Warning: Could not delete existing file: {delete_error}")
             
             # Rename the file
             print(f"Performing rename operation...")  # Debug print
@@ -3755,6 +3762,9 @@ class SParamBrowser(tk.Tk):
         - Ports 1,3: Input differential pair (P1 positive, P3 negative)
         - Ports 2,4: Output differential pair (P2 positive, P4 negative)
         """
+        # Import messagebox at function scope to avoid UnboundLocalError
+        from tkinter import messagebox
+        
         # Check if a file is selected in the table
         selected_rows = self.table.multiplerowlist
         if not selected_rows or len(selected_rows) != 1:
@@ -3830,6 +3840,8 @@ class SParamBrowser(tk.Tk):
                     abcd_matrix = rf.s2t(sdd)
                     # Calculate matrix square root with improved numerical stability
                     s_sqrt = np.zeros_like(sdd)
+                    fallback_count = 0  # Track how many times we fall back to symmetric method
+                    fallback_reasons = []  # Track reasons for fallback
                     
                     for f in range(len(network.f)):
                         try:
@@ -3839,6 +3851,9 @@ class SParamBrowser(tk.Tk):
                             # Check for numerical issues
                             if np.any(np.isnan(abcd_f)) or np.any(np.isinf(abcd_f)):
                                 print(f"Warning: NaN or Inf detected in ABCD matrix at frequency {f}")
+                                fallback_count += 1
+                                if "NaN/Inf values" not in fallback_reasons:
+                                    fallback_reasons.append("NaN/Inf values")
                                 # Use symmetric method as fallback
                                 s_sqrt[f] = self.split_symmetric_adapter(sdd[f:f+1])[0]
                                 continue
@@ -3847,6 +3862,9 @@ class SParamBrowser(tk.Tk):
                             cond_num = np.linalg.cond(abcd_f)
                             if cond_num > 1e12:
                                 print(f"Warning: Ill-conditioned ABCD matrix at frequency {f} (cond={cond_num:.2e})")
+                                fallback_count += 1
+                                if "Ill-conditioned matrices" not in fallback_reasons:
+                                    fallback_reasons.append("Ill-conditioned matrices")
                                 # Use symmetric method as fallback
                                 s_sqrt[f] = self.split_symmetric_adapter(sdd[f:f+1])[0]
                                 continue
@@ -3857,6 +3875,9 @@ class SParamBrowser(tk.Tk):
                             # Check for negative or complex eigenvalues that could cause issues
                             if np.any(np.real(eigenvals) < 0):
                                 print(f"Warning: Negative eigenvalues detected at frequency {f}")
+                                fallback_count += 1
+                                if "Negative eigenvalues" not in fallback_reasons:
+                                    fallback_reasons.append("Negative eigenvalues")
                                 # Use symmetric method as fallback
                                 s_sqrt[f] = self.split_symmetric_adapter(sdd[f:f+1])[0]
                                 continue
@@ -3874,6 +3895,9 @@ class SParamBrowser(tk.Tk):
                                 mag_diff = np.abs(np.abs(s_sqrt[f]) - np.abs(s_sqrt[f-1]))
                                 if np.any(mag_diff > 10):  # Threshold for spike detection
                                     print(f"Warning: Potential spike detected at frequency {f}")
+                                    fallback_count += 1
+                                    if "Spike detection" not in fallback_reasons:
+                                        fallback_reasons.append("Spike detection")
                                     # Use interpolation or symmetric method
                                     if f > 1:
                                         # Linear interpolation between f-1 and f+1 (if available)
@@ -3885,8 +3909,34 @@ class SParamBrowser(tk.Tk):
                             print(f"Error at frequency point {f}: {e}")
                             print(f"ABCD matrix:\n{abcd_matrix[f]}")
                             print(f"Using symmetric method as fallback")
+                            fallback_count += 1
+                            if "Matrix calculation errors" not in fallback_reasons:
+                                fallback_reasons.append("Matrix calculation errors")
                             # Use symmetric method as fallback
                             s_sqrt[f] = self.split_symmetric_adapter(sdd[f:f+1])[0]
+                    
+                    # Show popup notification if fallback was used
+                    if fallback_count > 0:
+                        from tkinter import messagebox
+                        total_points = len(network.f)
+                        fallback_percentage = (fallback_count / total_points) * 100
+                        
+                        reasons_text = "\n• ".join(fallback_reasons)
+                        message = (
+                            f"ABCD Matrix Method - Fallback Applied\n\n"
+                            f"Due to numerical instabilities, the symmetric method was used "
+                            f"instead of the ABCD matrix method for {fallback_count} out of "
+                            f"{total_points} frequency points ({fallback_percentage:.1f}%).\n\n"
+                            f"Reasons for fallback:\n• {reasons_text}\n\n"
+                            f"The conversion has been completed successfully using a hybrid approach "
+                            f"for optimal numerical stability."
+                        )
+                        
+                        messagebox.showinfo(
+                            "Conversion Method Notice",
+                            message,
+                            icon='info'
+                        )
                 else:
                     # Symmetric network assumption method
                     s_sqrt = self.split_symmetric_adapter(sdd)
