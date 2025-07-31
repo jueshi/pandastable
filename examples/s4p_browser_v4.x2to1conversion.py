@@ -3917,7 +3917,6 @@ class SParamBrowser(tk.Tk):
                     
                     # Show popup notification if fallback was used
                     if fallback_count > 0:
-                        from tkinter import messagebox
                         total_points = len(network.f)
                         fallback_percentage = (fallback_count / total_points) * 100
                         
