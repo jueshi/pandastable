@@ -923,7 +923,18 @@ class SParamBrowser(tk.Tk):
             
             # Check if target file already exists
             if os.path.exists(new_filepath):
-                raise FileExistsError(f"Target file already exists: {new_filepath}")
+                # Ask user for confirmation before overwriting
+                from tkinter import messagebox
+                result = messagebox.askyesno(
+                    "File Exists", 
+                    f"Target file already exists:\n{new_filepath}\n\nDo you want to overwrite it?",
+                    icon='warning'
+                )
+                if not result:
+                    print(f"Rename operation cancelled by user")
+                    return old_filepath  # Return original path if user cancels
+                else:
+                    print(f"User confirmed overwrite of existing file")
             
             # Rename the file
             print(f"Performing rename operation...")  # Debug print
