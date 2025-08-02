@@ -1,0 +1,4 @@
+matplotlib>=3.0
+pandas[excel]>=1.5
+numexpr>=2.4
+future

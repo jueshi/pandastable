@@ -1,0 +1,7 @@
+! Touchstone S-Parameter File
+! Simulated 4-port S-parameter data
+# Hz S MA R 50
+! Frequency S11 S12 S13 S14 S21 S22 S23 S24 S31 S32 S33 S34 S41 S42 S43 S44
+0.1E9 -20 45 -15 90 -10 30 -5 60 -15 90 -10 45 -5 30 -10 60
+1E9   -22 50 -18 95 -12 35 -8 65 -18 95 -12 50 -8 35 -12 65
+10E9  -25 55 -20 100 -15 40 -10 70 -20 100 -15 55 -10 40 -15 70

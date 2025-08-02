@@ -16,10 +16,53 @@ class TaskStatus(Enum):
     COMPLETED = "Completed"
     FAILED = "Failed"
 class TaskSchedulerGUI:
+    def browse_python_path(self):
+        path = filedialog.askopenfilename(title="选择Python解释器", filetypes=[("Python Executable", "python.exe"), ("All Files", "*")])
+        if path:
+            self.python_path_var.set(path)
+
+    def browse_script_path(self):
+        path = filedialog.askopenfilename(title="选择要运行的脚本", filetypes=[("Python Files", "*.py"), ("All Files", "*")])
+        if path:
+            self.script_path_var.set(path)
+
+    def launch_script(self):
+        python_path = self.python_path_var.get().strip()
+        script_path = self.script_path_var.get().strip()
+        if not os.path.isfile(python_path):
+            messagebox.showerror("错误", "无效的Python解释器路径!")
+            return
+        if not os.path.isfile(script_path):
+            messagebox.showerror("错误", "无效的脚本路径!")
+            return
+        try:
+            subprocess.Popen([python_path, script_path])
+        except Exception as e:
+            messagebox.showerror("运行出错", f"无法启动脚本:\n{e}")
+
     def __init__(self, root):
         self.root = root
         self.root.title("Windows App Launcher")
-        
+
+        # --- Python path and Script path configuration ---
+        python_path_frame = ttk.Frame(self.root)
+        python_path_frame.pack(fill='x', padx=10, pady=3)
+        ttk.Label(python_path_frame, text="Python解释器路径:").pack(side='left')
+        self.python_path_var = tk.StringVar(value=r"C:\Users\juesh\OneDrive\Documents\windsurf\AI_trading\AI_stock_predictor\venv\Scripts\python.exe")
+        python_entry = ttk.Entry(python_path_frame, textvariable=self.python_path_var, width=70)
+        python_entry.pack(side='left', padx=2)
+        python_browse = ttk.Button(python_path_frame, text="选择...", command=self.browse_python_path)
+        python_browse.pack(side='left')
+
+        script_path_frame = ttk.Frame(self.root)
+        script_path_frame.pack(fill='x', padx=10, pady=3)
+        ttk.Label(script_path_frame, text="脚本路径:").pack(side='left')
+        self.script_path_var = tk.StringVar(value=r"C:\Users\juesh\OneDrive\Documents\windsurf\PocketFlow-Tutorial-Codebase-Knowledge\path_gui.py")
+        script_entry = ttk.Entry(script_path_frame, textvariable=self.script_path_var, width=70)
+        script_entry.pack(side='left', padx=2)
+        script_browse = ttk.Button(script_path_frame, text="选择...", command=self.browse_script_path)
+        script_browse.pack(side='left')
+
         # Initialize the task scheduler
         self.scheduler = TaskScheduler(self)
         

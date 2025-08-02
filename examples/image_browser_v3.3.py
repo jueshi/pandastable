@@ -88,6 +88,15 @@ Features:
 """
 
 import os
+import sys
+# Add custom pandastable path to sys.path BEFORE importing pandastable
+# custom_pandastable_path = r"C:\Users\juesh\OneDrive\Documents\windsurf\pandastable\pandastable"
+custom_pandastable_path = r"C:\Users\JueShi\OneDrive - Astera Labs, Inc\Documents\windsurf\pandastable\pandastable"
+if os.path.exists(custom_pandastable_path):
+    # Insert at the beginning of sys.path to prioritize this version
+    sys.path.insert(0, custom_pandastable_path)
+    print(f"Using custom pandastable from: {custom_pandastable_path}")
+
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from PIL import Image, ImageTk
@@ -97,7 +106,7 @@ from datetime import datetime
 import shutil
 import traceback
 import logging
-import sys
+
 
 # Configure logging
 logging.basicConfig(
