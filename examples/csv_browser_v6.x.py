@@ -2790,13 +2790,9 @@ Features:
     def add_to_recent_directories(self, directory):
         """Add a directory to the recent directories list"""
         try:
-            if not directory:
-                print("Cannot add empty directory to recent list")
-                return
-                
             print(f"Adding to recent directories: {directory}")
             
-            # Remove the directory if it's already in the list
+            # Remove the directory if it already exists in the list
             if directory in self.recent_directories:
                 self.recent_directories.remove(directory)
                 
@@ -2807,8 +2803,11 @@ Features:
             if len(self.recent_directories) > self.max_recent_directories:
                 self.recent_directories = self.recent_directories[:self.max_recent_directories]
                 
-            # Update the recent directories menu
-            self.update_recent_directories_menu()
+            # Update the recent directories menu only if it exists
+            if hasattr(self, 'recent_dirs_menu'):
+                self.update_recent_directories_menu()
+            else:
+                print("Recent directories menu not yet created, skipping menu update")
             
             # Save recent directories to file
             self.save_settings()
@@ -3755,25 +3754,24 @@ Features:
             messagebox.showinfo("Filter Applied", f"File filter '{filter_name}' has been applied")
             
         except Exception as e:
-            print(f"Error applying file filter: {e}")
+            print(f"Error applying saved file filter: {e}")
             traceback.print_exc()
-            messagebox.showerror("Error", f"Failed to apply file filter:\n{str(e)}")
-
+            
     def update_recent_directories_menu(self):
-        """Update the recent directories menu with the current list of recent directories"""
-        print(f"Recent dirs menu object: {self.recent_dirs_menu}")
+        """Update the recent directories menu with current list of directories"""
         try:
-            # Check if menu exists
+            # First check if the menu attribute exists
             if not hasattr(self, 'recent_dirs_menu'):
                 print("Recent directories menu not yet created")
                 return
                 
-            # Clear the menu
+            print(f"Updating recent dirs menu")
+            
+            # Clear existing menu items
             self.recent_dirs_menu.delete(0, tk.END)
+            
             # Force update of the menu widget
             self.recent_dirs_menu.update()
-
-            print(f"Updating recent directories menu with: {self.recent_directories}")
             
             # Add each recent directory to the menu
             if self.recent_directories and len(self.recent_directories) > 0:
@@ -3786,7 +3784,7 @@ Features:
                     display_name = directory
                     if len(display_name) > 50:
                         display_name = "..." + display_name[-47:]
-                        
+                    
                     print(f"Adding menu item: {display_name}")
                     
                     # Use a lambda with a default argument to avoid late binding issues
@@ -3806,7 +3804,6 @@ Features:
             print(f"Error updating recent directories menu: {e}")
             traceback.print_exc()
             
-
     def open_recent_directory(self, directory):
         """Open a directory from the recent directories list"""
         try:
@@ -3831,8 +3828,7 @@ Features:
             # Update file list
             self.update_file_list()
 
-            # After line 3739: self.update_file_list()
-            # Add these lines:
+            # Update the file dataframe and refresh the browser
             self.update_file_dataframe()
             self.setup_file_browser()
             
