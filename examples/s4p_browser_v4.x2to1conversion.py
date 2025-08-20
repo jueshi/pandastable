@@ -23,7 +23,8 @@ import sys
 
 # Add custom pandastable path to sys.path BEFORE importing pandastable
 # custom_pandastable_path = r"C:\Users\juesh\OneDrive\Documents\windsurf\pandastable\pandastable"
-custom_pandastable_path = r"C:\Users\juesh\OneDrive\Documents\pandastable_repo\pandastable"
+# custom_pandastable_path = r"C:\Users\juesh\OneDrive\Documents\pandastable_repo\pandastable"
+custom_pandastable_path = r"C:\Users\juesh\OneDrive\Documents\pandastable\\"
 # custom_pandastable_path = r"C:\Users\JueShi\OneDrive - Astera Labs, Inc\Documents\windsurf\pandastable\pandastable"
 if os.path.exists(custom_pandastable_path):
     # Insert at the beginning of sys.path to prioritize this version
