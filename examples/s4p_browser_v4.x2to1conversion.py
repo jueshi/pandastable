@@ -23,7 +23,8 @@ import sys
 
 # Add custom pandastable path to sys.path BEFORE importing pandastable
 # custom_pandastable_path = r"C:\Users\juesh\OneDrive\Documents\windsurf\pandastable\pandastable"
-custom_pandastable_path = r"C:\Users\JueShi\OneDrive - Astera Labs, Inc\Documents\windsurf\pandastable\pandastable"
+custom_pandastable_path = r"C:\Users\juesh\OneDrive\Documents\pandastable_repo\pandastable"
+# custom_pandastable_path = r"C:\Users\JueShi\OneDrive - Astera Labs, Inc\Documents\windsurf\pandastable\pandastable"
 if os.path.exists(custom_pandastable_path):
     # Insert at the beginning of sys.path to prioritize this version
     sys.path.insert(0, custom_pandastable_path)
@@ -448,11 +449,32 @@ class SParamBrowser(tk.Tk):
                 file_path = os.path.normpath(str(displayed_df.iloc[row]['File_Path']))
                 current_name = displayed_df.iloc[row]['Name']
                 
-                # Reconstruct filename from Field_ columns
+                # Reconstruct filename from Field_ columns (preserves original extension)
                 new_filename = self.reconstruct_filename(displayed_df.iloc[row])
-                
-                # If filename is different, rename the file
-                if new_filename != current_name:
+
+                # Only rename if the logical base name from Field_* changed vs current base name
+                try:
+                    # Build base from Field_* like in reconstruct_filename()
+                    f_columns = [col for col in displayed_df.iloc[row].index if col.startswith('Field_')]
+                    parts_base = '_'.join(
+                        [str(displayed_df.iloc[row][col]) for col in f_columns
+                         if pd.notna(displayed_df.iloc[row][col]) and str(displayed_df.iloc[row][col]).strip()]
+                    ).replace('\n', '')
+                    current_base, current_ext = os.path.splitext(str(current_name))
+                except Exception:
+                    # Fallback to simple comparison if anything goes wrong
+                    parts_base = None
+                    current_base = None
+                    current_ext = None
+
+                should_rename = True
+                if parts_base is not None and current_base is not None:
+                    if parts_base == current_base:
+                        should_rename = False
+                        print("No logical filename change detected; skipping rename")
+
+                # If filename is different and logical base changed, rename the file
+                if new_filename != current_name and should_rename:
                     print(f"Renaming file from {current_name} to {new_filename}")  # Debug print
                     new_filepath = self.rename_sparam_file(file_path, new_filename)
                     
@@ -877,18 +899,27 @@ class SParamBrowser(tk.Tk):
             self.df = pd.DataFrame(columns=columns)
 
     def reconstruct_filename(self, row):
-        """Reconstruct filename from columns starting with 'F_'"""
-        # Find columns starting with 'F_'
-        f_columns = [col for col in row.index if col.startswith('Field_')]
+        """Reconstruct filename from columns starting with 'Field_'.
+        Preserves the original file extension (e.g., .s2p or .s4p).
+        """
+        # Determine original extension from Name or File_Path; default to .s4p
+        original_name = str(row.get('Name', '') or '')
+        original_path = str(row.get('File_Path', '') or '')
+        ext = os.path.splitext(original_name)[1]
+        if not ext:
+            ext = os.path.splitext(original_path)[1]
+        if not ext:
+            ext = '.s4p'
         
-        # Sort the columns to maintain order, in case the user changed the column order in the table
-        # f_columns.sort(key=lambda x: int(x.split('_')[1]))
+        # Find columns starting with 'Field_'
+        f_columns = [col for col in row.index if col.startswith('Field_')]
         
         # Extract values from these columns, skipping None/empty values
         filename_parts = [str(row[col]) for col in f_columns if pd.notna(row[col]) and str(row[col]).strip()]
         
-        # Join with underscore, add .csv extension
-        new_filename = '_'.join(filename_parts).replace('\n', '') + '.s4p'
+        # Join with underscore, add original extension
+        base = '_'.join(filename_parts).replace('\n', '')
+        new_filename = base + ext
         
         return new_filename
 
@@ -1747,7 +1778,12 @@ class SParamBrowser(tk.Tk):
             # Calculate differential S-parameter Sdd11
             sdd11_complex = (s11 - s13 - s31 + s33) / 2.0
             print(f"Sdd11 data shape: {sdd11_complex.shape}")        
-
+        elif network.s.shape[1] == 2:  # 2-port network (.s2p)
+            # Use S11 directly for TDR-like reflection analysis
+            sdd11_complex = network.s[:, 0, 0]
+            print(f"S11 data shape (2-port): {sdd11_complex.shape}")
+        else:
+            raise ValueError(f"Unsupported network port count: {network.s.shape[1]}")
         
         # Apply frequency limit if specified
         if freq_limit is not None:
