@@ -91,17 +91,30 @@ import os
 import sys
 # Add custom pandastable path to sys.path BEFORE importing pandastable
 # custom_pandastable_path = r"C:\Users\juesh\OneDrive\Documents\windsurf\pandastable\pandastable"
-custom_pandastable_path = r"C:\Users\JueShi\OneDrive - Astera Labs, Inc\Documents\windsurf\pandastable\pandastable"
-if os.path.exists(custom_pandastable_path):
-    # Insert at the beginning of sys.path to prioritize this version
-    sys.path.insert(0, custom_pandastable_path)
-    print(f"Using custom pandastable from: {custom_pandastable_path}")
+# # custom_pandastable_path = r"C:\Users\JueShi\OneDrive - Astera Labs, Inc\Documents\windsurf\pandastable\pandastable"
+# if os.path.exists(custom_pandastable_path):
+#     # Insert at the beginning of sys.path to prioritize this version
+#     sys.path.insert(0, custom_pandastable_path)
+#     print(f"Using custom pandastable from: {custom_pandastable_path}")
 
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, simpledialog
 from PIL import Image, ImageTk
 import pandas as pd
-from pandastable import Table, TableModel
+# Support running the example directly from the repo by adding project root to sys.path if needed
+try:
+    from pandastable import Table, TableModel
+except ModuleNotFoundError:
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    if repo_root not in sys.path:
+        sys.path.insert(0, repo_root)
+    try:
+        from pandastable import Table, TableModel
+    except ModuleNotFoundError as e:
+        raise ModuleNotFoundError(
+            "Could not import 'pandastable'. Install it (pip install pandastable) "
+            "or run this script from within the repository so that the local package is on sys.path."
+        ) from e
 from datetime import datetime
 import shutil
 import traceback
@@ -662,7 +675,6 @@ class ImageBrowser(tk.Tk):
             frame.update()  # Ensure we have current size
             cell_width = frame.winfo_width() - 8  # Account for padding
             cell_height = frame.winfo_height() - 8
-            print(f"Cell dimensions: {cell_width}x{cell_height}")  # Debug print
             
             # Calculate new dimensions preserving aspect ratio
             img_width, img_height = image.size
@@ -1350,10 +1362,119 @@ class ImageBrowser(tk.Tk):
         # Add refresh button
         ttk.Button(self.toolbar, text="Refresh", command=self.refresh_file_list).pack(side="left", padx=5)               
 
+        # Add OCR button
+        ttk.Button(self.toolbar, text="OCR to Clipboard",
+                  command=self.ocr_current_image).pack(side="left", padx=5)
+
+        # Bind keyboard shortcut for OCR
+        self.bind('<Control-Shift-O>', lambda e: self.ocr_current_image())
+
+    def ocr_current_image(self):
+        """Run OCR on the currently selected image and copy text to clipboard."""
+        try:
+            # Ensure an image is currently selected/displayed
+            image_path = getattr(self, 'current_image_path', None)
+            if not image_path or not os.path.exists(image_path):
+                messagebox.showinfo("No Image", "Please load an image into a grid cell first.")
+                return
+
+            # Import pytesseract lazily
+            try:
+                import pytesseract
+            except ImportError as ie:
+                messagebox.showerror(
+                    "pytesseract not installed",
+                    f"Python: {sys.executable}\nError: {ie}\n"
+                    "Please install pytesseract (pip install pytesseract).\n"
+                    "Also install Tesseract OCR engine from https://github.com/tesseract-ocr/tesseract"
+                )
+                return
+
+            # Ensure tesseract is available; try common paths or ask user
+            def _ensure_tesseract_cmd() -> bool:
+                try:
+                    from subprocess import DEVNULL, check_call
+                    cmd = getattr(pytesseract.pytesseract, 'tesseract_cmd', 'tesseract')
+                    check_call([cmd, '--version'], stdout=DEVNULL, stderr=DEVNULL)
+                    return True
+                except Exception:
+                    default_paths = [
+                        getattr(self, 'tesseract_cmd_path', None),
+                        r"C:\\Program Files\\Tesseract-OCR\\tesseract.exe",
+                        r"C:\\Program Files (x86)\\Tesseract-OCR\\tesseract.exe",
+                    ]
+                    for exe_path in default_paths:
+                        if exe_path and os.path.isfile(exe_path):
+                            try:
+                                pytesseract.pytesseract.tesseract_cmd = exe_path
+                                from subprocess import DEVNULL, check_call
+                                check_call([exe_path, '--version'], stdout=DEVNULL, stderr=DEVNULL)
+                                self.tesseract_cmd_path = exe_path
+                                return True
+                            except Exception:
+                                continue
+                    exe_path = filedialog.askopenfilename(
+                        title="Locate tesseract.exe",
+                        filetypes=[["Executable", "tesseract.exe"], ["All files", "*"]]
+                    )
+                    if not exe_path:
+                        return False
+                    try:
+                        pytesseract.pytesseract.tesseract_cmd = exe_path
+                        from subprocess import DEVNULL, check_call
+                        check_call([exe_path, '--version'], stdout=DEVNULL, stderr=DEVNULL)
+                        self.tesseract_cmd_path = exe_path
+                        return True
+                    except Exception:
+                        messagebox.showerror("Tesseract Error", "Selected tesseract.exe is not valid.")
+                        return False
+
+            if not _ensure_tesseract_cmd():
+                messagebox.showerror(
+                    "Tesseract not found",
+                    "Tesseract OCR not found. Please install it and/or provide the path to tesseract.exe."
+                )
+                return
+
+            # Open and preprocess image
+            try:
+                img = Image.open(image_path)
+                if img.mode != 'RGB':
+                    img = img.convert('RGB')
+                gray = img.convert('L')
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to open image for OCR: {e}")
+                return
+
+            # OCR
+            try:
+                text = pytesseract.image_to_string(gray)
+            except Exception as e:
+                messagebox.showerror("OCR Error", f"Failed to run OCR: {e}")
+                return
+
+            # Clipboard
+            try:
+                self.clipboard_clear()
+                self.clipboard_append(text)
+                self.update()
+            except Exception as e:
+                messagebox.showerror("Clipboard Error", f"Failed to copy text to clipboard: {e}")
+                return
+
+            # Feedback
+            snippet = (text.strip()[:200] + ('…' if len(text.strip()) > 200 else '')) if text else '(no text)'
+            messagebox.showinfo("OCR Complete", f"Extracted text copied to clipboard.\n\nPreview:\n{snippet}")
+
+        except Exception as e:
+            logging.error("Unexpected error in ocr_current_image", exc_info=e)
+            messagebox.showerror("Error", f"An unexpected error occurred: {e}")
+
     def rename_all_files(self):
         """Rename all files where constructed name differs from current name"""
         try:
             renamed_count = 0
+            # ... (rest of the code remains the same)
             for idx, row in self.df.iterrows():
                 current_name = row['Name']
                 new_name = self.reconstruct_filename(row)
@@ -1366,7 +1487,7 @@ class ImageBrowser(tk.Tk):
                     self.df.at[idx, 'Name'] = new_name
                     self.df.at[idx, 'File_Path'] = new_path
                     renamed_count += 1
-            
+        
             if renamed_count > 0:
                 # Update the table display
                 self.table.model.df = self.df
@@ -1376,7 +1497,7 @@ class ImageBrowser(tk.Tk):
             else:
                 messagebox.showinfo("No Changes", 
                                  "All filenames already match their field values")
-                
+                    
         except Exception as e:
             messagebox.showerror("Error", f"Failed to rename files: {str(e)}")
 
