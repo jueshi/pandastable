@@ -290,7 +290,8 @@ class TableModel(object):
 
     def getColumnType(self, columnIndex):
         """Get the column type"""
-        coltype = self.df.dtypes[columnIndex]
+        # Use positional access to avoid FutureWarning about Series integer keys
+        coltype = self.df.dtypes.iloc[columnIndex]
         return coltype
 
     def getColumnCount(self):
