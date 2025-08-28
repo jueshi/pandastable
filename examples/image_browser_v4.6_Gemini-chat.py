@@ -351,6 +351,44 @@ class ImageBrowser(tk.Tk):
         clear_btn = ttk.Button(controls, text="Clear", command=self.clear_markdown_content)
         clear_btn.pack(side=tk.LEFT)
 
+        # Copy actions
+        ttk.Separator(controls, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=6)
+        copy_btn = ttk.Button(controls, text="Copy", command=lambda: self.copy_markdown(selection=True))
+        copy_btn.pack(side=tk.LEFT)
+        copy_all_btn = ttk.Button(controls, text="Copy All", command=lambda: self.copy_markdown(selection=False))
+        copy_all_btn.pack(side=tk.LEFT, padx=(6, 0))
+
+        # View mode toggle (enable selectable text preview)
+        ttk.Separator(controls, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=6)
+        self.md_view_as_text = tk.BooleanVar(value=False)
+        view_toggle = ttk.Checkbutton(
+            controls,
+            text="View as Text",
+            variable=self.md_view_as_text,
+            command=self.update_markdown_preview,
+        )
+        view_toggle.pack(side=tk.LEFT)
+
+        # Edit mode toggle and Save button
+        ttk.Separator(controls, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=6)
+        self.md_edit_mode = tk.BooleanVar(value=False)
+        edit_toggle = ttk.Checkbutton(
+            controls,
+            text="Edit",
+            variable=self.md_edit_mode,
+            command=self.toggle_md_edit_mode,
+        )
+        edit_toggle.pack(side=tk.LEFT)
+
+        save_btn_current = ttk.Button(controls, text="Save", command=self.save_markdown_current)
+        save_btn_current.pack(side=tk.LEFT, padx=(6, 0))
+
+        # Bind Ctrl+S globally
+        try:
+            self.bind('<Control-s>', lambda e: (self.save_markdown_current(), 'break'))
+        except Exception:
+            pass
+
         # Load any existing content
         self.update_markdown_preview()
 
@@ -360,7 +398,9 @@ class ImageBrowser(tk.Tk):
         self.render_suggested_questions([])
 
     def update_markdown_preview(self):
-        """Load current markdown file and render preview (HTML if available)."""
+        """Load current markdown file and render preview.
+        If Edit mode is on, force text view and keep the text widget editable without overwriting user edits.
+        """
         text = ""
         try:
             if self.md_current_path and os.path.isfile(self.md_current_path):
@@ -369,7 +409,11 @@ class ImageBrowser(tk.Tk):
         except Exception as e:
             logging.warning(f"Failed to load markdown preview: {e}")
 
-        if self.md_use_html:
+        # Respect 'View as Text' and Edit mode
+        editing = bool(getattr(self, 'md_edit_mode', None)) and self.md_edit_mode.get()
+        # Force raw text when editing
+        use_html = self.md_use_html and not (hasattr(self, 'md_view_as_text') and self.md_view_as_text.get()) and not editing
+        if use_html:
             # Recreate the HTML widget each time to avoid residual/concatenated content
             try:
                 from tkhtmlview import HTMLScrolledText  # type: ignore
@@ -389,6 +433,11 @@ class ImageBrowser(tk.Tk):
                 self.md_preview.delete('1.0', tk.END)
                 self.md_preview.insert(tk.END, text)
                 self.md_preview.configure(state=tk.DISABLED)
+                # Bind copy keys and context menu
+                try:
+                    self._bind_md_copy_handlers(self.md_preview)
+                except Exception:
+                    pass
                 return
 
             # Destroy all previous children in the preview frame to guarantee a clean slate
@@ -418,39 +467,170 @@ class ImageBrowser(tk.Tk):
                     self._md_html_widget.set_text(html)
             except Exception as e:
                 logging.warning(f"Failed to render HTML preview: {e}")
-        else:
-            # Raw text display; ensure no leftover HTML widgets remain
+            # Bind copy handlers on HTML widget
             try:
-                for child in self._md_preview_frame.winfo_children():
-                    child.destroy()
+                # Provide the same copy/context behavior
+                self._md_html_widget.bind('<Control-c>', lambda e: (self.copy_markdown(selection=True), 'break'))
+                self._md_html_widget.bind('<Button-3>', self._md_show_context_menu)
             except Exception:
                 pass
-            self.md_preview = ScrolledText(self._md_preview_frame, wrap=tk.WORD, height=10)
-            self.md_preview.pack(fill=tk.BOTH, expand=True)
-            self.md_preview.configure(state=tk.NORMAL)
-            self.md_preview.delete('1.0', tk.END)
-            self.md_preview.insert(tk.END, text)
-            self.md_preview.configure(state=tk.DISABLED)
+            return
 
-    def clear_markdown_content(self):
-        """Clear both the on-screen preview and truncate the current markdown file."""
+        # Non-HTML preview: build/update a ScrolledText
         try:
-            if self.md_current_path and os.path.isfile(self.md_current_path):
-                with open(self.md_current_path, 'w', encoding='utf-8') as f:
-                    f.write("")
-            # Clear UI
-            if self.md_use_html and self._md_html_widget is not None:
-                if hasattr(self._md_html_widget, 'set_html'):
-                    self._md_html_widget.set_html("")
-                else:
-                    self._md_html_widget.set_text("")
+            # If editing, avoid overwriting any in-flight user edits
+            editing = bool(getattr(self, 'md_edit_mode', None)) and self.md_edit_mode.get()
+            if editing and hasattr(self, 'md_preview') and isinstance(self.md_preview, ScrolledText):
+                try:
+                    self.md_preview.configure(state=tk.NORMAL)
+                except Exception:
+                    pass
+                # Do not overwrite content while editing
             else:
+                for child in self._md_preview_frame.winfo_children():
+                    child.destroy()
+                self.md_preview = ScrolledText(self._md_preview_frame, wrap=tk.WORD, height=10)
+                self.md_preview.pack(fill=tk.BOTH, expand=True)
                 self.md_preview.configure(state=tk.NORMAL)
                 self.md_preview.delete('1.0', tk.END)
-                self.md_preview.configure(state=tk.DISABLED)
+                self.md_preview.insert(tk.END, text)
+                # Disable when not editing for read-only view
+                if not editing:
+                    self.md_preview.configure(state=tk.DISABLED)
+            # Bind copy keys and context menu
+            try:
+                self._bind_md_copy_handlers(self.md_preview)
+            except Exception:
+                pass
         except Exception as e:
-            logging.error("Failed to clear markdown content", exc_info=e)
-            messagebox.showerror("Error", f"Failed to clear: {e}")
+            logging.warning(f"Failed to render text preview: {e}")
+        
+        # --- Copy helpers for Markdown preview ---
+    def _bind_md_copy_handlers(self, widget):
+        """Bind Ctrl+C and right-click menu for the markdown preview widget."""
+        try:
+            widget.bind('<Control-c>', lambda e: (self.copy_markdown(selection=True), 'break'))
+            widget.bind('<Button-3>', self._md_show_context_menu)
+        except Exception:
+            pass
+
+    def _md_show_context_menu(self, event):
+        try:
+            if not hasattr(self, '_md_context_menu'):
+                menu = tk.Menu(self, tearoff=0)
+                menu.add_command(label="Copy", command=lambda: self.copy_markdown(selection=True))
+                menu.add_command(label="Copy All", command=lambda: self.copy_markdown(selection=False))
+                self._md_context_menu = menu
+            self._md_context_menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            try:
+                self._md_context_menu.grab_release()
+            except Exception:
+                pass
+
+    def copy_markdown(self, selection: bool = True):
+        """Copy selection (if any) or entire markdown content to clipboard.
+        Works for both text and HTML preview modes by reading from the backing file when needed.
+        """
+        try:
+            text = None
+            # Try selection from text widget if present
+            if selection and hasattr(self, 'md_preview') and isinstance(self.md_preview, ScrolledText):
+                try:
+                    state = str(self.md_preview['state'])
+                    if state == tk.DISABLED:
+                        self.md_preview.configure(state=tk.NORMAL)
+                    if self.md_preview.tag_ranges(tk.SEL):
+                        text = self.md_preview.get(tk.SEL_FIRST, tk.SEL_LAST)
+                    if state == tk.DISABLED:
+                        self.md_preview.configure(state=tk.DISABLED)
+                except Exception:
+                    text = None
+            # Fallback to entire file content
+            if not text:
+                if self.md_current_path and os.path.isfile(self.md_current_path):
+                    with open(self.md_current_path, 'r', encoding='utf-8') as f:
+                        text = f.read()
+                else:
+                    text = ""
+            self.clipboard_clear()
+            self.clipboard_append(text)
+            self.update()  # ensure clipboard is set
+        except Exception as e:
+            messagebox.showerror("Copy Error", f"Failed to copy: {e}")
+
+    def toggle_md_edit_mode(self):
+        """Toggle edit mode for the Markdown tab. Forces Text view when enabled."""
+        try:
+            if self.md_edit_mode.get():
+                # Force text view when editing
+                if hasattr(self, 'md_view_as_text'):
+                    self.md_view_as_text.set(True)
+                # Rebuild preview as editable text
+                self.update_markdown_preview()
+                try:
+                    if hasattr(self, 'md_preview'):
+                        self.md_preview.focus_set()
+                except Exception:
+                    pass
+            else:
+                # Leaving edit mode: refresh preview honoring the view toggle
+                self.update_markdown_preview()
+        except Exception as e:
+            logging.error("Failed to toggle edit mode", exc_info=e)
+
+    def save_markdown_current(self):
+        """Save current Markdown text widget content into md_current_path."""
+        try:
+            # Only meaningful if we have a text widget
+            if hasattr(self, 'md_preview') and isinstance(self.md_preview, ScrolledText):
+                # Ensure we can read the content
+                prev_state = None
+                try:
+                    prev_state = str(self.md_preview['state'])
+                    if prev_state == tk.DISABLED:
+                        self.md_preview.configure(state=tk.NORMAL)
+                except Exception:
+                    pass
+                content = self.md_preview.get('1.0', 'end-1c')
+                # Restore state if needed
+                if prev_state == tk.DISABLED:
+                    try:
+                        self.md_preview.configure(state=tk.DISABLED)
+                    except Exception:
+                        pass
+            else:
+                # Fallback: read from backing file to avoid data loss
+                content = ""
+                if self.md_current_path and os.path.isfile(self.md_current_path):
+                    with open(self.md_current_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+
+            if not self.md_current_path:
+                # If no current path, prompt for one
+                path = filedialog.asksaveasfilename(
+                    title="Save Markdown",
+                    defaultextension=".md",
+                    initialfile="conversation.md",
+                    filetypes=[("Markdown", "*.md"), ("Text", "*.txt"), ("All Files", "*.*")]
+                )
+                if not path:
+                    return
+                self.md_current_path = path
+
+            # Write out
+            with open(self.md_current_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+
+            # If not editing, refresh preview to show read-only state
+            if not (hasattr(self, 'md_edit_mode') and self.md_edit_mode.get()):
+                self.update_markdown_preview()
+
+            # Optional: lightweight confirmation in log
+            logging.info(f"Markdown saved to {self.md_current_path}")
+        except Exception as e:
+            logging.error("Failed to save markdown", exc_info=e)
+            messagebox.showerror("Save Error", f"Failed to save: {e}")
 
     def activate_markdown_tab(self):
         """Switch to the Markdown tab."""
@@ -572,6 +752,33 @@ class ImageBrowser(tk.Tk):
         except Exception as e:
             logging.error("save_markdown_as_new failed", exc_info=e)
             messagebox.showerror("Error", f"Failed to save: {e}")
+
+    def clear_markdown_content(self):
+        """Clear the current markdown file and reset the preview area."""
+        try:
+            # Clear file on disk if available
+            if self.md_current_path and os.path.isfile(self.md_current_path):
+                with open(self.md_current_path, 'w', encoding='utf-8') as f:
+                    f.write("")
+            # Clear UI
+            if self.md_use_html and getattr(self, '_md_html_widget', None) is not None:
+                try:
+                    if hasattr(self._md_html_widget, 'set_html'):
+                        self._md_html_widget.set_html("")
+                    else:
+                        self._md_html_widget.set_text("")
+                except Exception:
+                    pass
+            elif hasattr(self, 'md_preview'):
+                try:
+                    self.md_preview.configure(state=tk.NORMAL)
+                    self.md_preview.delete('1.0', tk.END)
+                    self.md_preview.configure(state=tk.DISABLED)
+                except Exception:
+                    pass
+        except Exception as e:
+            logging.error("Failed to clear markdown content", exc_info=e)
+            messagebox.showerror("Error", f"Failed to clear: {e}")
 
     def setup_file_browser(self):
         """Setup the file browser panel with pandastable"""
@@ -961,11 +1168,23 @@ class ImageBrowser(tk.Tk):
                 self.current_image_path = image_path
                 self.zoom_level = 1.0  # Reset zoom level when loading a new image
                 print(f"Updated current image to: {image_path}")  # Debug print
+                # Associate markdown file with the image (same basename, .md)
+                try:
+                    base = os.path.splitext(os.path.basename(image_path))[0]
+                    img_dir = os.path.dirname(image_path)
+                    paired_md = os.path.join(img_dir, f"{base}.md")
+                    self.md_current_path = paired_md
+                    # Refresh markdown preview to show paired file if it exists
+                    if hasattr(self, 'update_markdown_preview'):
+                        self.update_markdown_preview()
+                except Exception as _e:
+                    logging.debug("Failed to pair markdown for image %s: %s", image_path, _e)
             
             # Get the selected cell
             row, col = self.selected_cell
             frame, label = self.grid_cells[row][col]
             
+            # ... (rest of the code remains the same)
             # Get cell dimensions
             frame.update()  # Ensure we have current size
             cell_width = frame.winfo_width() - 8  # Account for padding
@@ -1853,7 +2072,10 @@ class ImageBrowser(tk.Tk):
 
             # Prepare markdown content (append to current md until saved as new)
             from datetime import datetime as _dt
-            md_path = getattr(self, 'md_current_path', None) or os.path.join(os.getcwd(), "image_explanation_from_gemini.md")
+            # Save markdown next to the image using same basename
+            img_dir = os.path.dirname(image_path)
+            base = os.path.splitext(os.path.basename(image_path))[0]
+            md_path = os.path.join(img_dir, f"{base}.md")
             self.md_current_path = md_path
             timestamp = _dt.now().strftime('%Y-%m-%d %H:%M:%S')
             header_needed = not os.path.isfile(md_path) or os.path.getsize(md_path) == 0
@@ -1861,6 +2083,8 @@ class ImageBrowser(tk.Tk):
                 ("# Image Explanation (Gemini)\n" if header_needed else "") +
                 ("\n" if header_needed else "") +
                 f"---\n**File:** {os.path.basename(image_path)}\n\n**Path:** {image_path}\n\n**Generated:** {timestamp}\n\n" +
+                # Embed the selected image before the explanation
+                f"![{os.path.basename(image_path)}]({image_path})\n\n" +
                 f"{explanation}\n"
             )
 
@@ -1888,15 +2112,94 @@ class ImageBrowser(tk.Tk):
             self.update_markdown_preview()
             self.activate_markdown_tab()
 
-            # Fetch and render suggested follow-up questions based on the explanation
+            # Fetch suggested questions and reference links based on the explanation
             try:
                 suggestions = self.fetch_followups(explanation)
-                self.render_suggested_questions(suggestions)
             except Exception:
-                self.render_suggested_questions([])
+                suggestions = []
+            try:
+                references = self.fetch_reference_links(explanation)
+            except Exception:
+                references = []
+
+            # Append sections to markdown
+            try:
+                extra_parts = []
+                if suggestions:
+                    extra_parts.append("\n\n### 建议的后续问题")
+                    for q in suggestions:
+                        extra_parts.append(f"- {q}")
+                if references:
+                    extra_parts.append("\n\n### 参考链接")
+                    for title, url in references:
+                        if title:
+                            extra_parts.append(f"- [{title}]({url})")
+                        else:
+                            extra_parts.append(f"- {url}")
+                if extra_parts:
+                    with open(self.md_current_path, 'a', encoding='utf-8') as f:
+                        f.write("\n".join(extra_parts) + "\n")
+                    self.update_markdown_preview()
+            except Exception as e:
+                logging.warning("Failed to append suggestions/references: %s", e)
+
+            # Render suggestion buttons
+            self.render_suggested_questions(suggestions or [])
         except Exception as e:
             logging.error("Unexpected error in explain_image_with_gemini", exc_info=e)
             messagebox.showerror("Error", f"An unexpected error occurred: {e}")
+
+    def fetch_reference_links(self, context_text):
+        """Ask Gemini for 3-7 reference links as JSON. Returns list of (title, url)."""
+        try:
+            model = self._ensure_gemini_model()
+        except Exception as e:
+            logging.warning("fetch_reference_links: model unavailable: %s", e)
+            return []
+
+        prompt = (
+            "基于以下内容，给出3到7条可供参考的链接（权威来源优先）。"
+            "输出要求：严格为JSON数组字符串。每个元素为对象，包含 'title' 和 'url' 两个字段；"
+            "如果无法提供title，可以仅输出url字符串。不得输出额外文字。\n\n"
+            f"内容：\n{context_text}"
+        )
+        try:
+            resp = model.generate_content([prompt])
+            text = (getattr(resp, 'text', '') or '').strip()
+        except Exception as e:
+            logging.warning("fetch_reference_links: generation failed: %s", e)
+            return []
+
+        # Try to parse different JSON shapes
+        def _extract_json(s):
+            try:
+                return json.loads(s)
+            except Exception:
+                try:
+                    i = s.find('[')
+                    j = s.rfind(']')
+                    if i != -1 and j != -1 and j > i:
+                        return json.loads(s[i:j+1])
+                except Exception:
+                    pass
+            return []
+
+        data = _extract_json(text)
+        out = []
+        if isinstance(data, list):
+            for item in data:
+                if isinstance(item, dict):
+                    title = str(item.get('title') or '').strip()
+                    url = str(item.get('url') or '').strip()
+                    if url:
+                        out.append((title, url))
+                elif isinstance(item, str):
+                    url = item.strip()
+                    if url:
+                        out.append(("", url))
+                if len(out) >= 7:
+                    break
+        return out
 
     def fetch_followups(self, context_text):
         """Ask Gemini for 3-5 concise follow-up questions (Chinese), returned as a JSON array."""
@@ -3352,22 +3655,50 @@ class ImageBrowser(tk.Tk):
             return
 
         try:
-            moved_files = []
+            moved_files = []  # list of filenames moved (for DataFrame removal)
+            moved_paths = []  # list of full source paths moved (for self.image_files update)
             for row in selected_rows:
                 if row < len(self.df):
                     filename = self.df.iloc[row]['Name']
                     src_path = self.df.iloc[row]['File_Path']  # Use full file path from DataFrame
                     dst_path = os.path.join(dest_dir, filename)
+                    src_dir = os.path.dirname(src_path)
+                    base, _ext = os.path.splitext(os.path.basename(src_path))
+                    # Paired markdown paths
+                    src_md = os.path.join(src_dir, f"{base}.md")
+                    dst_md = os.path.join(dest_dir, f"{base}.md")
                     
                     # Check if file already exists in destination
                     if os.path.exists(dst_path):
-                        if not messagebox.askyesno("File Exists", 
-                            f"File {filename} already exists in destination.\nDo you want to overwrite it?"):
+                        if not messagebox.askyesno(
+                            "File Exists",
+                            f"File {filename} already exists in destination.\nDo you want to overwrite it?"
+                        ):
                             continue
-                    
-                    # Move the file
+                        # User chose to overwrite: remove existing destination image first
+                        try:
+                            os.remove(dst_path)
+                        except Exception:
+                            pass
+
+                    # Move the image file
                     shutil.move(src_path, dst_path)
                     moved_files.append(filename)
+                    moved_paths.append(src_path)
+                    
+                    # If a paired markdown exists, move it using the same overwrite policy
+                    if os.path.isfile(src_md):
+                        try:
+                            if os.path.exists(dst_md):
+                                # If image overwrite was confirmed above (exists), we removed it.
+                                # Apply the same overwrite policy to markdown.
+                                try:
+                                    os.remove(dst_md)
+                                except Exception:
+                                    pass
+                            shutil.move(src_md, dst_md)
+                        except Exception as md_err:
+                            logging.warning("Failed to move paired markdown %s -> %s: %s", src_md, dst_md, md_err)
                     
                     # Clear image display if it was the moved image
                     if self.current_image == src_path and self.selected_cell is not None:
@@ -3377,6 +3708,15 @@ class ImageBrowser(tk.Tk):
                         if label:
                             label.configure(image='')
                             label.image = None
+                        # Update current markdown pointer if it pointed to the moved md
+                        try:
+                            if getattr(self, 'md_current_path', None) == src_md:
+                                self.md_current_path = dst_md
+                                # Refresh preview to reflect moved file
+                                if hasattr(self, 'update_markdown_preview'):
+                                    self.update_markdown_preview()
+                        except Exception:
+                            pass
 
             # Update the DataFrame and table
             if moved_files:
@@ -3385,10 +3725,14 @@ class ImageBrowser(tk.Tk):
                 self.table.redraw()
                 
                 # Update image files list
-                self.image_files = [f for f in self.image_files if f not in moved_files]
+                try:
+                    # self.image_files stores full paths; remove by source paths we moved
+                    self.image_files = [p for p in self.image_files if p not in moved_paths]
+                except Exception:
+                    pass
                 
                 # Show success message with count of moved files
-                messagebox.showinfo("Success", f"Moved {len(moved_files)} files to:\n{dest_dir}")
+                messagebox.showinfo("Success", f"Moved {len(moved_files)} images (and paired markdowns when present) to:\n{dest_dir}")
                 
         except Exception as e:
             messagebox.showerror("Error", f"Failed to move files:\n{str(e)}")
