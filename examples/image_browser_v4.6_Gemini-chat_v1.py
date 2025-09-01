@@ -116,6 +116,7 @@ try:
 except Exception:
     # Proceed without .env if package not installed; runtime will prompt for API key when needed
     pass
+<<<<<<< HEAD
 # Support running the example directly from the repo by adding project root to sys.path if needed
 try:
     from pandastable import Table, TableModel
@@ -129,6 +130,38 @@ except ModuleNotFoundError:
         raise ModuleNotFoundError(
             "Could not import 'pandastable'. Install it (pip install pandastable) "
             "or run this script from within the repository so that the local package is on sys.path."
+=======
+# Support running the example directly from the repo by adding project root to sys.path if needed.
+# Also avoid shadowing the installed package when the project root folder is named 'pandastable'.
+try:
+    from pandastable import Table, TableModel
+except Exception:
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    # Determine if a real local package exists under repo_root/pandastable with __init__.py
+    local_pkg_dir = os.path.join(repo_root, 'pandastable')
+    has_local_pkg = os.path.isdir(local_pkg_dir) and os.path.isfile(os.path.join(local_pkg_dir, '__init__.py'))
+
+    # If a real local package exists, prioritize it
+    if has_local_pkg and repo_root not in sys.path:
+        sys.path.insert(0, repo_root)
+
+    # If the repo_root itself is named 'pandastable' (this project), it can shadow the installed package.
+    # Remove it from sys.path to allow importing the pip-installed package instead.
+    if os.path.basename(repo_root).lower() == 'pandastable' and not has_local_pkg:
+        try:
+            while repo_root in sys.path:
+                sys.path.remove(repo_root)
+        except Exception:
+            pass
+
+    try:
+        from pandastable import Table, TableModel
+    except Exception as e:
+        raise ModuleNotFoundError(
+            "Could not import 'pandastable'.\n"
+            "- If you want to use the installed package: run 'pip install pandastable'.\n"
+            "- If you want to use a local copy: ensure there is a 'pandastable/__init__.py' under the project root."
+>>>>>>> 5c02e8f8c41a2320591eafeeeb8b967f4e1f22f0
         ) from e
 from datetime import datetime
 import shutil
@@ -345,12 +378,37 @@ class ImageBrowser(tk.Tk):
         send_btn = ttk.Button(controls, text="Send", command=self.send_md_chat)
         send_btn.pack(side=tk.LEFT, padx=(0, 6))
 
+<<<<<<< HEAD
         save_btn = ttk.Button(controls, text="Save As .md", command=self.save_markdown_as_new)
+=======
+        save_btn = ttk.Button(controls, text="Save As…", command=self.save_markdown_as_new)
+>>>>>>> 5c02e8f8c41a2320591eafeeeb8b967f4e1f22f0
         save_btn.pack(side=tk.LEFT, padx=(0, 6))
 
         clear_btn = ttk.Button(controls, text="Clear", command=self.clear_markdown_content)
         clear_btn.pack(side=tk.LEFT)
 
+<<<<<<< HEAD
+=======
+        # View mode toggle
+        ttk.Separator(controls, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=6)
+        self.md_view_as_text = tk.BooleanVar(value=False)
+        view_toggle = ttk.Checkbutton(
+            controls,
+            text="View as Text",
+            variable=self.md_view_as_text,
+            command=self.update_markdown_preview,
+        )
+        view_toggle.pack(side=tk.LEFT)
+
+        # Copy actions
+        ttk.Separator(controls, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=6)
+        copy_btn = ttk.Button(controls, text="Copy", command=lambda: self.copy_markdown(selection=True))
+        copy_btn.pack(side=tk.LEFT)
+        copy_all_btn = ttk.Button(controls, text="Copy All", command=lambda: self.copy_markdown(selection=False))
+        copy_all_btn.pack(side=tk.LEFT, padx=(6, 0))
+
+>>>>>>> 5c02e8f8c41a2320591eafeeeb8b967f4e1f22f0
         # Load any existing content
         self.update_markdown_preview()
 
@@ -369,7 +427,13 @@ class ImageBrowser(tk.Tk):
         except Exception as e:
             logging.warning(f"Failed to load markdown preview: {e}")
 
+<<<<<<< HEAD
         if self.md_use_html:
+=======
+        # Respect 'View as Text' toggle even if HTML preview is available
+        use_html = self.md_use_html and not (hasattr(self, 'md_view_as_text') and self.md_view_as_text.get())
+        if use_html:
+>>>>>>> 5c02e8f8c41a2320591eafeeeb8b967f4e1f22f0
             # Recreate the HTML widget each time to avoid residual/concatenated content
             try:
                 from tkhtmlview import HTMLScrolledText  # type: ignore
@@ -389,6 +453,11 @@ class ImageBrowser(tk.Tk):
                 self.md_preview.delete('1.0', tk.END)
                 self.md_preview.insert(tk.END, text)
                 self.md_preview.configure(state=tk.DISABLED)
+<<<<<<< HEAD
+=======
+                # Bind copy keys and context menu
+                self._bind_md_copy_handlers(self.md_preview)
+>>>>>>> 5c02e8f8c41a2320591eafeeeb8b967f4e1f22f0
                 return
 
             # Destroy all previous children in the preview frame to guarantee a clean slate
@@ -418,6 +487,14 @@ class ImageBrowser(tk.Tk):
                     self._md_html_widget.set_text(html)
             except Exception as e:
                 logging.warning(f"Failed to render HTML preview: {e}")
+<<<<<<< HEAD
+=======
+            # Bind context menu on HTML widget and its container
+            try:
+                self._bind_md_copy_handlers(self._md_html_widget)
+            except Exception:
+                pass
+>>>>>>> 5c02e8f8c41a2320591eafeeeb8b967f4e1f22f0
         else:
             # Raw text display; ensure no leftover HTML widgets remain
             try:
@@ -431,6 +508,11 @@ class ImageBrowser(tk.Tk):
             self.md_preview.delete('1.0', tk.END)
             self.md_preview.insert(tk.END, text)
             self.md_preview.configure(state=tk.DISABLED)
+<<<<<<< HEAD
+=======
+            # Bind copy keys and context menu
+            self._bind_md_copy_handlers(self.md_preview)
+>>>>>>> 5c02e8f8c41a2320591eafeeeb8b967f4e1f22f0
 
     def clear_markdown_content(self):
         """Clear both the on-screen preview and truncate the current markdown file."""
@@ -438,6 +520,7 @@ class ImageBrowser(tk.Tk):
             if self.md_current_path and os.path.isfile(self.md_current_path):
                 with open(self.md_current_path, 'w', encoding='utf-8') as f:
                     f.write("")
+<<<<<<< HEAD
             # Clear UI
             if self.md_use_html and self._md_html_widget is not None:
                 if hasattr(self._md_html_widget, 'set_html'):
@@ -448,6 +531,10 @@ class ImageBrowser(tk.Tk):
                 self.md_preview.configure(state=tk.NORMAL)
                 self.md_preview.delete('1.0', tk.END)
                 self.md_preview.configure(state=tk.DISABLED)
+=======
+            # Refresh preview
+            self.update_markdown_preview()
+>>>>>>> 5c02e8f8c41a2320591eafeeeb8b967f4e1f22f0
         except Exception as e:
             logging.error("Failed to clear markdown content", exc_info=e)
             messagebox.showerror("Error", f"Failed to clear: {e}")
@@ -459,6 +546,63 @@ class ImageBrowser(tk.Tk):
         except Exception:
             pass
 
+<<<<<<< HEAD
+=======
+    # --- Copy helpers for Markdown preview ---
+    def _bind_md_copy_handlers(self, widget):
+        """Bind Ctrl+C and right-click menu for the markdown preview widget."""
+        try:
+            widget.bind('<Control-c>', lambda e: (self.copy_markdown(selection=True), 'break'))
+            widget.bind('<Button-3>', self._md_show_context_menu)
+        except Exception:
+            pass
+
+    def _md_show_context_menu(self, event):
+        try:
+            if not hasattr(self, '_md_context_menu'):
+                menu = tk.Menu(self, tearoff=0)
+                menu.add_command(label="Copy", command=lambda: self.copy_markdown(selection=True))
+                menu.add_command(label="Copy All", command=lambda: self.copy_markdown(selection=False))
+                self._md_context_menu = menu
+            self._md_context_menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            try:
+                self._md_context_menu.grab_release()
+            except Exception:
+                pass
+
+    def copy_markdown(self, selection: bool = True):
+        """Copy selection (if any) or entire markdown content to clipboard.
+        Works for both text and HTML preview modes by reading from the backing file when needed.
+        """
+        try:
+            text = None
+            # Try selection from text widget if present
+            if selection and hasattr(self, 'md_preview') and isinstance(self.md_preview, ScrolledText):
+                try:
+                    state = str(self.md_preview['state'])
+                    if state == tk.DISABLED:
+                        self.md_preview.configure(state=tk.NORMAL)
+                    if self.md_preview.tag_ranges(tk.SEL):
+                        text = self.md_preview.get(tk.SEL_FIRST, tk.SEL_LAST)
+                    if state == tk.DISABLED:
+                        self.md_preview.configure(state=tk.DISABLED)
+                except Exception:
+                    text = None
+            # Fallback to entire file content
+            if not text:
+                if self.md_current_path and os.path.isfile(self.md_current_path):
+                    with open(self.md_current_path, 'r', encoding='utf-8') as f:
+                        text = f.read()
+                else:
+                    text = ""
+            self.clipboard_clear()
+            self.clipboard_append(text)
+            self.update()  # ensure clipboard is set
+        except Exception as e:
+            messagebox.showerror("Copy Error", f"Failed to copy: {e}")
+
+>>>>>>> 5c02e8f8c41a2320591eafeeeb8b967f4e1f22f0
     def _ensure_gemini_model(self):
         """Helper to return a configured Gemini model or raise."""
         import google.generativeai as genai  # type: ignore
@@ -509,23 +653,65 @@ class ImageBrowser(tk.Tk):
             ])
             answer = (getattr(resp, 'text', '') or '').strip()
 
+<<<<<<< HEAD
             # Append to markdown
             ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             block = f"\n\n---\n## Follow-up ({ts})\n**User:**\n\n{user_msg}\n\n**Assistant:**\n\n{answer}\n"
             with open(self.md_current_path, 'a', encoding='utf-8') as f:
                 f.write(block)
+=======
+            # Fetch suggestions and references before writing
+            try:
+                suggestions = self.fetch_followups(context_text + "\n\n" + answer)
+            except Exception:
+                suggestions = []
+            try:
+                references = self.fetch_reference_links(context_text + "\n\n" + answer)
+            except Exception:
+                references = []
+
+            # Append to markdown with suggested questions and references
+            ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            parts = [
+                "\n\n---",
+                f"## Follow-up ({ts})",
+                "**User:**\n",
+                user_msg,
+                "\n\n**Assistant:**\n",
+                answer,
+            ]
+            if suggestions:
+                parts.append("\n\n### 建议的后续问题")
+                for q in suggestions:
+                    parts.append(f"- {q}")
+            if references:
+                parts.append("\n\n### 参考链接")
+                for ref in references:
+                    title, url = ref
+                    if title:
+                        parts.append(f"- [{title}]({url})")
+                    else:
+                        parts.append(f"- {url}")
+            with open(self.md_current_path, 'a', encoding='utf-8') as f:
+                f.write("\n".join(parts) + "\n")
+>>>>>>> 5c02e8f8c41a2320591eafeeeb8b967f4e1f22f0
 
             # Refresh UI
             self.chat_var.set("")
             self.update_markdown_preview()
             self.activate_markdown_tab()
 
+<<<<<<< HEAD
             # Fetch and render suggested follow-up questions
             try:
                 suggestions = self.fetch_followups(context_text + "\n\n" + answer)
                 self.render_suggested_questions(suggestions)
             except Exception as _:
                 self.render_suggested_questions([])
+=======
+            # Render suggested follow-up questions
+            self.render_suggested_questions(suggestions or [])
+>>>>>>> 5c02e8f8c41a2320591eafeeeb8b967f4e1f22f0
         except Exception as e:
             logging.error("send_md_chat failed", exc_info=e)
             messagebox.showerror("Error", f"Failed to send chat: {e}")
@@ -1888,16 +2074,107 @@ class ImageBrowser(tk.Tk):
             self.update_markdown_preview()
             self.activate_markdown_tab()
 
+<<<<<<< HEAD
             # Fetch and render suggested follow-up questions based on the explanation
             try:
                 suggestions = self.fetch_followups(explanation)
                 self.render_suggested_questions(suggestions)
             except Exception:
                 self.render_suggested_questions([])
+=======
+            # Fetch suggested questions and references based on the explanation
+            try:
+                suggestions = self.fetch_followups(explanation)
+            except Exception:
+                suggestions = []
+            try:
+                references = self.fetch_reference_links(explanation)
+            except Exception:
+                references = []
+
+            # Append sections to markdown
+            try:
+                extra_parts = []
+                if suggestions:
+                    extra_parts.append("\n\n### 建议的后续问题")
+                    for q in suggestions:
+                        extra_parts.append(f"- {q}")
+                if references:
+                    extra_parts.append("\n\n### 参考链接")
+                    for title, url in references:
+                        if title:
+                            extra_parts.append(f"- [{title}]({url})")
+                        else:
+                            extra_parts.append(f"- {url}")
+                if extra_parts:
+                    with open(self.md_current_path, 'a', encoding='utf-8') as f:
+                        f.write("\n".join(extra_parts) + "\n")
+                    self.update_markdown_preview()
+            except Exception as e:
+                logging.warning("Failed to append suggestions/references: %s", e)
+
+            # Render suggestion buttons
+            self.render_suggested_questions(suggestions or [])
+>>>>>>> 5c02e8f8c41a2320591eafeeeb8b967f4e1f22f0
         except Exception as e:
             logging.error("Unexpected error in explain_image_with_gemini", exc_info=e)
             messagebox.showerror("Error", f"An unexpected error occurred: {e}")
 
+<<<<<<< HEAD
+=======
+    def fetch_reference_links(self, context_text):
+        """Ask Gemini for 3-7 reference links as JSON. Returns list of (title, url)."""
+        try:
+            model = self._ensure_gemini_model()
+        except Exception as e:
+            logging.warning("fetch_reference_links: model unavailable: %s", e)
+            return []
+
+        prompt = (
+            "基于以下内容，给出3到7条可供参考的链接（权威来源优先）。"
+            "输出要求：严格为JSON数组字符串。每个元素为对象，包含 'title' 和 'url' 两个字段；"
+            "如果无法提供title，可以仅输出url字符串。不得输出额外文字。\n\n"
+            f"内容：\n{context_text}"
+        )
+        try:
+            resp = model.generate_content([prompt])
+            text = (getattr(resp, 'text', '') or '').strip()
+        except Exception as e:
+            logging.warning("fetch_reference_links: generation failed: %s", e)
+            return []
+
+        # Try to parse different JSON shapes
+        def _extract_json(s):
+            try:
+                return json.loads(s)
+            except Exception:
+                try:
+                    i = s.find('[')
+                    j = s.rfind(']')
+                    if i != -1 and j != -1 and j > i:
+                        return json.loads(s[i:j+1])
+                except Exception:
+                    pass
+            return []
+
+        data = _extract_json(text)
+        out = []
+        if isinstance(data, list):
+            for item in data:
+                if isinstance(item, dict):
+                    title = str(item.get('title') or '').strip()
+                    url = str(item.get('url') or '').strip()
+                    if url:
+                        out.append((title, url))
+                elif isinstance(item, str):
+                    url = item.strip()
+                    if url:
+                        out.append(("", url))
+                if len(out) >= 7:
+                    break
+        return out
+
+>>>>>>> 5c02e8f8c41a2320591eafeeeb8b967f4e1f22f0
     def fetch_followups(self, context_text):
         """Ask Gemini for 3-5 concise follow-up questions (Chinese), returned as a JSON array."""
         try:

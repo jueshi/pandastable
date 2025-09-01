@@ -102,7 +102,16 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, simpledialog
 from tkinter.scrolledtext import ScrolledText
 from PIL import Image, ImageTk
+try:
+    # For screen capture on Windows
+    from PIL import ImageGrab  # type: ignore
+except Exception:
+    ImageGrab = None  # type: ignore
 import pandas as pd
+import subprocess
+import io
+from typing import Optional
+import time
 # Load environment variables from .env if available (non-fatal if python-dotenv missing)
 try:
     from dotenv import load_dotenv  # type: ignore
@@ -246,6 +255,12 @@ class ImageBrowser(tk.Tk):
         # Bind keyboard shortcuts
         self.bind('<Delete>', self.delete_selected)
         self.bind('<Control-c>', self._copy_button_click)
+        # PDF page navigation
+        try:
+            self.bind(']', self.next_pdf_page)
+            self.bind('[', self.prev_pdf_page)
+        except Exception:
+            pass
 
     def format_size(self, size):
         # Convert size to human readable format
@@ -270,10 +285,20 @@ class ImageBrowser(tk.Tk):
         # Create file browser frame
         self.file_frame = ttk.Frame(self.paned)
         self.paned.add(self.file_frame, weight=1)
+        try:
+            # Ensure file pane can't collapse to zero
+            self.paned.paneconfigure(self.file_frame, minsize=200)
+        except Exception:
+            pass
 
         # Create grid container frame
         self.grid_container = ttk.Frame(self.paned)
         self.paned.add(self.grid_container, weight=2)
+        try:
+            # Ensure grid pane can't collapse to zero
+            self.paned.paneconfigure(self.grid_container, minsize=200)
+        except Exception:
+            pass
 
         # Create a notebook with two tabs: Images and Markdown Preview/Chat
         self.notebook = ttk.Notebook(self.grid_container)
@@ -286,6 +311,28 @@ class ImageBrowser(tk.Tk):
         # Grid frame inside Images tab
         self.grid_frame = ttk.Frame(self.images_tab)
         self.grid_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        # Recreate PDF navigation widgets so they belong to the new images_tab
+        try:
+            # Destroy old nav frame if it exists (from previous layout)
+            if hasattr(self, 'pdf_nav_frame') and self.pdf_nav_frame.winfo_exists():
+                try:
+                    self.pdf_nav_frame.destroy()
+                except Exception:
+                    pass
+            self.pdf_nav_initialized = False
+            self._ensure_pdf_nav_widgets()
+            # After creating widgets, refresh state for current selection
+            try:
+                if getattr(self, 'selected_cell', None):
+                    r, c = self.selected_cell
+                    frame, label = self.grid_cells[r][c]
+                    self._update_pdf_controls(label)
+                else:
+                    self._hide_pdf_controls()
+            except Exception:
+                self._hide_pdf_controls()
+        except Exception:
+            pass
 
         # Markdown Preview/Chat tab
         self.md_tab = ttk.Frame(self.notebook)
@@ -308,6 +355,27 @@ class ImageBrowser(tk.Tk):
             self.paned.sashpos(0, 400)  # 400 pixels from left
         else:
             self.paned.sashpos(0, 300)  # 300 pixels from top
+
+        # Defer another sash adjustment to ensure visibility after layout settles
+        try:
+            self.after(100, self._set_initial_sash)
+        except Exception:
+            pass
+
+    def _set_initial_sash(self):
+        """Adjust sash after widgets are realized so both panes are visible."""
+        try:
+            self.update_idletasks()
+            if self.is_horizontal:
+                total = self.paned.winfo_width()
+                pos = max(200, min(total - 200, int(total * 0.3)))
+                self.paned.sashpos(0, pos)
+            else:
+                total = self.paned.winfo_height()
+                pos = max(150, min(total - 150, int(total * 0.35)))
+                self.paned.sashpos(0, pos)
+        except Exception:
+            pass
 
     def setup_markdown_tab(self):
         """Initialize widgets for the Markdown preview and chat UI."""
@@ -337,6 +405,25 @@ class ImageBrowser(tk.Tk):
         self.md_controls_frame = controls
 
         ttk.Label(controls, text="Chat with Gemini:").pack(side=tk.LEFT)
+
+        # Language selector for chat outputs
+        self.chat_lang_var = tk.StringVar(value="English")
+        self.chat_lang_combo = ttk.Combobox(
+            controls,
+            textvariable=self.chat_lang_var,
+            width=18,
+            state="readonly",
+            values=(
+                "English",
+                "Chinese (Simplified)",
+                "Chinese (Traditional)",
+                "Japanese",
+                "Korean",
+                "Spanish",
+            ),
+        )
+        self.chat_lang_combo.pack(side=tk.LEFT, padx=(6, 6))
+
         self.chat_var = tk.StringVar()
         self.chat_entry = ttk.Entry(controls, textvariable=self.chat_var)
         self.chat_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=6)
@@ -351,6 +438,44 @@ class ImageBrowser(tk.Tk):
         clear_btn = ttk.Button(controls, text="Clear", command=self.clear_markdown_content)
         clear_btn.pack(side=tk.LEFT)
 
+        # Copy actions
+        ttk.Separator(controls, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=6)
+        copy_btn = ttk.Button(controls, text="Copy", command=lambda: self.copy_markdown(selection=True))
+        copy_btn.pack(side=tk.LEFT)
+        copy_all_btn = ttk.Button(controls, text="Copy All", command=lambda: self.copy_markdown(selection=False))
+        copy_all_btn.pack(side=tk.LEFT, padx=(6, 0))
+
+        # View mode toggle (enable selectable text preview)
+        ttk.Separator(controls, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=6)
+        self.md_view_as_text = tk.BooleanVar(value=False)
+        view_toggle = ttk.Checkbutton(
+            controls,
+            text="View as Text",
+            variable=self.md_view_as_text,
+            command=self.update_markdown_preview,
+        )
+        view_toggle.pack(side=tk.LEFT)
+
+        # Edit mode toggle and Save button
+        ttk.Separator(controls, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=6)
+        self.md_edit_mode = tk.BooleanVar(value=False)
+        edit_toggle = ttk.Checkbutton(
+            controls,
+            text="Edit",
+            variable=self.md_edit_mode,
+            command=self.toggle_md_edit_mode,
+        )
+        edit_toggle.pack(side=tk.LEFT)
+
+        save_btn_current = ttk.Button(controls, text="Save", command=self.save_markdown_current)
+        save_btn_current.pack(side=tk.LEFT, padx=(6, 0))
+
+        # Bind Ctrl+S globally
+        try:
+            self.bind('<Control-s>', lambda e: (self.save_markdown_current(), 'break'))
+        except Exception:
+            pass
+
         # Load any existing content
         self.update_markdown_preview()
 
@@ -360,7 +485,9 @@ class ImageBrowser(tk.Tk):
         self.render_suggested_questions([])
 
     def update_markdown_preview(self):
-        """Load current markdown file and render preview (HTML if available)."""
+        """Load current markdown file and render preview.
+        If Edit mode is on, force text view and keep the text widget editable without overwriting user edits.
+        """
         text = ""
         try:
             if self.md_current_path and os.path.isfile(self.md_current_path):
@@ -369,7 +496,16 @@ class ImageBrowser(tk.Tk):
         except Exception as e:
             logging.warning(f"Failed to load markdown preview: {e}")
 
-        if self.md_use_html:
+        # Respect 'View as Text' and Edit mode
+        editing = bool(getattr(self, 'md_edit_mode', None)) and self.md_edit_mode.get()
+        # Detect if backing file path changed since last render; if so, we must refresh even in edit mode
+        try:
+            path_changed = getattr(self, '_md_last_rendered_path', None) != self.md_current_path
+        except Exception:
+            path_changed = True
+        # Force raw text when editing
+        use_html = self.md_use_html and not (hasattr(self, 'md_view_as_text') and self.md_view_as_text.get()) and not editing
+        if use_html:
             # Recreate the HTML widget each time to avoid residual/concatenated content
             try:
                 from tkhtmlview import HTMLScrolledText  # type: ignore
@@ -389,6 +525,11 @@ class ImageBrowser(tk.Tk):
                 self.md_preview.delete('1.0', tk.END)
                 self.md_preview.insert(tk.END, text)
                 self.md_preview.configure(state=tk.DISABLED)
+                # Bind copy keys and context menu
+                try:
+                    self._bind_md_copy_handlers(self.md_preview)
+                except Exception:
+                    pass
                 return
 
             # Destroy all previous children in the preview frame to guarantee a clean slate
@@ -418,39 +559,244 @@ class ImageBrowser(tk.Tk):
                     self._md_html_widget.set_text(html)
             except Exception as e:
                 logging.warning(f"Failed to render HTML preview: {e}")
-        else:
-            # Raw text display; ensure no leftover HTML widgets remain
+            # Bind copy handlers on HTML widget
             try:
-                for child in self._md_preview_frame.winfo_children():
-                    child.destroy()
+                # Provide the same copy/context behavior
+                self._md_html_widget.bind('<Control-c>', lambda e: (self.copy_markdown(selection=True), 'break'))
+                self._md_html_widget.bind('<Button-3>', self._md_show_context_menu)
             except Exception:
                 pass
-            self.md_preview = ScrolledText(self._md_preview_frame, wrap=tk.WORD, height=10)
-            self.md_preview.pack(fill=tk.BOTH, expand=True)
-            self.md_preview.configure(state=tk.NORMAL)
-            self.md_preview.delete('1.0', tk.END)
-            self.md_preview.insert(tk.END, text)
-            self.md_preview.configure(state=tk.DISABLED)
+            # Record last rendered path
+            try:
+                self._md_last_rendered_path = self.md_current_path
+            except Exception:
+                pass
+            return
 
-    def clear_markdown_content(self):
-        """Clear both the on-screen preview and truncate the current markdown file."""
+        # Non-HTML preview: build/update a ScrolledText
         try:
-            if self.md_current_path and os.path.isfile(self.md_current_path):
-                with open(self.md_current_path, 'w', encoding='utf-8') as f:
-                    f.write("")
-            # Clear UI
-            if self.md_use_html and self._md_html_widget is not None:
-                if hasattr(self._md_html_widget, 'set_html'):
-                    self._md_html_widget.set_html("")
-                else:
-                    self._md_html_widget.set_text("")
+            # If editing, avoid overwriting any in-flight user edits
+            editing = bool(getattr(self, 'md_edit_mode', None)) and self.md_edit_mode.get()
+            if editing and not path_changed and hasattr(self, 'md_preview') and isinstance(self.md_preview, ScrolledText):
+                try:
+                    self.md_preview.configure(state=tk.NORMAL)
+                except Exception:
+                    pass
+                # Do not overwrite content while editing
             else:
+                for child in self._md_preview_frame.winfo_children():
+                    child.destroy()
+                self.md_preview = ScrolledText(self._md_preview_frame, wrap=tk.WORD, height=10)
+                self.md_preview.pack(fill=tk.BOTH, expand=True)
                 self.md_preview.configure(state=tk.NORMAL)
                 self.md_preview.delete('1.0', tk.END)
-                self.md_preview.configure(state=tk.DISABLED)
+                self.md_preview.insert(tk.END, text)
+                # Disable when not editing for read-only view
+                if not editing:
+                    self.md_preview.configure(state=tk.DISABLED)
+            # Bind copy keys and context menu
+            try:
+                self._bind_md_copy_handlers(self.md_preview)
+            except Exception:
+                pass
+            # Record last rendered path
+            try:
+                self._md_last_rendered_path = self.md_current_path
+            except Exception:
+                pass
         except Exception as e:
-            logging.error("Failed to clear markdown content", exc_info=e)
-            messagebox.showerror("Error", f"Failed to clear: {e}")
+            logging.warning(f"Failed to render text preview: {e}")
+        
+        # --- Copy helpers for Markdown preview ---
+    def _bind_md_copy_handlers(self, widget):
+        """Bind Ctrl+C and right-click menu for the markdown preview widget."""
+        try:
+            widget.bind('<Control-c>', lambda e: (self.copy_markdown(selection=True), 'break'))
+            widget.bind('<Button-3>', self._md_show_context_menu)
+        except Exception:
+            pass
+
+    def _md_show_context_menu(self, event):
+        try:
+            if not hasattr(self, '_md_context_menu'):
+                menu = tk.Menu(self, tearoff=0)
+                menu.add_command(label="Copy", command=lambda: self.copy_markdown(selection=True))
+                menu.add_command(label="Copy All", command=lambda: self.copy_markdown(selection=False))
+                self._md_context_menu = menu
+            self._md_context_menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            try:
+                self._md_context_menu.grab_release()
+            except Exception:
+                pass
+
+    def copy_markdown(self, selection: bool = True):
+        """Copy selection (if any) or entire markdown content to clipboard.
+        Works for both text and HTML preview modes by reading from the backing file when needed.
+        """
+        try:
+            text = None
+            # Try selection from text widget if present
+            if selection and hasattr(self, 'md_preview') and isinstance(self.md_preview, ScrolledText):
+                try:
+                    state = str(self.md_preview['state'])
+                    if state == tk.DISABLED:
+                        self.md_preview.configure(state=tk.NORMAL)
+                    if self.md_preview.tag_ranges(tk.SEL):
+                        text = self.md_preview.get(tk.SEL_FIRST, tk.SEL_LAST)
+                    if state == tk.DISABLED:
+                        self.md_preview.configure(state=tk.DISABLED)
+                except Exception:
+                    text = None
+            # Fallback to entire file content
+            if not text:
+                if self.md_current_path and os.path.isfile(self.md_current_path):
+                    with open(self.md_current_path, 'r', encoding='utf-8') as f:
+                        text = f.read()
+                else:
+                    text = ""
+            self.clipboard_clear()
+            self.clipboard_append(text)
+            self.update()  # ensure clipboard is set
+        except Exception as e:
+            messagebox.showerror("Copy Error", f"Failed to copy: {e}")
+
+    def _get_markdown_preview_text(self) -> Optional[str]:
+        """Return current markdown text from the preview widget if present; otherwise None.
+        This reads from the text widget regardless of edit mode by temporarily enabling it if disabled.
+        """
+        try:
+            if hasattr(self, 'md_preview') and isinstance(self.md_preview, ScrolledText):
+                prev_state = None
+                try:
+                    prev_state = str(self.md_preview['state'])
+                    if prev_state == tk.DISABLED:
+                        self.md_preview.configure(state=tk.NORMAL)
+                except Exception:
+                    pass
+                text = self.md_preview.get('1.0', 'end-1c')
+                if prev_state == tk.DISABLED:
+                    try:
+                        self.md_preview.configure(state=tk.DISABLED)
+                    except Exception:
+                        pass
+                return text
+        except Exception:
+            pass
+        return None
+
+    def _autosave_markdown_if_dirty(self):
+        """If a markdown file is open and the preview content differs from disk, save it silently."""
+        try:
+            md_path = getattr(self, 'md_current_path', None)
+            if not md_path:
+                return
+            preview_text = self._get_markdown_preview_text()
+            if preview_text is None:
+                return
+            disk_text = ""
+            if os.path.isfile(md_path):
+                try:
+                    with open(md_path, 'r', encoding='utf-8') as f:
+                        disk_text = f.read()
+                except Exception:
+                    disk_text = ""
+            if preview_text != disk_text:
+                with open(md_path, 'w', encoding='utf-8') as f:
+                    f.write(preview_text)
+                logging.info(f"Autosaved markdown to {md_path}")
+        except Exception as e:
+            logging.warning("Autosave markdown failed", exc_info=e)
+
+    def _switch_markdown_for_selection(self, file_path: str, switch_tab: bool = False):
+        """Point md_current_path to the sidecar markdown for the selected file.
+        If the sidecar doesn't exist, still set the intended path and refresh preview to blank.
+        """
+        try:
+            if not file_path:
+                return
+            stem, _ = os.path.splitext(file_path)
+            md_path = stem + ".md"
+            self.md_current_path = md_path
+            # Refresh preview (will be blank if file doesn't exist)
+            self.update_markdown_preview()
+            if switch_tab:
+                self.activate_markdown_tab()
+        except Exception as e:
+            logging.debug(f"Failed to switch markdown for {file_path}: {e}")
+
+    def toggle_md_edit_mode(self):
+        """Toggle edit mode for the Markdown tab. Forces Text view when enabled."""
+        try:
+            if self.md_edit_mode.get():
+                # Force text view when editing
+                if hasattr(self, 'md_view_as_text'):
+                    self.md_view_as_text.set(True)
+                # Rebuild preview as editable text
+                self.update_markdown_preview()
+                try:
+                    if hasattr(self, 'md_preview'):
+                        self.md_preview.focus_set()
+                except Exception:
+                    pass
+            else:
+                # Leaving edit mode: refresh preview honoring the view toggle
+                self.update_markdown_preview()
+        except Exception as e:
+            logging.error("Failed to toggle edit mode", exc_info=e)
+
+    def save_markdown_current(self):
+        """Save current Markdown text widget content into md_current_path."""
+        try:
+            # Only meaningful if we have a text widget
+            if hasattr(self, 'md_preview') and isinstance(self.md_preview, ScrolledText):
+                # Ensure we can read the content
+                prev_state = None
+                try:
+                    prev_state = str(self.md_preview['state'])
+                    if prev_state == tk.DISABLED:
+                        self.md_preview.configure(state=tk.NORMAL)
+                except Exception:
+                    pass
+                content = self.md_preview.get('1.0', 'end-1c')
+                # Restore state if needed
+                if prev_state == tk.DISABLED:
+                    try:
+                        self.md_preview.configure(state=tk.DISABLED)
+                    except Exception:
+                        pass
+            else:
+                # Fallback: read from backing file to avoid data loss
+                content = ""
+                if self.md_current_path and os.path.isfile(self.md_current_path):
+                    with open(self.md_current_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+
+            if not self.md_current_path:
+                # If no current path, prompt for one
+                path = filedialog.asksaveasfilename(
+                    title="Save Markdown",
+                    defaultextension=".md",
+                    initialfile="conversation.md",
+                    filetypes=[("Markdown", "*.md"), ("Text", "*.txt"), ("All Files", "*.*")]
+                )
+                if not path:
+                    return
+                self.md_current_path = path
+
+            # Write out
+            with open(self.md_current_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+
+            # If not editing, refresh preview to show read-only state
+            if not (hasattr(self, 'md_edit_mode') and self.md_edit_mode.get()):
+                self.update_markdown_preview()
+
+            # Optional: lightweight confirmation in log
+            logging.info(f"Markdown saved to {self.md_current_path}")
+        except Exception as e:
+            logging.error("Failed to save markdown", exc_info=e)
+            messagebox.showerror("Save Error", f"Failed to save: {e}")
 
     def activate_markdown_tab(self):
         """Switch to the Markdown tab."""
@@ -502,11 +848,24 @@ class ImageBrowser(tk.Tk):
                 messagebox.showerror("Gemini", str(e))
                 return
 
+            # Build language instruction
+            lang_label = getattr(self, 'chat_lang_var', None).get() if hasattr(self, 'chat_lang_var') else 'English'
+            lang_map = {
+                'English': 'Answer in English and format with Markdown.',
+                'Chinese (Simplified)': 'Answer in Chinese (Simplified) and format with Markdown.',
+                'Chinese (Traditional)': 'Answer in Chinese (Traditional) and format with Markdown.',
+                'Japanese': 'Answer in Japanese and format with Markdown.',
+                'Korean': 'Answer in Korean and format with Markdown.',
+                'Spanish': 'Answer in Spanish and format with Markdown.',
+            }
+            lang_instruction = lang_map.get(lang_label, 'Answer in English and format with Markdown.')
+
             resp = model.generate_content([
-                "You are continuing a markdown-based analysis conversation. Answer in Chinese (Simplified) and format with Markdown.",
-                "Context (may be truncated):\n" + context_text,
-                "User question:\n" + user_msg,
-            ])
+                    "You are continuing a markdown-based analysis conversation.",
+                    lang_instruction,
+                    "Context (may be truncated):\n" + context_text,
+                    "User question:\n" + user_msg,
+                ])
             answer = (getattr(resp, 'text', '') or '').strip()
 
             # Append to markdown
@@ -530,896 +889,222 @@ class ImageBrowser(tk.Tk):
             logging.error("send_md_chat failed", exc_info=e)
             messagebox.showerror("Error", f"Failed to send chat: {e}")
 
+
     def save_markdown_as_new(self):
         """Save current preview content to a new markdown file and clear the preview."""
         try:
             # Default to current image name for better association, fallback to current md name
-            if getattr(self, 'current_image_path', None):
-                base = os.path.splitext(os.path.basename(self.current_image_path))[0]
-                initial = f"{base}.md"
-            else:
-                initial = os.path.basename(self.md_current_path) if self.md_current_path else "conversation.md"
-            new_path = filedialog.asksaveasfilename(
-                title="Save Conversation As",
+            suggested_name = "conversation.md"
+            try:
+                if getattr(self, 'current_image_path', None):
+                    base = os.path.splitext(os.path.basename(self.current_image_path))[0]
+                    suggested_name = f"{base}.md"
+                elif getattr(self, 'md_current_path', None):
+                    suggested_name = os.path.basename(self.md_current_path)
+            except Exception:
+                pass
+
+            # Determine current text to save
+            text_to_save = ""
+            try:
+                if hasattr(self, 'md_preview') and isinstance(self.md_preview, ScrolledText):
+                    state = None
+                    try:
+                        state = str(self.md_preview['state'])
+                        if state == tk.DISABLED:
+                            self.md_preview.configure(state=tk.NORMAL)
+                    except Exception:
+                        pass
+                    text_to_save = self.md_preview.get('1.0', 'end-1c')
+                    if state == tk.DISABLED:
+                        try:
+                            self.md_preview.configure(state=tk.DISABLED)
+                        except Exception:
+                            pass
+                elif self.md_current_path and os.path.isfile(self.md_current_path):
+                    with open(self.md_current_path, 'r', encoding='utf-8') as f:
+                        text_to_save = f.read()
+            except Exception:
+                pass
+
+            # Ask a new path
+            path = filedialog.asksaveasfilename(
+                title="Save Markdown As",
                 defaultextension=".md",
-                initialfile=initial,
+                initialfile=suggested_name,
                 filetypes=[("Markdown", "*.md"), ("Text", "*.txt"), ("All Files", "*.*")]
             )
-            if not new_path:
+            if not path:
                 return
-            # Save current content
-            # Always treat the file on disk as source of truth to keep behavior consistent
-            content = ""
-            try:
-                if self.md_current_path and os.path.isfile(self.md_current_path):
-                    with open(self.md_current_path, 'r', encoding='utf-8') as f:
-                        content = f.read()
-            except Exception:
-                content = ""
-            with open(new_path, 'w', encoding='utf-8') as f:
-                f.write(content)
-            # Do NOT change md_current_path. Instead, clear the original file and refresh preview.
-            try:
-                if self.md_current_path and os.path.isfile(self.md_current_path):
-                    with open(self.md_current_path, 'w', encoding='utf-8') as f:
-                        f.write("")
-            except Exception as e:
-                logging.warning(f"Failed to clear original markdown after Save As: {e}")
 
-            # Refresh preview to continue showing the original (now empty) file
-            self.update_markdown_preview()
-            messagebox.showinfo("Saved", f"Saved to: {new_path}. Original file cleared and ready for next response.")
+            # Save file and adopt as current
+            with open(path, 'w', encoding='utf-8') as f:
+                f.write(text_to_save or "")
+            self.md_current_path = path
+
+            # Clear preview area for a clean slate
+            try:
+                if hasattr(self, 'md_preview') and isinstance(self.md_preview, ScrolledText):
+                    self.md_preview.configure(state=tk.NORMAL)
+                    self.md_preview.delete('1.0', tk.END)
+                    self.md_preview.configure(state=tk.DISABLED)
+            except Exception:
+                pass
+
+            # Confirmation
+            try:
+                messagebox.showinfo("Saved", f"Markdown saved to:\n{path}")
+            except Exception:
+                pass
         except Exception as e:
-            logging.error("save_markdown_as_new failed", exc_info=e)
+            logging.error("Failed to save markdown as new", exc_info=e)
             messagebox.showerror("Error", f"Failed to save: {e}")
 
-    def setup_file_browser(self):
-        """Setup the file browser panel with pandastable"""
-        print("\n=== Setting up file browser ===")  # Debug print
-        
-        # Create frame for pandastable
-        if hasattr(self, 'pt_frame'):
-            self.pt_frame.destroy()
-        self.pt_frame = ttk.Frame(self.file_frame)
-        self.pt_frame.pack(fill="both", expand=True, padx=5, pady=5)
-        
-        # Add filter frame
-        filter_frame = ttk.Frame(self.pt_frame)
-        filter_frame.pack(fill="x", padx=5, pady=5)
-        
-        # Add filter label and entry
-        ttk.Label(filter_frame, text="Filter Files:").pack(side="left", padx=(0,5))
-        filter_entry = ttk.Entry(filter_frame, textvariable=self.filter_text)
-        filter_entry.pack(side="left", fill="x", expand=True)
-        
-        # Create right-click context menu for filtering instructions
-        filter_menu = tk.Menu(filter_entry, tearoff=0)
-        filter_menu.add_command(label="Filtering Instructions", state='disabled', font=('Arial', 10, 'bold'))
-        filter_menu.add_separator()
-        filter_menu.add_command(label="Basic Search: Enter any text to match", state='disabled')
-        filter_menu.add_command(label="Multiple Terms: Use space ' 'to combine", state='disabled')
-        filter_menu.add_command(label="Exclude Terms: Use '!' prefix", state='disabled')
-        filter_menu.add_separator()
-        filter_menu.add_command(label="Examples:", state='disabled', font=('Arial', 10, 'bold'))
-        filter_menu.add_command(label="'png': Show files with 'png'", state='disabled')
-        filter_menu.add_command(label="'2024 report': Files with both terms", state='disabled')
-        filter_menu.add_command(label="'!temp': Exclude files with 'temp'", state='disabled')
-        filter_menu.add_command(label="'png !old': PNG files, not old", state='disabled')
-        
-        def show_filter_menu(event):
-            filter_menu.tk_popup(event.x_root, event.y_root)
-        
-        filter_entry.bind('<Button-3>', show_filter_menu)  # Right-click
-        
-        # Create DataFrame for files
-        self.update_file_dataframe()
-        
-        # Create a separate frame for the table to avoid geometry manager conflicts
-        table_frame = ttk.Frame(self.pt_frame)
-        table_frame.pack(fill="both", expand=True)
-        
-        # Create pandastable
-        self.table = Table(table_frame, dataframe=self.df,
-                          showtoolbar=True, showstatusbar=True)
-        self.table.show()
-        
-        # Configure table options
-        self.table.autoResizeColumns()
-        self.table.columnwidths['Name'] = 30
-        self.table.columnwidths['File_Path'] = 30
-        self.table.columnwidths['Date_Modified'] = 30
-        self.table.columnwidths['Size_(KB)'] = 30
-        for col in self.df.columns:
-            if col not in ['Name', 'File_Path', 'Date_Modified', 'Size_(KB)']:
-                max_width = max(len(str(x)) for x in self.df[col].head(20))
-                self.table.columnwidths[col] = max(min(max_width * 10, 200), 50) # fit to number of letter *10 if it's in between 50 and 250
-
-        self.table.redraw()
-        
-        # Bind double click for editing and single click for selection
-        self.table.bind('<Double-1>', self.on_table_double_click)
-        self.table.bind('<ButtonRelease-1>', self.on_table_select)
-        
-        # Enable editing and bind to key events
-        self.table.editable = True
-        self.table.bind('<Key>', self.on_key_press)  # Bind to key press
-        self.table.bind('<Return>', self.on_return_press)  # Bind to return key
-        self.table.bind('<FocusOut>', self.on_focus_out)  # Bind to focus loss
-        # Bind arrow keys specifically to handle navigation
-        self.table.bind('<Up>', self.on_key_press)
-        self.table.bind('<Down>', self.on_key_press)
-
-    def on_key_press(self, event):
-        """Handle key press events"""
+    def get_selected_file_paths(self):
+        """Return absolute file paths for currently selected rows in the table."""
+        paths = []
         try:
-            if event.keysym in ('Up', 'Down'):
-                # Handle arrow key navigation
-                current_row = self.table.getSelectedRow()
-                num_rows = len(self.table.model.df)
-                
-                if event.keysym == 'Up' and current_row > 0:
-                    new_row = current_row - 1
-                elif event.keysym == 'Down' and current_row < num_rows - 1:
-                    new_row = current_row + 1
-                else:
-                    return
-                
-                # Select the new row and ensure it's visible
-                self.table.setSelectedRow(new_row)
-                self.table.redraw()  # Ensure table updates
-                
-                # Load the corresponding image
-                self.load_selected_image()
-                
-            elif event.char and event.char.isprintable():            
-                row = self.table.getSelectedRow()
-                col = self.table.getSelectedColumn()
-                if row is not None and col is not None:
-                    # Let the default handler process the key first
-                    self.table.handle_key_press(event)
-                    # Then check for changes
-                    self.check_for_changes(row, col)
+            if not hasattr(self, 'table') or self.table is None:
+                return paths
+            view_df = getattr(self.table.model, 'df', None)
+            if view_df is None or view_df.empty:
+                return paths
+
+            rows = []
+            # Prefer multi-select list if available
+            if hasattr(self.table, 'multiplerowlist') and self.table.multiplerowlist:
+                rows = [r for r in self.table.multiplerowlist if isinstance(r, int) and 0 <= r < len(view_df)]
+            else:
+                r = self.table.getSelectedRow()
+                if isinstance(r, int) and 0 <= r < len(view_df):
+                    rows = [r]
+
+            for r in rows:
+                try:
+                    fp = str(view_df.iloc[r]['File_Path'])
+                    if fp:
+                        paths.append(fp)
+                except Exception:
+                    continue
         except Exception as e:
-            print(f"Error handling key press: {e}")
-            traceback.print_exc()
+            logging.error("get_selected_file_paths failed: %s", e)
+        return paths
 
-    def on_return_press(self, event):
-        """Handle return key press"""
+    def clear_markdown_content(self):
+        """Clear the Markdown preview area (HTML or text)."""
         try:
-            row = self.table.getSelectedRow()
-            col = self.table.getSelectedColumn()
-            if row is not None and col is not None:
-                self.check_for_changes(row, col)
-        except Exception as e:
-            print(f"Error handling return press: {e}")
-            traceback.print_exc()
-
-    def on_focus_out(self, event):
-        """Handle focus out events"""
-        try:
-            row = self.table.getSelectedRow()
-            col = self.table.getSelectedColumn()
-            if row is not None and col is not None:
-                self.check_for_changes(row, col)
-        except Exception as e:
-            print(f"Error handling focus out: {e}")
-            traceback.print_exc()
-
-    def check_for_changes(self, row, col):
-        """Check for changes in the cell and handle file renaming"""
-        try:
-            # Get both the displayed and original DataFrames
-            displayed_df = self.table.model.df
-            if row < len(displayed_df):
-                # If filter is active, temporarily disable and re-enable it
-                filter_text = self.filter_text.get()
-                if filter_text:
-                    self.filter_text.set('')
-                    self.filter_text.set(filter_text)
-
-                displayed_df = self.table.model.df
-                # Get current filename and path from displayed DataFrame
-                file_path = str(displayed_df.iloc[row]['File_Path'])
-                current_name = displayed_df.iloc[row]['Name']
-                
-                # Reconstruct filename from Field_ columns
-                new_filename = self.reconstruct_filename(displayed_df.iloc[row])
-                
-                # If filename is different, rename the file
-                if new_filename != current_name:
-                    print(f"Renaming file from {current_name} to {new_filename}")  # Debug print
-                    new_filepath = self.rename_csv_file(file_path, new_filename)
-                    
-                    # Update the displayed DataFrame
-                    displayed_df.loc[row, 'Name'] = new_filename
-                    displayed_df.loc[row, 'File_Path'] = new_filepath
-                    
-                    # Find and update the corresponding row in the original DataFrame
-                    orig_idx = self.df[self.df['File_Path'] == file_path].index
-                    if len(orig_idx) > 0:
-                        # Update all Field_ columns in the original DataFrame
-                        for col in self.df.columns:
-                            if col.startswith('Field_'):
-                                self.df.loc[orig_idx[0], col] = displayed_df.iloc[row][col]
-                        # Update Name and File_Path
-                        self.df.loc[orig_idx[0], 'Name'] = new_filename
-                        self.df.loc[orig_idx[0], 'File_Path'] = new_filepath
-                    
-                    # If filtering is active, reapply the filter
-                    if hasattr(self, 'filter_text') and self.filter_text.get():
-                        self.filter_files()
+            if getattr(self, 'md_use_html', False) and getattr(self, '_md_html_widget', None):
+                # For HTML widget, reset content
+                try:
+                    if hasattr(self._md_html_widget, 'set_html'):
+                        self._md_html_widget.set_html("")
                     else:
-                        # Just update the model's DataFrame
-                        self.table.model.df = displayed_df
-                    
-                    # Show confirmation
-                    messagebox.showinfo("File Renamed", 
-                                    f"File has been renamed from:\n{current_name}\nto:\n{new_filename}")
-                    
-                    # Refresh the table
-                    self.table.redraw()
+                        self._md_html_widget.set_text("")
+                except Exception:
+                    # Recreate a blank widget if needed
+                    try:
+                        for child in self._md_preview_frame.winfo_children():
+                            child.destroy()
+                    except Exception:
+                        pass
+                    from tkinter.scrolledtext import ScrolledText as _ST
+                    self.md_use_html = False
+                    self._md_html_widget = None
+                    self.md_preview = _ST(self._md_preview_frame, wrap=tk.WORD, height=10)
+                    self.md_preview.pack(fill=tk.BOTH, expand=True)
+                    self.md_preview.configure(state=tk.DISABLED)
+            else:
+                # Text mode
+                if hasattr(self, 'md_preview') and isinstance(self.md_preview, ScrolledText):
+                    self.md_preview.configure(state=tk.NORMAL)
+                    self.md_preview.delete('1.0', tk.END)
+                    self.md_preview.configure(state=tk.DISABLED)
         except Exception as e:
-            print(f"Error checking for changes: {e}")
-            traceback.print_exc()                    
+            logging.warning(f"Failed to clear markdown content: {e}")
 
-    def update_file_dataframe(self):
-        """Update the pandas DataFrame with file information"""
-        print("\n=== Updating file DataFrame ===")  # Debug print
-        
-        data = []
-        for file_path in self.image_files:
-            # Get the filename from the full path
-            filename = os.path.basename(file_path)
-            
-            try:
-                file_stat = os.stat(file_path)
-                
-                # Get basic file info
-                file_info = {
-                    'Name': filename,
-                    'File_Path': file_path,  # Store full path for direct access
-                    'Date_Modified': datetime.fromtimestamp(file_stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S'),
-                    'Size_(KB)': round(file_stat.st_size / 1024, 2)
-                }
-                
-                # Add fields from filename
-                name_without_ext = os.path.splitext(filename)[0]
-                fields = name_without_ext.split('_')
-                for i in range(self.max_fields):
-                    field_name = f'Field_{i+1}'
-                    file_info[field_name] = fields[i] if i < len(fields) else ''
-                
-                data.append(file_info)
-            except Exception as e:
-                print(f"Error processing file {file_path}: {e}")
-        
-        # Create DataFrame with a reset index
-        self.df = pd.DataFrame(data)
-        if not self.df.empty:
-            # Ensure consistent column order
-            columns = ['Name', 'File_Path', 'Date_Modified', 'Size_(KB)']
-            columns.extend([f'Field_{i+1}' for i in range(self.max_fields)])
-            self.df = self.df[columns]
-            self.df.sort_values(by='Date_Modified', ascending=False, inplace=True)            
-
-    def reconstruct_filename(self, row):
-        """Reconstruct filename from columns starting with 'Field_'"""
-        # Find columns starting with 'Field_'
-        f_columns = [col for col in row.index if col.startswith('Field_')]
-        
-        # Sort the columns to maintain order, in case the user changed the column order in the table
-        # f_columns.sort(key=lambda x: int(x.split('_')[1]))
-        
-        # Extract values from these columns, skipping None/empty values
-        filename_parts = [str(row[col]) for col in f_columns if pd.notna(row[col]) and str(row[col]).strip()]
-        
-        # Join with underscore and preserve the original file extension
-        current_name = row['Name']
-        _, file_extension = os.path.splitext(current_name)
-        
-        # Create new filename with original extension
-        new_filename = '_'.join(filename_parts).replace('\n', '') + file_extension
-        
-        return new_filename
-
-    def rename_csv_file(self, old_filepath, new_filename):
-        """Rename CSV file on disk"""
+    def delete_selected_files(self):
+        """Delete selected files from disk and refresh the file list."""
         try:
-            directory = os.path.dirname(old_filepath)
-            new_filepath = os.path.join(directory, new_filename)
-            
-            # Rename the file
-            os.rename(old_filepath, new_filepath)
-            return new_filepath
-        except Exception as e:
-            print(f"Error renaming file: {e}")
-            return old_filepath
-        
-    def on_table_double_click(self, event):
-        """Handle double click for cell editing"""
-        if self.table.get_row_clicked(event) is not None:
-            self.table.handle_double_click(event)
-
-    def on_table_select(self, event):
-        """Handle table row selection"""
-        try:
-            # Get the clicked row
-            row = self.table.get_row_clicked(event)
-            print(f"Clicked row: {row}")  # Debug print
-            
-            if row is not None:
-                # Get the actual data from the filtered/sorted view
-                displayed_df = self.table.model.df
-                if row < len(displayed_df):
-                    # Get filename and path directly from the displayed DataFrame
-                    filename = str(displayed_df.iloc[row]['Name'])
-                    file_path = str(displayed_df.iloc[row]['File_Path'])
-                    print(f"Selected row {row}, filename: {filename}")  # Debug print
-                    
-                    # If no cell is selected, select the first empty cell
-                    if self.selected_cell is None:
-                        print("No cell selected, finding empty cell")  # Debug print
-                        self.find_and_select_empty_cell()
-                    
-                    if self.selected_cell is not None:
-                        print(f"Displaying image in cell {self.selected_cell}")  # Debug print
-                        # Show image in selected cell using the full path
-                        self.display_image(file_path, update_current=True)
-                    else:
-                        print("No cell selected after find_and_select_empty_cell")  # Debug print
-                        messagebox.showinfo("Info", "No empty cells available")
-        except Exception as e:
-            print(f"Error in table selection: {e}")
-            import traceback
-            traceback.print_exc()
-
-    def load_selected_image(self):
-        """Load the selected image into the selected grid cell"""
-        try:
-            # Get the current selection from the table
-            row = self.table.getSelectedRow()
-            print(f"Selected row: {row}")  # Debug print
-            
-            if row is None:
-                messagebox.showinfo("Info", "Please select a row in the table first")
+            paths = self.get_selected_file_paths()
+            if not paths:
+                messagebox.showinfo("Delete Files", "No files selected.")
                 return
-                
-            if row < len(self.df):
-                # Get filename from selected row
-                filename = str(self.df.iloc[row]['Name'])
-                print(f"Loading image: {filename}")  # Debug print
-                
-                # If no cell is selected, select the first empty cell
-                if self.selected_cell is None:
-                    print("No cell selected, finding empty cell")  # Debug print
-                    self.find_and_select_empty_cell()
-                
-                if self.selected_cell is not None:
-                    print(f"Displaying image in cell {self.selected_cell}")  # Debug print
-                    # Show image in selected cell
-                    self.display_image(filename)
-                else:
-                    print("No cell selected after find_and_select_empty_cell")  # Debug print
-                    messagebox.showinfo("Info", "Please select a grid cell first")
+            if not messagebox.askyesno("Delete Files", f"Delete {len(paths)} file(s)? This cannot be undone."):
+                return
+
+            successes = 0
+            errors = []
+            for p in paths:
+                try:
+                    if os.path.isfile(p):
+                        os.remove(p)
+                        successes += 1
+                except Exception as e:
+                    errors.append((p, str(e)))
+
+            # Refresh UI after operations
+            self.refresh_file_list()
+
+            msg = f"Deleted {successes} file(s)."
+            if errors:
+                msg += f"\n{len(errors)} failed."
+            messagebox.showinfo("Delete Files", msg)
         except Exception as e:
-            print(f"Error loading selected image: {e}")
-            import traceback
-            traceback.print_exc()
+            logging.error("delete_selected_files failed", exc_info=e)
+            messagebox.showerror("Delete Files", f"Error: {e}")
 
-    def find_and_select_empty_cell(self):
-        """Find the first empty cell in the grid and select it"""
-        print("\n=== Finding empty cell ===")  # Debug print
-        for i in range(self.grid_rows):
-            for j in range(self.grid_cols):
-                frame, label = self.grid_cells[i][j]
-                if not hasattr(label, 'image') or label.image is None:
-                    print(f"Found empty cell at [{i}, {j}]")  # Debug print
-                    self.select_cell(i, j)
-                    return
-        
-        # If no empty cell found, select first cell
-        print("No empty cell found, selecting first cell")  # Debug print
-        self.select_cell(0, 0)
-
-    def display_image(self, filename, update_current=True):
-        """Display the selected image in the selected grid cell
-        
-        Args:
-            filename: The filename or full path of the image to display
-            update_current: Whether to update the current_image_path and other references
-                           Set to False when displaying an image but not selecting it
-        """
-        print(f"\n=== Displaying image: {filename} ===")  # Debug print
-        
-        if self.selected_cell is None:
-            messagebox.showinfo("Info", "Please select a grid cell first")
-            return
-            
+    def move_selected_files(self):
+        """Move selected files to a destination folder with overwrite confirmation."""
         try:
-            # Check if filename is actually a full path
-            if os.path.isabs(filename) and os.path.exists(filename):
-                image_path = filename
-                print(f"Loading image from direct path: {image_path}")  # Debug print
-                image = Image.open(image_path)
-            else:
-                # Find the file path from the DataFrame
-                file_row = self.table.model.df[self.table.model.df['Name'] == filename]
-                if not file_row.empty:
-                    # Use the stored File_Path instead of joining with current_directory
-                    image_path = file_row.iloc[0]['File_Path']
-                    print(f"Loading image from: {image_path}")  # Debug print
-                    image = Image.open(image_path)
-                else:
-                    # Fallback to the old method if not found in DataFrame
-                    image_path = os.path.join(self.current_directory, filename)
-                    print(f"Fallback loading image from: {image_path}")  # Debug print
-                    image = Image.open(image_path)
-            
-            # Store the original image and reset zoom level if update_current is True
-            if update_current:
-                self.original_image = image
-                self.current_image_path = image_path
-                self.zoom_level = 1.0  # Reset zoom level when loading a new image
-                print(f"Updated current image to: {image_path}")  # Debug print
-            
-            # Get the selected cell
-            row, col = self.selected_cell
-            frame, label = self.grid_cells[row][col]
-            
-            # Get cell dimensions
-            frame.update()  # Ensure we have current size
-            cell_width = frame.winfo_width() - 8  # Account for padding
-            cell_height = frame.winfo_height() - 8
-            
-            # Calculate new dimensions preserving aspect ratio
-            img_width, img_height = image.size
-            aspect_ratio = img_width / img_height
-            
-            if aspect_ratio > 1:
-                # Image is wider than tall
-                new_width = cell_width
-                new_height = int(cell_width / aspect_ratio)
-                if new_height > cell_height:
-                    new_height = cell_height
-                    new_width = int(cell_height * aspect_ratio)
-            else:
-                # Image is taller than wide
-                new_height = cell_height
-                new_width = int(cell_height * aspect_ratio)
-                if new_width > cell_width:
-                    new_width = cell_width
-                    new_height = int(cell_width / aspect_ratio)
-            
-            print(f"New image dimensions: {new_width}x{new_height}")  # Debug print
-            
-            # Center the image
-            x = (cell_width - new_width) // 2
-            y = (cell_height - new_height) // 2
-            
-            # Create white background
-            bg = Image.new('RGBA', (cell_width, cell_height), (255, 255, 255, 255))
-            
-            # Resize image
-            resized_image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
-            
-            # Paste onto white background
-            bg.paste(resized_image, (x, y))
-            
-            # Clean up any existing PhotoImage reference to avoid memory leaks
-            if hasattr(label, 'image') and label.image is not None:
-                # Delete the reference to allow garbage collection
-                label.image = None
-                
-            # Convert to PhotoImage
-            photo = ImageTk.PhotoImage(bg)
-            label.configure(image=photo)
-            label.image = photo  # Keep reference!
-            label.image_path = image_path  # Store image path in the label for cell selection
-            
-            # Store current image path
-            self.current_image = image_path
-            
-            # Bind mouse events for zooming and panning
-            label.bind('<MouseWheel>', self.on_mouse_wheel)
-            # Use Control+Click for panning instead of just click to avoid conflict with cell selection
-            label.bind('<Control-ButtonPress-1>', self.start_pan)
-            label.bind('<Control-B1-Motion>', self.pan_image)
-            label.bind('<ButtonRelease-1>', self.stop_pan)
-            
-            # Add right mouse button bindings for panning
-            label.bind('<ButtonPress-3>', self.start_right_pan)
-            label.bind('<B3-Motion>', self.pan_image)
-            label.bind('<ButtonRelease-3>', self.stop_pan)
-            print("Image displayed successfully")  # Debug print
-            
-        except Exception as e:
-            print(f"Error displaying image: {e}")  # Debug print
-            messagebox.showerror("Error", f"Failed to load image: {str(e)}")
+            paths = self.get_selected_file_paths()
+            if not paths:
+                messagebox.showinfo("Move Files", "No files selected.")
+                return
 
-    def on_mouse_wheel(self, event):
-        """Handle mouse wheel events for zooming images"""
-        if self.original_image is None or self.selected_cell is None:
-            return
-            
-        # Get cursor position relative to the label
-        cursor_x = event.x
-        cursor_y = event.y
-        
-        # Store previous zoom level for calculating zoom center
-        prev_zoom = self.zoom_level
-            
-        # Determine zoom direction based on wheel movement
-        # For Windows, event.delta is positive when scrolling up and negative when scrolling down
-        zoom_factor = 1.1  # 10% zoom change per scroll
-        
-        if event.delta > 0:
-            # Zoom in
-            self.zoom_level *= zoom_factor
-        else:
-            # Zoom out
-            self.zoom_level /= zoom_factor
-            
-        # Limit zoom level to reasonable bounds
-        self.zoom_level = max(0.1, min(5.0, self.zoom_level))  # Between 10% and 500%
-        
-        print(f"Zoom level: {self.zoom_level:.2f}x at cursor position ({cursor_x}, {cursor_y})")  # Debug print
-        
-        # Apply zoom and redisplay the image with cursor position as center
-        self.apply_zoom(cursor_x, cursor_y, prev_zoom)
-    
-    def apply_zoom(self, cursor_x=None, cursor_y=None, prev_zoom=None):
-        """Apply the current zoom level to the image and display it
-        
-        Args:
-            cursor_x: X position of cursor for centered zoom (optional)
-            cursor_y: Y position of cursor for centered zoom (optional)
-            prev_zoom: Previous zoom level before this zoom operation (optional)
-        """
-        if self.original_image is None or self.selected_cell is None:
-            return
-            
-        try:
-            # Get the selected cell
-            row, col = self.selected_cell
-            frame, label = self.grid_cells[row][col]
-            
-            # Get cell dimensions
-            frame.update()  # Ensure we have current size
-            cell_width = frame.winfo_width() - 8  # Account for padding
-            cell_height = frame.winfo_height() - 8
-            
-            # Get original image dimensions
-            img_width, img_height = self.original_image.size
-            aspect_ratio = img_width / img_height
-            
-            # Calculate base size (100% zoom) preserving aspect ratio
-            if aspect_ratio > 1:
-                # Image is wider than tall
-                base_width = cell_width
-                base_height = int(cell_width / aspect_ratio)
-                if base_height > cell_height:
-                    base_height = cell_height
-                    base_width = int(cell_height * aspect_ratio)
-            else:
-                # Image is taller than wide
-                base_height = cell_height
-                base_width = int(cell_height * aspect_ratio)
-                if base_width > cell_width:
-                    base_width = cell_width
-                    base_height = int(cell_width / aspect_ratio)
-            
-            # Apply zoom factor to the base size
-            new_width = int(base_width * self.zoom_level)
-            new_height = int(base_height * self.zoom_level)
-            
-            print(f"Zoomed dimensions: {new_width}x{new_height}")  # Debug print
-            
-            # Resize image with zoom factor
-            resized_image = self.original_image.resize((new_width, new_height), Image.Resampling.LANCZOS)
-            
-            # Create white background
-            bg = Image.new('RGBA', (cell_width, cell_height), (255, 255, 255, 255))
-            
-            # Calculate position to center the zoomed image
-            x = max(0, (cell_width - new_width) // 2)
-            y = max(0, (cell_height - new_height) // 2)
-            
-            # If image is larger than cell, use cursor position as center for zooming
-            if new_width > cell_width or new_height > cell_height:
-                # Default to center if cursor position not provided
-                if cursor_x is None or cursor_y is None or prev_zoom is None:
-                    # Use center of image as default
-                    crop_x = max(0, (new_width - cell_width) // 2)
-                    crop_y = max(0, (new_height - cell_height) // 2)
-                else:
-                    # Calculate the relative position of cursor within the cell
-                    rel_x = cursor_x / cell_width
-                    rel_y = cursor_y / cell_height
-                    
-                    # Calculate the point in the image that should stay under cursor
-                    # This is the key to cursor-centered zooming
-                    zoom_ratio = self.zoom_level / prev_zoom
-                    
-                    # Calculate crop position to keep cursor point fixed
-                    crop_x = int(rel_x * base_width * prev_zoom * zoom_ratio - cursor_x)
-                    crop_y = int(rel_y * base_height * prev_zoom * zoom_ratio - cursor_y)
-                    
-                    # Ensure crop region stays within bounds
-                    crop_x = max(0, min(crop_x, new_width - cell_width))
-                    crop_y = max(0, min(crop_y, new_height - cell_height))
-                
-                crop_width = min(new_width, cell_width)
-                crop_height = min(new_height, cell_height)
-                
-                # Crop the zoomed image to fit the cell
-                resized_image = resized_image.crop((crop_x, crop_y, crop_x + crop_width, crop_y + crop_height))
-                x = 0
-                y = 0
-            
-            # Paste onto white background
-            bg.paste(resized_image, (x, y))
-            
-            # Clean up any existing PhotoImage reference to avoid memory leaks
-            if hasattr(label, 'image') and label.image is not None:
-                # Delete the reference to allow garbage collection
-                label.image = None
-                
-            # Convert to PhotoImage and display
-            photo = ImageTk.PhotoImage(bg)
-            label.configure(image=photo)
-            label.image = photo  # Keep reference!
-            
-        except Exception as e:
-            print(f"Error applying zoom: {e}")
-            messagebox.showerror("Error", f"Failed to apply zoom: {str(e)}")
-    
-    def start_pan(self, event):
-        """Start panning the image with Control+Left click"""
-        if self.original_image is None or self.selected_cell is None:
-            return
-            
-        # Only enable panning when zoomed in
-        if self.zoom_level <= 1.0:
-            return
-        
-        # Check if Control key is pressed (for the new Control+Click binding)
-        if not event.state & 0x0004:  # 0x0004 is the state mask for Control key
-            print("Panning requires Control key to be pressed")  # Debug print
-            return
-            
-        self.is_panning = True
-        self.pan_start_x = event.x
-        self.pan_start_y = event.y
-        
-        print(f"Starting pan at ({event.x}, {event.y}) with Control+Left click")  # Debug print
-        
-    def start_right_pan(self, event):
-        """Start panning the image with right click"""
-        if self.original_image is None or self.selected_cell is None:
-            return
-            
-        # Only enable panning when zoomed in
-        if self.zoom_level <= 1.0:
-            return
-            
-        self.is_panning = True
-        self.pan_start_x = event.x
-        self.pan_start_y = event.y
-        
-        print(f"Starting pan at ({event.x}, {event.y}) with right click")  # Debug print
-    
-    def pan_image(self, event):
-        """Pan the image as mouse moves"""
-        if not self.is_panning or self.original_image is None or self.selected_cell is None:
-            return
-            
-        # Calculate the distance moved
-        dx = self.pan_start_x - event.x
-        dy = self.pan_start_y - event.y
-        
-        # Update pan start position for next movement
-        self.pan_start_x = event.x
-        self.pan_start_y = event.y
-        
-        # Update crop position based on movement
-        row, col = self.selected_cell
-        frame, label = self.grid_cells[row][col]
-        
-        # Get cell dimensions
-        cell_width = frame.winfo_width() - 8
-        cell_height = frame.winfo_height() - 8
-        
-        # Get image dimensions at current zoom
-        img_width, img_height = self.original_image.size
-        aspect_ratio = img_width / img_height
-        
-        # Calculate base size (100% zoom)
-        if aspect_ratio > 1:
-            base_width = cell_width
-            base_height = int(cell_width / aspect_ratio)
-            if base_height > cell_height:
-                base_height = cell_height
-                base_width = int(cell_height * aspect_ratio)
-        else:
-            base_height = cell_height
-            base_width = int(cell_height * aspect_ratio)
-            if base_width > cell_width:
-                base_width = cell_width
-                base_height = int(cell_width / aspect_ratio)
-        
-        # Calculate zoomed size
-        zoomed_width = int(base_width * self.zoom_level)
-        zoomed_height = int(base_height * self.zoom_level)
-        
-        # Update crop position
-        self.crop_x += dx
-        self.crop_y += dy
-        
-        # Ensure crop position stays within bounds
-        self.crop_x = max(0, min(self.crop_x, zoomed_width - cell_width))
-        self.crop_y = max(0, min(self.crop_y, zoomed_height - cell_height))
-        
-        # Apply the pan
-        self.apply_pan()
-        
-    def stop_pan(self, event):
-        """Stop panning the image"""
-        self.is_panning = False
-        print("Panning stopped")  # Debug print
-    
-    def apply_pan(self):
-        """Apply the current pan position to the image"""
-        if self.original_image is None or self.selected_cell is None:
-            return
-            
-        try:
-            # Get the selected cell
-            row, col = self.selected_cell
-            frame, label = self.grid_cells[row][col]
-            
-            # Get cell dimensions
-            frame.update()  # Ensure we have current size
-            cell_width = frame.winfo_width() - 8  # Account for padding
-            cell_height = frame.winfo_height() - 8
-            
-            # Get original image dimensions
-            img_width, img_height = self.original_image.size
-            aspect_ratio = img_width / img_height
-            
-            # Calculate base size (100% zoom) preserving aspect ratio
-            if aspect_ratio > 1:
-                # Image is wider than tall
-                base_width = cell_width
-                base_height = int(cell_width / aspect_ratio)
-                if base_height > cell_height:
-                    base_height = cell_height
-                    base_width = int(cell_height * aspect_ratio)
-            else:
-                # Image is taller than wide
-                base_height = cell_height
-                base_width = int(cell_height * aspect_ratio)
-                if base_width > cell_width:
-                    base_width = cell_width
-                    base_height = int(cell_width / aspect_ratio)
-            
-            # Apply zoom factor to the base size
-            new_width = int(base_width * self.zoom_level)
-            new_height = int(base_height * self.zoom_level)
-            
-            # Resize image with zoom factor
-            resized_image = self.original_image.resize((new_width, new_height), Image.Resampling.LANCZOS)
-            
-            # Create white background
-            bg = Image.new('RGBA', (cell_width, cell_height), (255, 255, 255, 255))
-            
-            # Crop the zoomed image based on pan position
-            crop_width = min(new_width, cell_width)
-            crop_height = min(new_height, cell_height)
-            
-            # Ensure crop region stays within bounds
-            crop_x = max(0, min(self.crop_x, new_width - crop_width))
-            crop_y = max(0, min(self.crop_y, new_height - crop_height))
-            
-            # Crop the zoomed image to fit the cell
-            resized_image = resized_image.crop((crop_x, crop_y, crop_x + crop_width, crop_y + crop_height))
-            
-            # Paste onto white background
-            bg.paste(resized_image, (0, 0))
-            
-            # Convert to PhotoImage and display
-            photo = ImageTk.PhotoImage(bg)
-            label.configure(image=photo)
-            label.image = photo  # Keep reference!
-            
-        except Exception as e:
-            print(f"Error applying pan: {e}")
-            messagebox.showerror("Error", f"Failed to apply pan: {str(e)}")
-    
-    def select_cell(self, row, col):
-        """Select a cell in the grid"""
-        print(f"\n=== Selecting cell [{row}, {col}] ===")  # Debug print
-        
-        # Clear previous selection
-        if hasattr(self, 'selected_cell'):
-            if self.selected_cell is not None:
-                old_row, old_col = self.selected_cell
-                old_frame, _ = self.grid_cells[old_row][old_col]
-                old_frame.configure(borderwidth=1, relief="solid")
-        
-        # Update selection
-        self.selected_cell = (row, col)
-        frame, _ = self.grid_cells[row][col]
-        frame.configure(borderwidth=4, relief="solid")
-        print(f"Selected cell at [{row}, {col}]")  # Debug print
+            dest_dir = filedialog.askdirectory(
+                title="Select Destination Folder",
+                initialdir=os.path.dirname(self.current_directory) if self.current_directory else os.getcwd()
+            )
+            if not dest_dir:
+                return
 
-    def filter_images(self, *args):
-        """Filter images based on the filter text"""
-        if hasattr(self, 'table'):
-            try:
-                # Get filter text and remove any quotes
-                filter_text = self.filter_text.get().lower().strip('"\'')
-                print(f"\n=== Filtering images with: '{filter_text}' ===")  # Debug print
-                
-                if filter_text:
-                    # Split filter text by spaces
-                    filter_terms = [term.strip() for term in filter_text.split()]
-                    print(f"Searching for terms: {filter_terms}")  # Debug print
-                    
-                    # Start with all rows
-                    mask = pd.Series([True] * len(self.df), index=self.df.index)
-                    
-                    # Apply each filter term with AND logic
-                    for term in filter_terms:
-                        term = term.strip()
-                        if term:  # Skip empty terms
-                            if term.startswith('!'):  # Exclusion term
-                                exclude_term = term[1:].strip()  # Remove ! and whitespace
-                                if exclude_term:  # Only if there's something to exclude
-                                    term_mask = ~self.df['Name'].str.contains(exclude_term, case=False, na=False)
-                                    print(f"Excluding rows with name containing: '{exclude_term}'")  # Debug print
-                            else:  # Inclusion term
-                                term_mask = self.df['Name'].str.contains(term, case=False, na=False)
-                                print(f"Including rows with name containing: '{term}'")  # Debug print
-                            mask = mask & term_mask
-                    
-                    # Debug print matches
-                    print("\nMatching results:")
-                    for idx, row in self.df[mask].iterrows():
-                        print(f"Match found in row {idx}: {row['Name']}")
-                    
-                    filtered_df = self.df[mask].copy()
-                    print(f"\nFound {len(filtered_df)} matching files")  # Debug print
-                else:
-                    filtered_df = self.df.copy()
-                    print("No filter applied, showing all files")  # Debug print
-                
-                # Update table
-                self.table.model.df = filtered_df
-                
-                # Only update column widths if we have data
-                if not filtered_df.empty:
-                    # Preserve column widths
-                    for col in filtered_df.columns:
-                        if col in self.table.columnwidths:
-                            width = max(
-                                len(str(filtered_df[col].max())),
-                                len(str(filtered_df[col].min())),
-                                len(col),
-                                self.table.columnwidths[col]
-                            )
-                            self.table.columnwidths[col] = width
-                
-                # Redraw the table
-                self.table.redraw()
-                
-            except Exception as e:
-                print(f"Error in filter_images: {str(e)}")
-                traceback.print_exc()  # Print the full traceback for debugging
+            moved = 0
+            errors = []
+            for src in paths:
+                try:
+                    if not os.path.isfile(src):
+                        continue
+                    fname = os.path.basename(src)
+                    dst = os.path.join(dest_dir, fname)
+                    if os.path.exists(dst):
+                        overwrite = messagebox.askyesno("Overwrite?", f"{fname} exists. Overwrite?")
+                        if not overwrite:
+                            continue
+                        try:
+                            os.remove(dst)
+                        except Exception:
+                            pass
+                    shutil.move(src, dst)
+                    moved += 1
+                except Exception as e:
+                    errors.append((src, str(e)))
+
+            # Refresh UI and update current directory if we actually moved files
+            self.refresh_file_list()
+
+            msg = f"Moved {moved} file(s) to:\n{dest_dir}"
+            if errors:
+                msg += f"\n{len(errors)} failed."
+            messagebox.showinfo("Move Files", msg)
+        except Exception as e:
+            logging.error("move_selected_files failed", exc_info=e)
+            messagebox.showerror("Move Files", f"Error: {e}")
 
     def browse_folder(self):
         """Open a directory chooser dialog and update the file list"""
         print("\n=== Browse folder called ===")  # Debug print
         directory = filedialog.askdirectory(
+            title="Select Directory",
             initialdir=self.current_directory or os.path.dirname(os.path.abspath(__file__))
         )
         if directory:
@@ -1446,8 +1131,8 @@ class ImageBrowser(tk.Tk):
                 self.create_grid()
 
     def update_image_files(self):
-        """Update the list of image files"""
-        print("\n=== Updating image files ===")  # Debug print
+        """Update the list of files in the current directory (optionally including subfolders)."""
+        print("\n=== Updating files list ===")  # Debug print
         
         # Clear existing list
         self.image_files = []
@@ -1461,18 +1146,17 @@ class ImageBrowser(tk.Tk):
                 # Recursively walk through all subdirectories
                 for root, _, files in os.walk(normalized_directory):
                     for file in files:
-                        if file.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp')):
-                            full_path = os.path.normpath(os.path.join(root, file))
-                            if os.path.exists(full_path):
-                                self.image_files.append(full_path)
+                        full_path = os.path.normpath(os.path.join(root, file))
+                        if os.path.isfile(full_path):
+                            self.image_files.append(full_path)
             else:
                 # Get files only from current directory
                 files = os.listdir(normalized_directory)
                 self.image_files = [os.path.normpath(os.path.join(normalized_directory, f)) 
-                                  for f in files if f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp')) 
-                                  and os.path.isfile(os.path.join(normalized_directory, f))]
+                                  for f in files 
+                                  if os.path.isfile(os.path.join(normalized_directory, f))]
             
-            print(f"Found {len(self.image_files)} image files")  # Debug print
+            print(f"Found {len(self.image_files)} files")  # Debug print
         except Exception as e:
             print(f"Error updating image files: {e}")
             messagebox.showerror("Error", f"Failed to update image files: {e}")
@@ -1491,6 +1175,217 @@ class ImageBrowser(tk.Tk):
             max_fields = max(max_fields, len(fields))
         print(f"Max fields found: {max_fields}")  # Debug print
         return max_fields
+
+    def setup_file_browser(self):
+        """Setup the file browser panel with pandastable."""
+        print("\n=== Setting up file browser ===")
+        try:
+            prev_selection_paths = []
+            try:
+                if hasattr(self, 'table') and getattr(self.table, 'model', None):
+                    view_df_prev = self.table.model.df
+                    if isinstance(view_df_prev, pd.DataFrame) and not view_df_prev.empty:
+                        # Save selected paths to restore later
+                        if hasattr(self.table, 'multiplerowlist') and self.table.multiplerowlist:
+                            rows = [r for r in self.table.multiplerowlist if isinstance(r, int) and 0 <= r < len(view_df_prev)]
+                        else:
+                            r = self.table.getSelectedRow()
+                            rows = [r] if isinstance(r, int) and 0 <= r < len(view_df_prev) else []
+                        for r in rows:
+                            try:
+                                prev_selection_paths.append(str(view_df_prev.iloc[r]['File_Path']))
+                            except Exception:
+                                pass
+            except Exception:
+                pass
+
+            # Decide whether to reuse or rebuild the DataFrame
+            need_rebuild = True
+            if isinstance(getattr(self, 'df', None), pd.DataFrame) and 'File_Path' in getattr(self.df, 'columns', []):
+                try:
+                    df_paths = set(map(str, self.df['File_Path'].tolist()))
+                    img_paths = set(map(str, getattr(self, 'image_files', []) or []))
+                    # Reuse only if paths match; otherwise, folder/content changed -> rebuild
+                    need_rebuild = (df_paths != img_paths)
+                    if not need_rebuild and self.df.empty and img_paths:
+                        need_rebuild = True
+                except Exception:
+                    need_rebuild = True
+            if not need_rebuild:
+                print("Reusing existing DataFrame for table")
+            else:
+                # Build DataFrame from current files
+                records = []
+                for fp in getattr(self, 'image_files', []) or []:
+                    try:
+                        name = os.path.basename(fp)
+                        size = os.path.getsize(fp)
+                        mtime = os.path.getmtime(fp)
+                        records.append({
+                            'Name': name,
+                            'Size': self.format_size(size),
+                            'Date_Modified': self.format_date(mtime),
+                            'File_Path': fp,
+                        })
+                    except Exception:
+                        continue
+
+                self.df = pd.DataFrame(records)
+            # If somehow df is empty but we have files, rebuild
+            if (not isinstance(self.df, pd.DataFrame)) or (self.df.empty and getattr(self, 'image_files', [])):
+                records = []
+                for fp in getattr(self, 'image_files', []) or []:
+                    try:
+                        name = os.path.basename(fp)
+                        size = os.path.getsize(fp)
+                        mtime = os.path.getmtime(fp)
+                        records.append({
+                            'Name': name,
+                            'Size': self.format_size(size),
+                            'Date_Modified': self.format_date(mtime),
+                            'File_Path': fp,
+                        })
+                    except Exception:
+                        continue
+                self.df = pd.DataFrame(records)
+            # Add Field_ columns based on max_fields
+            if not self.df.empty:
+                for i in range(1, int(self.max_fields) + 1):
+                    col = f"Field_{i}"
+                    if col not in self.df.columns:
+                        self.df[col] = ''
+                # Populate Field_ values from filename parts
+                try:
+                    for idx in self.df.index:
+                        base = os.path.splitext(self.df.at[idx, 'Name'])[0]
+                        parts = base.split('_')
+                        for i, part in enumerate(parts, start=1):
+                            col = f"Field_{i}"
+                            if col in self.df.columns:
+                                self.df.at[idx, col] = part
+                except Exception:
+                    pass
+
+            # Keep a copy for filtering
+            self._base_df = self.df.copy() if isinstance(getattr(self, 'df', None), pd.DataFrame) else pd.DataFrame()
+            print(f"Table rows prepared: {len(self.df) if isinstance(self.df, pd.DataFrame) else 0}")
+
+            # Rebuild filter toolbar (ensure it persists across layout toggles)
+            try:
+                if hasattr(self, 'file_toolbar') and self.file_toolbar.winfo_exists():
+                    try:
+                        self.file_toolbar.destroy()
+                    except Exception:
+                        pass
+                self.file_toolbar = ttk.Frame(self.file_frame)
+                self.file_toolbar.pack(fill=tk.X, padx=6, pady=(6, 0))
+                ttk.Label(self.file_toolbar, text="Filter:").pack(side=tk.LEFT)
+                # Preserve existing text value
+                current_query = ''
+                try:
+                    current_query = (self.filter_text.get() or '')
+                except Exception:
+                    current_query = ''
+                self.filter_entry = ttk.Entry(self.file_toolbar, textvariable=self.filter_text, width=30)
+                self.filter_entry.pack(side=tk.LEFT, padx=(6, 0))
+                # A clear button
+                ttk.Button(self.file_toolbar, text="Clear", command=lambda: self.filter_text.set('')).pack(side=tk.LEFT, padx=6)
+                # If there was a query, reapply it (trace will trigger filter)
+                if current_query:
+                    try:
+                        # Force re-set to trigger trace
+                        self.filter_text.set(current_query)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+            # Recreate container frame under the current file_frame (avoid reusing old parent)
+            try:
+                if hasattr(self, 'table_frame') and self.table_frame.winfo_exists():
+                    try:
+                        self.table_frame.destroy()
+                    except Exception:
+                        pass
+                self.table_frame = ttk.Frame(self.file_frame)
+                self.table_frame.pack(fill=tk.BOTH, expand=True)
+            except Exception:
+                self.table_frame = ttk.Frame(self.file_frame)
+                self.table_frame.pack(fill=tk.BOTH, expand=True)
+
+            # Create table
+            self.table = Table(self.table_frame, dataframe=self.df, showtoolbar=False, showstatusbar=False)
+            self.table.show()
+            try:
+                self.table.multipleselection = True
+            except Exception:
+                pass
+
+            # Redraw
+            self.table.redraw()
+
+            # Bind table selection events to update image grid
+            try:
+                # Mouse selection
+                self.table.bind('<ButtonRelease-1>', self.on_table_select)
+                # Keyboard navigation
+                self.table.bind('<KeyRelease-Up>', self.on_table_select)
+                self.table.bind('<KeyRelease-Down>', self.on_table_select)
+                self.table.bind('<KeyRelease-Home>', self.on_table_select)
+                self.table.bind('<KeyRelease-End>', self.on_table_select)
+                self.table.bind('<KeyRelease-Prior>', self.on_table_select)  # PageUp
+                self.table.bind('<KeyRelease-Next>', self.on_table_select)   # PageDown
+            except Exception:
+                pass
+
+            # Try to restore selection by File_Path
+            try:
+                if prev_selection_paths and isinstance(self.table.model.df, pd.DataFrame):
+                    df_now = self.table.model.df
+                    restore_rows = [df_now.index.get_loc(idx) if isinstance(idx, (int,)) else None for idx in []]  # placeholder
+                    rows_to_select = []
+                    for i in range(len(df_now)):
+                        try:
+                            if str(df_now.iloc[i]['File_Path']) in prev_selection_paths:
+                                rows_to_select.append(i)
+                        except Exception:
+                            continue
+                    if rows_to_select:
+                        try:
+                            self.table.multiplerowlist = rows_to_select
+                        except Exception:
+                            # Fallback: select first
+                            self.table.setSelectedRow(rows_to_select[0])
+            except Exception:
+                pass
+            print(f"Table rows shown: {len(self.table.model.df) if getattr(self.table, 'model', None) else 0}")
+        except Exception as e:
+            print(f"Error in setup_file_browser: {e}")
+            traceback.print_exc()
+
+    def filter_images(self, *args):
+        """Filter the table view by substring across all columns using self.filter_text."""
+        try:
+            if not isinstance(getattr(self, '_base_df', None), pd.DataFrame) or self._base_df.empty:
+                return
+            query = ''
+            try:
+                query = (self.filter_text.get() or '').strip()
+            except Exception:
+                query = ''
+            if not query:
+                self.df = self._base_df.copy()
+            else:
+                q = query.lower()
+                mask = self._base_df.apply(lambda col: col.astype(str).str.lower().str.contains(q, na=False))
+                rows = mask.any(axis=1)
+                self.df = self._base_df[rows].copy()
+            if hasattr(self, 'table') and getattr(self.table, 'model', None):
+                self.table.model.df = self.df
+                self.table.redraw()
+        except Exception as e:
+            print(f"Error in filter_images: {e}")
+            traceback.print_exc()
 
     def create_grid(self):
         """Create the image grid"""
@@ -1530,6 +1425,24 @@ class ImageBrowser(tk.Tk):
                 # Bind click events
                 cell_frame.bind("<Button-1>", lambda e, r=i, c=j: self.select_cell(r, c))
                 cell.bind("<Button-1>", lambda e, r=i, c=j: self.select_cell(r, c))
+                # Right-click context menu to open externally
+                cell_frame.bind("<Button-3>", lambda e, r=i, c=j: self._show_cell_context_menu(e, r, c))
+                cell.bind("<Button-3>", lambda e, r=i, c=j: self._show_cell_context_menu(e, r, c))
+                # Double-click to open with system default
+                cell_frame.bind("<Double-Button-1>", lambda e, r=i, c=j: (self._reset_or_open(e, r, c)))
+                cell.bind("<Double-Button-1>", lambda e, r=i, c=j: (self._reset_or_open(e, r, c)))
+                # Mouse wheel zoom bindings (Windows/macOS/Linux)
+                cell.bind("<MouseWheel>", lambda e, r=i, c=j: self._on_mouse_wheel_zoom(e, r, c))
+                cell_frame.bind("<MouseWheel>", lambda e, r=i, c=j: self._on_mouse_wheel_zoom(e, r, c))
+                cell.bind("<Button-4>", lambda e, r=i, c=j: self._on_mouse_wheel_zoom(e, r, c, linux_dir=1))
+                cell.bind("<Button-5>", lambda e, r=i, c=j: self._on_mouse_wheel_zoom(e, r, c, linux_dir=-1))
+                cell_frame.bind("<Button-4>", lambda e, r=i, c=j: self._on_mouse_wheel_zoom(e, r, c, linux_dir=1))
+                cell_frame.bind("<Button-5>", lambda e, r=i, c=j: self._on_mouse_wheel_zoom(e, r, c, linux_dir=-1))
+                # Pan (drag) when zoomed in
+                cell.bind("<ButtonPress-1>", lambda e, r=i, c=j: self._on_pan_start(e, r, c))
+                cell.bind("<B1-Motion>", lambda e, r=i, c=j: self._on_pan_move(e, r, c))
+                cell_frame.bind("<ButtonPress-1>", lambda e, r=i, c=j: self._on_pan_start(e, r, c))
+                cell_frame.bind("<B1-Motion>", lambda e, r=i, c=j: self._on_pan_move(e, r, c))
                 
                 row_cells.append((cell_frame, cell))
             self.grid_cells.append(row_cells)
@@ -1541,6 +1454,730 @@ class ImageBrowser(tk.Tk):
             self.grid_frame.grid_columnconfigure(j, weight=1)
             
         print(f"Created grid with {self.grid_rows}x{self.grid_cols} cells")  # Debug print
+
+    def on_table_select(self, event=None):
+        """Handle selection change in the file table and load the image into the grid.
+        Uses the currently displayed DataFrame view (self.table.model.df) and 'File_Path'.
+        """
+        try:
+            if not hasattr(self, 'table') or not getattr(self.table, 'model', None):
+                return
+            view_df = self.table.model.df
+            if not isinstance(view_df, pd.DataFrame) or view_df.empty:
+                return
+
+            # Determine selected row from table (prefer multiplerowlist; use first selection)
+            sel_rows = []
+            try:
+                if hasattr(self.table, 'multiplerowlist') and self.table.multiplerowlist:
+                    sel_rows = [r for r in self.table.multiplerowlist if isinstance(r, int) and 0 <= r < len(view_df)]
+                else:
+                    r = self.table.getSelectedRow()
+                    if isinstance(r, int) and 0 <= r < len(view_df):
+                        sel_rows = [r]
+            except Exception:
+                pass
+            if not sel_rows:
+                return
+
+            row = sel_rows[0]
+            try:
+                fp = str(view_df.iloc[row]['File_Path'])
+            except Exception:
+                fp = None
+            if not fp or not os.path.isfile(fp):
+                return
+
+            # If Markdown file, preview it in Markdown tab
+            try:
+                ext = os.path.splitext(fp)[1].lower()
+            except Exception:
+                ext = ''
+            if ext in ('.md', '.markdown'):
+                try:
+                    self.md_current_path = fp
+                    self.update_markdown_preview()
+                    self.activate_markdown_tab()
+                except Exception:
+                    pass
+                return
+
+            # Otherwise, ensure images tab is visible and load image
+            try:
+                if hasattr(self, 'notebook') and hasattr(self, 'images_tab'):
+                    self.notebook.select(self.images_tab)
+            except Exception:
+                pass
+
+            # Load into currently selected grid cell, or default to (0,0)
+            target = getattr(self, 'selected_cell', None)
+            if not target:
+                target = (0, 0)
+            # Before displaying, try to load associated Markdown sidecar for preview
+            try:
+                self._load_associated_markdown(fp, switch_tab=False)
+            except Exception:
+                pass
+            self._display_image_in_cell(target[0], target[1], fp)
+        except Exception as e:
+            print(f"Error in on_table_select: {e}")
+            traceback.print_exc()
+
+    def _display_image_in_cell(self, row: int, col: int, file_path: str):
+        """Open image at file_path, fit it to the target cell, and display it.
+        Also sets label.image_path so select_cell() and other features work.
+        """
+        try:
+            if not hasattr(self, 'grid_cells') or not self.grid_cells:
+                return
+            # Clamp row/col to grid bounds
+            row = max(0, min(row, self.grid_rows - 1))
+            col = max(0, min(col, self.grid_cols - 1))
+
+            frame, label = self.grid_cells[row][col]
+            # Compute fit to cell size (account for padding/border)
+            frame.update_idletasks()
+            avail_w = max(10, frame.winfo_width() - 8)
+            avail_h = max(10, frame.winfo_height() - 8)
+            if avail_w <= 0 or avail_h <= 0:
+                # Fallback reasonable size
+                avail_w, avail_h = 300, 300
+
+            # If the file is a common non-image type, try to render a preview snapshot
+            base = os.path.basename(file_path)
+            ext = os.path.splitext(base)[1].lower()
+            base_img = None
+            try:
+                if ext == '.pdf':
+                    # Track current page per cell/label
+                    current_page = getattr(label, 'pdf_page', 0)
+                    base_img = self._render_pdf_preview(file_path, max(avail_w, 1200), max(avail_h, 900), page=current_page)
+                    # Cache page info on the label for navigation
+                    try:
+                        label._pdf_page_count = self._get_pdf_page_count(file_path)
+                    except Exception:
+                        label._pdf_page_count = None
+                elif ext == '.svg':
+                    base_img = self._render_svg_preview(file_path, max(avail_w, 1200), max(avail_h, 900))
+                elif ext in ('.mp4', '.avi', '.mov', '.mkv', '.wmv', '.mpg', '.mpeg', '.m4v'):
+                    base_img = self._render_video_preview(file_path, target_w=max(avail_w, 800))
+                elif ext in ('.wav', '.mp3', '.flac', '.ogg', '.m4a', '.aac'):
+                    base_img = self._render_audio_preview(file_path, width=max(avail_w, 800), height=max(avail_h, 400))
+                elif ext in ('.csv', '.tsv'):
+                    sep = '\t' if ext == '.tsv' else ','
+                    try:
+                        preview_df = pd.read_csv(file_path, sep=sep, nrows=50)
+                        text = preview_df.to_string(max_rows=50, max_cols=12, show_dimensions=False)
+                    except Exception as _e:
+                        # Fallback to raw text read
+                        text = self._safe_read_text(file_path, max_bytes=65536)
+                    base_img = self._render_text_snapshot(text, max(avail_w, 800), max(avail_h, 600), title=base)
+                elif ext in ('.txt', '.log', '.json', '.yaml', '.yml', '.ini', '.cfg', '.py', '.md'):
+                    text = self._safe_read_text(file_path, max_bytes=65536)
+                    base_img = self._render_text_snapshot(text, max(avail_w, 800), max(avail_h, 600), title=base)
+                elif ext in ('.xlsx', '.xls'):
+                    try:
+                        preview_df = pd.read_excel(file_path, sheet_name=0, nrows=30)
+                        text = preview_df.to_string(max_rows=30, max_cols=12, show_dimensions=False)
+                        base_img = self._render_text_snapshot(text, max(avail_w, 800), max(avail_h, 600), title=base)
+                    except Exception as _e:
+                        # Likely missing engine (openpyxl). Show a hint.
+                        hint = f"Unable to preview Excel. Install 'openpyxl' to enable.\n\nFile: {base}"
+                        base_img = self._render_text_snapshot(hint, max(avail_w, 800), max(avail_h, 600), title=base)
+            except Exception:
+                base_img = None
+
+            if base_img is None:
+                # Try to open the file as an image; if it fails, create a placeholder preview
+                try:
+                    base_img = Image.open(file_path)
+                except Exception:
+                    # Generate a simple placeholder image with file name and extension
+                    from PIL import ImageDraw, ImageFont
+                    base_img = Image.new('RGB', (max(10, avail_w), max(10, avail_h)), color='white')
+                    draw = ImageDraw.Draw(base_img)
+                    title = (base[:40] + '...') if len(base) > 43 else base
+                    subtitle = f"{ext or 'file'} preview"
+                    try:
+                        font_title = ImageFont.load_default()
+                        font_sub = ImageFont.load_default()
+                        t_w, t_h = draw.textsize(title, font=font_title)
+                        s_w, s_h = draw.textsize(subtitle, font=font_sub)
+                    except Exception:
+                        t_w = s_w = 0
+                        t_h = s_h = 0
+                        font_title = ImageFont.load_default()
+                        font_sub = ImageFont.load_default()
+                    t_x = max(4, (base_img.width - t_w) // 2)
+                    t_y = max(4, (base_img.height - t_h) // 2 - 10)
+                    s_x = max(4, (base_img.width - s_w) // 2)
+                    s_y = min(base_img.height - s_h - 4, t_y + t_h + 8)
+                    try:
+                        draw.rectangle([(0, 0), (base_img.width - 1, base_img.height - 1)], outline='#cccccc')
+                    except Exception:
+                        pass
+                    draw.text((t_x, t_y), title, fill='black', font=font_title)
+                    draw.text((s_x, s_y), subtitle, fill='gray', font=font_sub)
+
+            # Compute initial zoom to fit and initial view center
+            img_w, img_h = base_img.size
+            zoom_fit = min(avail_w / max(1, img_w), avail_h / max(1, img_h))
+            zoom_fit = max(0.01, zoom_fit)
+            # Initialize view center to image center
+            view_cx = img_w // 2
+            view_cy = img_h // 2
+            # Render to display
+            disp_img = self._render_cell_view(base_img, avail_w, avail_h, zoom_fit, zoom_fit, view_cx, view_cy)
+            photo = ImageTk.PhotoImage(disp_img)
+            label.configure(image=photo)
+            label.image = photo  # keep reference
+            label.image_path = file_path  # custom attribute used by select_cell()
+            # Store base image and zoom for mouse zooming
+            label.base_image = base_img
+            # Keep file-type specific state on label
+            if ext == '.pdf':
+                try:
+                    if not hasattr(label, 'pdf_page'):
+                        label.pdf_page = 0
+                except Exception:
+                    pass
+            label.zoom = zoom_fit
+            label.fit_zoom = zoom_fit
+            label.zoom_min = 0.05
+            label.zoom_max = 10.0
+            label.view_cx = view_cx
+            label.view_cy = view_cy
+            # Pan state
+            label._pan_start = None
+
+            # Update current selection and state
+            self.select_cell(row, col)
+        except Exception as e:
+            print(f"Error displaying image in cell: {e}")
+            traceback.print_exc()
+
+    # ---- Lightweight renderers for non-image previews ----
+    def _ensure_pdf_nav_widgets(self):
+        """Create PDF nav controls once. Initially hidden (not packed)."""
+        if getattr(self, 'pdf_nav_initialized', False):
+            return
+        self.pdf_nav_frame = ttk.Frame(self.images_tab)
+        self.btn_pdf_prev = ttk.Button(self.pdf_nav_frame, text="◀ Prev", command=self.prev_pdf_page)
+        self.lbl_pdf_page = ttk.Label(self.pdf_nav_frame, text="Page -/-")
+        self.btn_pdf_next = ttk.Button(self.pdf_nav_frame, text="Next ▶", command=self.next_pdf_page)
+        self.btn_pdf_prev.pack(side=tk.LEFT)
+        self.lbl_pdf_page.pack(side=tk.LEFT, padx=8)
+        self.btn_pdf_next.pack(side=tk.LEFT)
+        self.pdf_nav_initialized = True
+
+    def _hide_pdf_controls(self):
+        try:
+            if hasattr(self, 'pdf_nav_frame') and self.pdf_nav_frame.winfo_ismapped():
+                self.pdf_nav_frame.pack_forget()
+        except Exception:
+            pass
+
+    def _update_pdf_controls(self, label):
+        """Show/update pdf nav for the current label if it's a PDF; otherwise hide."""
+        try:
+            self._ensure_pdf_nav_widgets()
+            img_path = getattr(label, 'image_path', None)
+            if not img_path or os.path.splitext(img_path)[1].lower() != '.pdf':
+                self._hide_pdf_controls()
+                return
+            total = getattr(label, '_pdf_page_count', None)
+            page = getattr(label, 'pdf_page', 0)
+            text = f"Page {page + 1}/{total if total is not None else '?'}"
+            try:
+                self.lbl_pdf_page.configure(text=text)
+            except Exception:
+                pass
+            # Enable/disable buttons
+            try:
+                can_prev = page > 0
+                can_next = (total is None) or (page < max(0, total - 1))
+                self.btn_pdf_prev.configure(state=(tk.NORMAL if can_prev else tk.DISABLED))
+                self.btn_pdf_next.configure(state=(tk.NORMAL if can_next else tk.DISABLED))
+            except Exception:
+                pass
+            # Show controls above the grid_frame
+            try:
+                if not self.pdf_nav_frame.winfo_ismapped():
+                    self.pdf_nav_frame.pack(in_=self.images_tab, side=tk.TOP, fill=tk.X, padx=10, pady=(6, 0), before=self.grid_frame)
+                else:
+                    # Ensure it's positioned before the grid_frame
+                    self.pdf_nav_frame.pack_forget()
+                    self.pdf_nav_frame.pack(in_=self.images_tab, side=tk.TOP, fill=tk.X, padx=10, pady=(6, 0), before=self.grid_frame)
+            except Exception:
+                pass
+        except Exception:
+            pass
+    def _safe_read_text(self, path: str, max_bytes: int = 65536) -> str:
+        try:
+            with open(path, 'rb') as f:
+                data = f.read(max_bytes)
+            return data.decode('utf-8', errors='replace')
+        except Exception:
+            return "(unable to read file)"
+
+    def _render_text_snapshot(self, text: str, width: int, height: int, title: str = ""):
+        from PIL import ImageDraw, ImageFont
+        img = Image.new('RGB', (max(10, width), max(10, height)), color='white')
+        draw = ImageDraw.Draw(img)
+        font = ImageFont.load_default()
+        line_height = max(12, font.getbbox('Ag')[3] - font.getbbox('Ag')[1]) if hasattr(font, 'getbbox') else 14
+        padding = 8
+        x = padding
+        y = padding
+        # title
+        if title:
+            draw.text((x, y), title, fill='black', font=font)
+            y += line_height + 4
+            draw.line([(padding, y), (img.width - padding, y)], fill='#dddddd')
+            y += 6
+        # wrap text based on approximate char width
+        try:
+            avg_char_w = draw.textlength('M', font=font)
+            if not avg_char_w:
+                avg_char_w = 7
+        except Exception:
+            avg_char_w = 7
+        max_chars = max(10, int((img.width - 2 * padding) / max(1, avg_char_w)))
+        import textwrap
+        lines = []
+        for paragraph in text.splitlines()[:2000]:
+            wrapped = textwrap.wrap(paragraph, width=max_chars, drop_whitespace=False)
+            if not wrapped:
+                lines.append('')
+            else:
+                lines.extend(wrapped)
+            if len(lines) > 2000:
+                break
+        # draw lines until we run out of space
+        for ln in lines:
+            if y + line_height > img.height - padding:
+                break
+            draw.text((x, y), ln, fill='black', font=font)
+            y += line_height
+        # border
+        try:
+            draw.rectangle([(0, 0), (img.width - 1, img.height - 1)], outline='#cccccc')
+        except Exception:
+            pass
+        return img
+
+    # ---- Renderers for additional formats (optional deps) ----
+    def _render_pdf_preview(self, path: str, max_w: int, max_h: int, page: int = 0):
+        try:
+            import fitz  # PyMuPDF
+        except Exception:
+            hint = "PDF preview requires 'PyMuPDF' (pip install pymupdf)."
+            return self._render_text_snapshot(hint, max_w, max_h, title=os.path.basename(path))
+        try:
+            doc = fitz.open(path)
+            if doc.page_count == 0:
+                return self._render_text_snapshot("Empty PDF.", max_w, max_h, title=os.path.basename(path))
+            # Clamp page index
+            p = max(0, min(page, doc.page_count - 1))
+            page_obj = doc.load_page(p)
+            zoom = 2.0  # 144 dpi approx
+            mat = fitz.Matrix(zoom, zoom)
+            pix = page_obj.get_pixmap(matrix=mat)
+            mode = "RGBA" if pix.alpha else "RGB"
+            img = Image.frombytes(mode, (pix.width, pix.height), pix.samples)
+            if mode == "RGBA":
+                img = img.convert('RGB')
+            # scale down to max_w/h while preserving aspect
+            scale = min(max_w / max(1, img.width), max_h / max(1, img.height), 1.0)
+            if scale < 1.0:
+                try:
+                    img = img.resize((max(1, int(img.width * scale)), max(1, int(img.height * scale))), Image.LANCZOS)
+                except Exception:
+                    img = img.resize((max(1, int(img.width * scale)), max(1, int(img.height * scale))))
+            return img
+        except Exception as e:
+            return self._render_text_snapshot(f"Failed to render PDF: {e}", max_w, max_h, title=os.path.basename(path))
+
+    def _get_pdf_page_count(self, path: str) -> int | None:
+        try:
+            import fitz  # PyMuPDF
+        except Exception:
+            return None
+        try:
+            with fitz.open(path) as doc:
+                return int(doc.page_count)
+        except Exception:
+            return None
+
+    def next_pdf_page(self, event=None):
+        """Go to next page of the PDF in the currently selected cell (if any)."""
+        try:
+            if not getattr(self, 'selected_cell', None):
+                return
+            r, c = self.selected_cell
+            frame, label = self.grid_cells[r][c]
+            if not hasattr(label, 'image_path') or not label.image_path:
+                return
+            _, ext = os.path.splitext(label.image_path)
+            if ext.lower() != '.pdf':
+                return
+            total = getattr(label, '_pdf_page_count', None)
+            page = getattr(label, 'pdf_page', 0) + 1
+            if total is not None:
+                page = min(page, max(0, total - 1))
+            label.pdf_page = page
+            # Re-render base image for this page and refresh display
+            frame.update_idletasks()
+            avail_w = max(10, frame.winfo_width() - 8)
+            avail_h = max(10, frame.winfo_height() - 8)
+            base_img = self._render_pdf_preview(label.image_path, max(avail_w, 1200), max(avail_h, 900), page=page)
+            label.base_image = base_img
+            # Reset fit zoom and center
+            img_w, img_h = base_img.size
+            zoom_fit = min(avail_w / max(1, img_w), avail_h / max(1, img_h))
+            label.fit_zoom = zoom_fit
+            label.zoom = zoom_fit
+            label.view_cx = img_w // 2
+            label.view_cy = img_h // 2
+            self._update_cell_zoom_display(r, c)
+            # Update controls text and button states
+            try:
+                self._update_pdf_controls(label)
+            except Exception:
+                pass
+        except Exception:
+            pass
+
+    def prev_pdf_page(self, event=None):
+        """Go to previous page of the PDF in the currently selected cell (if any)."""
+        try:
+            if not getattr(self, 'selected_cell', None):
+                return
+            r, c = self.selected_cell
+            frame, label = self.grid_cells[r][c]
+            if not hasattr(label, 'image_path') or not label.image_path:
+                return
+            _, ext = os.path.splitext(label.image_path)
+            if ext.lower() != '.pdf':
+                return
+            page = max(0, getattr(label, 'pdf_page', 0) - 1)
+            label.pdf_page = page
+            # Re-render base image for this page and refresh display
+            frame.update_idletasks()
+            avail_w = max(10, frame.winfo_width() - 8)
+            avail_h = max(10, frame.winfo_height() - 8)
+            base_img = self._render_pdf_preview(label.image_path, max(avail_w, 1200), max(avail_h, 900), page=page)
+            label.base_image = base_img
+            # Reset fit zoom and center
+            img_w, img_h = base_img.size
+            zoom_fit = min(avail_w / max(1, img_w), avail_h / max(1, img_h))
+            label.fit_zoom = zoom_fit
+            label.zoom = zoom_fit
+            label.view_cx = img_w // 2
+            label.view_cy = img_h // 2
+            self._update_cell_zoom_display(r, c)
+            # Update controls text and button states
+            try:
+                self._update_pdf_controls(label)
+            except Exception:
+                pass
+        except Exception:
+            pass
+
+    def _render_svg_preview(self, path: str, max_w: int, max_h: int):
+        try:
+            import cairosvg
+        except Exception:
+            hint = "SVG preview requires 'cairosvg' (pip install cairosvg)."
+            return self._render_text_snapshot(hint, max_w, max_h, title=os.path.basename(path))
+        try:
+            png_bytes = cairosvg.svg2png(url=path, output_width=max_w, output_height=max_h, scale=1)
+            bio = io.BytesIO(png_bytes)
+            img = Image.open(bio).convert('RGB')
+            return img
+        except Exception as e:
+            return self._render_text_snapshot(f"Failed to render SVG: {e}", max_w, max_h, title=os.path.basename(path))
+
+    def _render_video_preview(self, path: str, target_w: int = 800):
+        try:
+            import cv2
+        except Exception:
+            hint = "Video preview requires 'opencv-python' (pip install opencv-python)."
+            return self._render_text_snapshot(hint, target_w, int(target_w*0.56), title=os.path.basename(path))
+        try:
+            cap = cv2.VideoCapture(path)
+            ok, frame = cap.read()
+            cap.release()
+            if not ok or frame is None:
+                return self._render_text_snapshot("Unable to decode first frame.", target_w, int(target_w*0.56), title=os.path.basename(path))
+            # Convert BGR to RGB
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            h, w, _ = frame.shape
+            img = Image.fromarray(frame)
+            # scale to target width
+            scale = min(target_w / max(1, w), 1.0)
+            new_w = max(1, int(w * scale))
+            new_h = max(1, int(h * scale))
+            try:
+                img = img.resize((new_w, new_h), Image.LANCZOS)
+            except Exception:
+                img = img.resize((new_w, new_h))
+            return img
+        except Exception as e:
+            return self._render_text_snapshot(f"Failed to render video: {e}", target_w, int(target_w*0.56), title=os.path.basename(path))
+
+    def _render_audio_preview(self, path: str, width: int = 800, height: int = 400):
+        try:
+            import librosa
+            import numpy as np
+            import matplotlib
+            matplotlib.use('Agg')
+            import matplotlib.pyplot as plt
+        except Exception:
+            hint = "Audio preview requires 'librosa' and 'matplotlib' (pip install librosa matplotlib)."
+            return self._render_text_snapshot(hint, width, height, title=os.path.basename(path))
+        try:
+            y, sr = librosa.load(path, mono=True, duration=30.0)
+            if y is None or len(y) == 0:
+                return self._render_text_snapshot("Unable to load audio.", width, height, title=os.path.basename(path))
+            fig = plt.figure(figsize=(width/100, height/100), dpi=100)
+            ax = fig.add_subplot(111)
+            ax.plot(y, linewidth=0.5)
+            ax.set_title(os.path.basename(path))
+            ax.set_xlabel('Samples')
+            ax.set_ylabel('Amplitude')
+            ax.grid(True, alpha=0.3)
+            plt.tight_layout()
+            buf = io.BytesIO()
+            plt.savefig(buf, format='png')
+            plt.close(fig)
+            buf.seek(0)
+            img = Image.open(buf).convert('RGB')
+            return img
+        except Exception as e:
+            return self._render_text_snapshot(f"Failed to render audio: {e}", width, height, title=os.path.basename(path))
+
+    def _render_cell_view(self, base_img, avail_w, avail_h, zoom, fit_zoom, view_cx, view_cy):
+        """Render the cell image. If zoom<=fit_zoom, scale whole image to fit; otherwise crop around (view_cx,view_cy)
+        to viewport size (avail_w/zoom, avail_h/zoom) and resize to (avail_w,avail_h)."""
+        try:
+            img_w, img_h = base_img.size
+            if zoom <= fit_zoom + 1e-6:
+                # full-image fit
+                scale = min(avail_w / max(1, img_w), avail_h / max(1, img_h))
+                new_w = max(1, int(img_w * scale))
+                new_h = max(1, int(img_h * scale))
+                try:
+                    disp_img = base_img.resize((new_w, new_h), Image.LANCZOS)
+                except Exception:
+                    disp_img = base_img.resize((new_w, new_h))
+                return disp_img
+            # zoomed beyond fit -> crop viewport
+            vw = max(1, int(avail_w / max(zoom, 1e-6)))
+            vh = max(1, int(avail_h / max(zoom, 1e-6)))
+            # Clamp center and compute box
+            half_vw = vw // 2
+            half_vh = vh // 2
+            cx = max(half_vw, min(img_w - half_vw, int(view_cx)))
+            cy = max(half_vh, min(img_h - half_vh, int(view_cy)))
+            left = max(0, cx - half_vw)
+            upper = max(0, cy - half_vh)
+            right = min(img_w, left + vw)
+            lower = min(img_h, upper + vh)
+            try:
+                cropped = base_img.crop((left, upper, right, lower))
+            except Exception:
+                cropped = base_img
+            try:
+                disp_img = cropped.resize((avail_w, avail_h), Image.LANCZOS)
+            except Exception:
+                disp_img = cropped.resize((avail_w, avail_h))
+            return disp_img
+        except Exception:
+            return base_img
+
+    # ---- Zoom handlers ----
+    def _on_mouse_wheel_zoom(self, event, row: int, col: int, linux_dir: int | None = None):
+        try:
+            if not hasattr(self, 'grid_cells') or not self.grid_cells:
+                return
+            frame, label = self.grid_cells[row][col]
+            if not hasattr(label, 'base_image'):
+                return
+            # Determine direction: positive for zoom in, negative for zoom out
+            delta = 0
+            if linux_dir is not None:
+                delta = linux_dir  # +1 for Button-4, -1 for Button-5
+            else:
+                # Windows/mac: event.delta is multiple of 120 typically
+                delta = 1 if event.delta > 0 else -1
+            # Adjust zoom factor
+            factor = 1.1 if delta > 0 else 0.9
+            new_zoom = max(getattr(label, 'zoom_min', 0.05), min(getattr(label, 'zoom_max', 10.0), label.zoom * factor))
+            if abs(new_zoom - label.zoom) < 1e-3:
+                return
+            label.zoom = new_zoom
+            self._update_cell_zoom_display(row, col)
+        except Exception:
+            pass
+
+    def _update_cell_zoom_display(self, row: int, col: int):
+        try:
+            frame, label = self.grid_cells[row][col]
+            if not hasattr(label, 'base_image'):
+                return
+            base_img = label.base_image
+            frame.update_idletasks()
+            avail_w = max(10, frame.winfo_width() - 8)
+            avail_h = max(10, frame.winfo_height() - 8)
+            disp_img = self._render_cell_view(base_img, avail_w, avail_h, label.zoom, getattr(label, 'fit_zoom', label.zoom), getattr(label, 'view_cx', base_img.size[0]//2), getattr(label, 'view_cy', base_img.size[1]//2))
+            photo = ImageTk.PhotoImage(disp_img)
+            label.configure(image=photo)
+            label.image = photo
+        except Exception:
+            pass
+
+    def _on_pan_start(self, event, row: int, col: int):
+        try:
+            frame, label = self.grid_cells[row][col]
+            if not hasattr(label, 'base_image') or label.zoom <= getattr(label, 'fit_zoom', label.zoom):
+                label._pan_start = None
+                return
+            label._pan_start = (event.x_root, event.y_root, label.view_cx, label.view_cy)
+        except Exception:
+            pass
+
+    def _on_pan_move(self, event, row: int, col: int):
+        try:
+            frame, label = self.grid_cells[row][col]
+            if not getattr(label, '_pan_start', None):
+                return
+            if label.zoom <= getattr(label, 'fit_zoom', label.zoom):
+                return
+            sx, sy, start_cx, start_cy = label._pan_start
+            dx = event.x_root - sx
+            dy = event.y_root - sy
+            # Convert screen delta to image-space delta (approx: 1 px move equals 1/zoom in image space)
+            label.view_cx = start_cx - int(dx / max(label.zoom, 1e-6))
+            label.view_cy = start_cy - int(dy / max(label.zoom, 1e-6))
+            # Clamp
+            img_w, img_h = label.base_image.size
+            vw = max(1, int((frame.winfo_width() - 8) / max(label.zoom, 1e-6)))
+            vh = max(1, int((frame.winfo_height() - 8) / max(label.zoom, 1e-6)))
+            half_vw, half_vh = vw // 2, vh // 2
+            label.view_cx = max(half_vw, min(img_w - half_vw, label.view_cx))
+            label.view_cy = max(half_vh, min(img_h - half_vh, label.view_cy))
+            self._update_cell_zoom_display(row, col)
+        except Exception:
+            pass
+
+    def _reset_or_open(self, event, row: int, col: int):
+        """Shift+Double-Click resets zoom/pan; otherwise open externally."""
+        try:
+            if (event.state & 0x0001):  # Shift pressed
+                self._reset_cell_zoom(row, col)
+            else:
+                self._open_cell_file(row, col)
+        except Exception:
+            self._open_cell_file(row, col)
+
+    def _reset_cell_zoom(self, row: int, col: int):
+        try:
+            frame, label = self.grid_cells[row][col]
+            if not hasattr(label, 'base_image'):
+                return
+            label.zoom = getattr(label, 'fit_zoom', label.zoom)
+            img_w, img_h = label.base_image.size
+            label.view_cx = img_w // 2
+            label.view_cy = img_h // 2
+            self._update_cell_zoom_display(row, col)
+        except Exception:
+            pass
+
+    def _load_associated_markdown(self, image_path: str, switch_tab: bool = False):
+        """If a sidecar markdown file exists for the given image, load it into the preview.
+        Looks for files with the same basename and .md or .markdown extensions in the same directory.
+        If switch_tab is True, also activates the Markdown tab.
+        """
+        try:
+            if not image_path:
+                return
+            stem, _ = os.path.splitext(image_path)
+            candidates = [stem + ".md", stem + ".markdown"]
+            md_path = next((p for p in candidates if os.path.isfile(p)), None)
+            if not md_path:
+                return
+            self.md_current_path = md_path
+            self.update_markdown_preview()
+            if switch_tab:
+                self.activate_markdown_tab()
+        except Exception as e:
+            logging.debug(f"No associated markdown loaded for {image_path}: {e}")
+
+    def open_with_system_default(self, path: str | None = None):
+        """Open the given path (or current selection) with the OS default application."""
+        try:
+            target = path
+            if not target:
+                # Prefer the currently selected/displayed file
+                target = getattr(self, 'current_image_path', None)
+            if not target or not os.path.exists(target):
+                # Fallback: try current table selection
+                try:
+                    if hasattr(self, 'table') and getattr(self.table, 'model', None):
+                        view_df = self.table.model.df
+                        r = self.table.getSelectedRow()
+                        if isinstance(r, int) and 0 <= r < len(view_df):
+                            candidate = str(view_df.iloc[r].get('File_Path', ''))
+                            if candidate and os.path.exists(candidate):
+                                target = candidate
+                except Exception:
+                    pass
+            if not target or not os.path.exists(target):
+                messagebox.showinfo("Open", "No file selected to open.")
+                return
+
+            if sys.platform.startswith('win'):
+                os.startfile(target)  # type: ignore[attr-defined]
+            elif sys.platform == 'darwin':
+                subprocess.Popen(['open', target])
+            else:
+                subprocess.Popen(['xdg-open', target])
+        except Exception as e:
+            messagebox.showerror("Open Externally", f"Failed to open file:\n{e}")
+
+    def _open_cell_file(self, row: int, col: int):
+        """Open the file associated with the specified grid cell via system default app."""
+        try:
+            if not hasattr(self, 'grid_cells') or not self.grid_cells:
+                return
+            frame, label = self.grid_cells[row][col]
+            fp = getattr(label, 'image_path', None)
+            if fp and os.path.exists(fp):
+                self.open_with_system_default(fp)
+        except Exception:
+            pass
+
+    def _show_cell_context_menu(self, event, row: int, col: int):
+        """Show a context menu for a grid cell with an option to open externally."""
+        try:
+            if not hasattr(self, '_cell_context_menu'):
+                menu = tk.Menu(self, tearoff=0)
+                menu.add_command(label="Open with Default App", command=lambda: self._open_cell_file(row, col))
+                menu.add_command(label="Reset Zoom", command=lambda: self._reset_cell_zoom(row, col))
+                self._cell_context_menu = menu
+            # Rebuild command to capture current row/col
+            try:
+                self._cell_context_menu.entryconfig(0, command=lambda: self._open_cell_file(row, col))
+                self._cell_context_menu.entryconfig(1, command=lambda: self._reset_cell_zoom(row, col))
+            except Exception:
+                pass
+            self._cell_context_menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            try:
+                self._cell_context_menu.grab_release()
+            except Exception:
+                pass
 
     def setup_toolbar(self):
         # Grid size controls
@@ -1671,6 +2308,10 @@ class ImageBrowser(tk.Tk):
         # Bind keyboard shortcut for Gemini explanation
         self.bind('<Control-Shift-G>', lambda e: self.explain_image_with_gemini())
 
+        # Add Open Externally button
+        ttk.Button(self.toolbar, text="Open Externally",
+                   command=lambda: self.open_with_system_default()).pack(side="left", padx=5)
+
     def ocr_current_image(self):
         """Run OCR on the currently selected image and copy text to clipboard."""
         try:
@@ -1738,15 +2379,30 @@ class ImageBrowser(tk.Tk):
                 )
                 return
 
-            # Open and preprocess image
+            # Open and preprocess image, or fallback to capturing the Images tab if not an image
+            gray = None
             try:
-                img = Image.open(image_path)
-                if img.mode != 'RGB':
-                    img = img.convert('RGB')
-                gray = img.convert('L')
-            except Exception as e:
-                messagebox.showerror("Error", f"Failed to open image for OCR: {e}")
-                return
+                # Quick extension check to skip obvious non-images
+                _ext = os.path.splitext(image_path)[1].lower()
+                if _ext in ('.png', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff', '.gif', '.webp'):
+                    img = Image.open(image_path)
+                    if img.mode != 'RGB':
+                        img = img.convert('RGB')
+                    gray = img.convert('L')
+                else:
+                    raise ValueError("Selected file is not an image; will try screen capture of the preview area.")
+            except Exception:
+                # Fallback: capture the currently visible image widget/canvas region
+                try:
+                    # Prefer an inner Canvas if present for tighter crop
+                    widget = self._find_first_canvas(self.grid_frame) or self.grid_frame
+                    cap_img = self._capture_widget_region(widget)
+                    if cap_img.mode != 'RGB':
+                        cap_img = cap_img.convert('RGB')
+                    gray = cap_img.convert('L')
+                except Exception as e2:
+                    messagebox.showerror("Image Error", f"Failed to open or capture image for OCR: {e2}")
+                    return
 
             # OCR
             try:
@@ -1773,16 +2429,116 @@ class ImageBrowser(tk.Tk):
             messagebox.showerror("Error", f"An unexpected error occurred: {e}")
 
     def explain_image_with_gemini(self):
-        """Send the currently selected image to Google Gemini for explanation.
-        Saves the response to 'image_explanation_from_gemini.md' and copies it to the clipboard.
+        """Ask what to send to Gemini (selected file, current Images tab, or area capture),
+        send it, and append the response to a markdown file. Also copies the response to clipboard.
         Requires the 'google-generativeai' package and a GOOGLE_API_KEY.
         """
         try:
-            # Ensure an image is currently selected/displayed
-            image_path = getattr(self, 'current_image_path', None)
-            if not image_path or not os.path.exists(image_path):
-                messagebox.showinfo("No Image", "Please load an image into a grid cell first.")
+            # Ask user for source
+            choice = simpledialog.askstring(
+                "Explain (Gemini)",
+                "Choose source to send:\n1) Selected file\n2) Current Images tab\n3) Area of screen\n\nEnter 1/2/3:",
+                parent=self
+            )
+            if not choice:
                 return
+            choice = choice.strip()
+
+            # Determine image and a representative path (for saving/embedding)
+            img = None
+            image_path_for_md = None
+            current_path = getattr(self, 'current_image_path', None)
+            used_file_direct = False
+
+            if choice == '1':
+                # Use currently selected file (always associate with its sidecar md)
+                if not current_path or not os.path.exists(current_path):
+                    messagebox.showinfo("No Image", "Please load an image into a grid cell first.")
+                    return
+                image_path_for_md = current_path
+                try:
+                    img = Image.open(current_path)
+                    used_file_direct = True
+                except Exception:
+                    used_file_direct = False
+
+            elif choice == '2':
+                # Current Images tab; prefer actual file; if not image, capture widget
+                if current_path and os.path.exists(current_path):
+                    image_path_for_md = current_path
+                    try:
+                        img = Image.open(current_path)
+                        used_file_direct = True
+                    except Exception:
+                        used_file_direct = False
+                else:
+                    used_file_direct = False
+
+            elif choice == '3':
+                # Interactive area selection; prefer appending to the selected file's sidecar markdown
+                if current_path and os.path.exists(current_path):
+                    image_path_for_md = current_path
+                if ImageGrab is None:
+                    messagebox.showerror("Screen Capture", "PIL.ImageGrab is unavailable on this system.")
+                    return
+                try:
+                    img = self._capture_screen_area()
+                except Exception as e:
+                    messagebox.showerror("Capture Error", f"Failed to capture area: {e}")
+                    return
+                if img is None:
+                    return
+            else:
+                messagebox.showinfo("Explain (Gemini)", "Invalid choice. Please enter 1, 2, or 3.")
+                return
+
+            # If option 1/2 failed to open image directly, capture widget area but keep association
+            if choice in ('1', '2') and not used_file_direct:
+                if ImageGrab is None:
+                    messagebox.showerror("Screen Capture", "PIL.ImageGrab is unavailable on this system.")
+                    return
+                try:
+                    # Bring Images tab to front and refresh painting
+                    try:
+                        self.notebook.select(self.images_tab)
+                    except Exception:
+                        pass
+                    self.lift()
+                    # Close any lingering Toplevels from the prompt
+                    try:
+                        for child in self.winfo_children():
+                            if isinstance(child, tk.Toplevel):
+                                try:
+                                    child.destroy()
+                                except Exception:
+                                    pass
+                        try:
+                            root = self.nametowidget('.')
+                            for child in root.winfo_children():
+                                if isinstance(child, tk.Toplevel):
+                                    try:
+                                        child.destroy()
+                                    except Exception:
+                                        pass
+                        except Exception:
+                            pass
+                    except Exception:
+                        pass
+                    # Small delay to ensure prompt fully disappears
+                    self.update_idletasks()
+                    self.update()
+                    time.sleep(0.5)
+                    self.update_idletasks()
+                    self.update()
+                    # Prefer inner canvas inside grid_frame if present
+                    target = getattr(self, 'grid_frame', None) or self.images_tab
+                    canvas = self._find_first_canvas(target)
+                    if canvas is not None:
+                        target = canvas
+                    img = self._capture_widget_region(target)
+                except Exception as e:
+                    messagebox.showerror("Capture Error", f"Failed to capture Images tab: {e}")
+                    return
 
             # Lazy import google-generativeai
             try:
@@ -1796,7 +2552,7 @@ class ImageBrowser(tk.Tk):
                 )
                 return
 
-            # Get API key from env (supports GOOGLE_API_KEY or GEMINI_API_KEY) or prompt user once
+            # Get API key
             api_key = (
                 getattr(self, 'gemini_api_key', None)
                 or os.environ.get('GOOGLE_API_KEY')
@@ -1812,25 +2568,17 @@ class ImageBrowser(tk.Tk):
                 if not api_key:
                     messagebox.showwarning("API Key Required", "Gemini API key is required to proceed.")
                     return
-                self.gemini_api_key = api_key  # cache for this session
+                self.gemini_api_key = api_key
 
-            # Configure the client
+            # Configure model
             try:
                 genai.configure(api_key=api_key)
-                # Use a multimodal model capable of image understanding
                 model = genai.GenerativeModel("gemini-1.5-flash")
             except Exception as e:
                 messagebox.showerror("Gemini Error", f"Failed to configure Gemini client: {e}")
                 return
 
-            # Open the image with PIL
-            try:
-                img = Image.open(image_path)
-            except Exception as e:
-                messagebox.showerror("Image Error", f"Failed to open image: {e}")
-                return
-
-            # Build prompt (Chinese response requested)
+            # Build prompt (Chinese response)
             prompt = (
                 "你是一位资深的视觉分析专家。请清晰地解释这张图片的内容。"
                 "说明它展示了什么、有哪些重要元素/对象/文本或图表，并给出洞见。"
@@ -1839,32 +2587,60 @@ class ImageBrowser(tk.Tk):
                 "最后给出一个简短的小结。"
             )
 
-            # Call the model
+            # Generate
             try:
                 response = model.generate_content([prompt, img])
-                explanation = (response.text or "").strip()
+                explanation = (getattr(response, 'text', '') or '').strip()
             except Exception as e:
                 messagebox.showerror("Gemini Error", f"Failed to get response from Gemini: {e}")
                 return
-
             if not explanation:
                 messagebox.showinfo("No Response", "Gemini returned no text for this image.")
                 return
 
-            # Prepare markdown content (append to current md until saved as new)
+            # Decide where to save markdown and image (if capture)
             from datetime import datetime as _dt
-            md_path = getattr(self, 'md_current_path', None) or os.path.join(os.getcwd(), "image_explanation_from_gemini.md")
-            self.md_current_path = md_path
             timestamp = _dt.now().strftime('%Y-%m-%d %H:%M:%S')
+            # Save captured image if we didn't use the file directly (widget/area capture)
+            if not used_file_direct:
+                # Prefer saving alongside the selected file if we have one; else use current directory
+                save_dir = os.path.dirname(image_path_for_md) if image_path_for_md else getattr(self, 'current_directory', os.getcwd())
+                fname = _dt.now().strftime('capture_%Y%m%d_%H%M%S.png')
+                embed_path = os.path.join(save_dir, fname)
+                try:
+                    img_rgb = img.convert('RGB') if img.mode != 'RGB' else img
+                    img_rgb.save(embed_path)
+                except Exception as e:
+                    messagebox.showerror("Save Error", f"Failed to save captured image: {e}")
+                    return
+                file_label = os.path.basename(embed_path)
+                path_label = embed_path
+            else:
+                # Using the selected file directly as the embedded image
+                embed_path = image_path_for_md
+                file_label = os.path.basename(image_path_for_md)
+                path_label = image_path_for_md
+
+            # Resolve markdown path: if we have a selected file association, write to its sidecar; otherwise default file
+            if image_path_for_md:
+                img_dir = os.path.dirname(image_path_for_md)
+                base = os.path.splitext(os.path.basename(image_path_for_md))[0]
+                md_path = os.path.join(img_dir, f"{base}.md")
+            else:
+                save_dir = getattr(self, 'current_directory', os.getcwd())
+                md_path = os.path.join(save_dir, 'image_explanation_from_gemini.md')
+
+            self.md_current_path = md_path
             header_needed = not os.path.isfile(md_path) or os.path.getsize(md_path) == 0
             section = (
                 ("# Image Explanation (Gemini)\n" if header_needed else "") +
                 ("\n" if header_needed else "") +
-                f"---\n**File:** {os.path.basename(image_path)}\n\n**Path:** {image_path}\n\n**Generated:** {timestamp}\n\n" +
+                f"---\n**File:** {file_label}\n\n**Path:** {path_label}\n\n**Generated:** {timestamp}\n\n" +
+                f"![{file_label}]({path_label})\n\n" +
                 f"{explanation}\n"
             )
 
-            # Append markdown file
+            # Write markdown
             try:
                 with open(md_path, 'a', encoding='utf-8') as f:
                     f.write(section)
@@ -1872,31 +2648,184 @@ class ImageBrowser(tk.Tk):
                 messagebox.showerror("File Error", f"Failed to write markdown file: {e}")
                 return
 
-            # Copy to clipboard
+            # Clipboard
             try:
                 self.clipboard_clear()
                 self.clipboard_append(explanation)
                 self.update()
             except Exception as e:
-                messagebox.showwarning("Clipboard Warning", f"Explanation saved to file but clipboard copy failed: {e}")
+                logging.warning("Clipboard copy failed: %s", e)
 
-            # Success feedback (no popup)
-            snippet = explanation[:200] + ('…' if len(explanation) > 200 else '')
-            logging.info("Gemini explanation appended to %s. Preview snippet: %s", md_path, snippet)
-
-            # Update preview and activate Markdown tab
+            logging.info("Gemini explanation appended to %s", md_path)
             self.update_markdown_preview()
             self.activate_markdown_tab()
 
-            # Fetch and render suggested follow-up questions based on the explanation
+            # Suggestions and references
             try:
                 suggestions = self.fetch_followups(explanation)
-                self.render_suggested_questions(suggestions)
             except Exception:
-                self.render_suggested_questions([])
+                suggestions = []
+            try:
+                references = self.fetch_reference_links(explanation)
+            except Exception:
+                references = []
+            try:
+                extra_parts = []
+                if suggestions:
+                    extra_parts.append("\n\n### 建议的后续问题")
+                    for q in suggestions:
+                        extra_parts.append(f"- {q}")
+                if references:
+                    extra_parts.append("\n\n### 参考链接")
+                    for title, url in references:
+                        if title:
+                            extra_parts.append(f"- [{title}]({url})")
+                        else:
+                            extra_parts.append(f"- {url}")
+                if extra_parts:
+                    with open(self.md_current_path, 'a', encoding='utf-8') as f:
+                        f.write("\n".join(extra_parts) + "\n")
+                    self.update_markdown_preview()
+            except Exception as e:
+                logging.warning("Failed to append suggestions/references: %s", e)
+
+            self.render_suggested_questions(suggestions or [])
         except Exception as e:
             logging.error("Unexpected error in explain_image_with_gemini", exc_info=e)
             messagebox.showerror("Error", f"An unexpected error occurred: {e}")
+
+    def _capture_widget_region(self, widget) -> Image.Image:
+        """Capture a screenshot of the given widget's visible region and return a PIL Image."""
+        self.update_idletasks()
+        x = widget.winfo_rootx()
+        y = widget.winfo_rooty()
+        w = widget.winfo_width()
+        h = widget.winfo_height()
+        if ImageGrab is None:
+            raise RuntimeError("ImageGrab unavailable")
+        bbox = (x, y, x + max(1, w), y + max(1, h))
+        return ImageGrab.grab(bbox)
+
+    def _find_first_canvas(self, widget) -> Optional[tk.Canvas]:
+        """Depth-first search for the first tk.Canvas descendant of the given widget."""
+        try:
+            # Direct match
+            if isinstance(widget, tk.Canvas):
+                return widget
+            # Search children
+            for child in widget.winfo_children():
+                if isinstance(child, tk.Canvas):
+                    return child
+                found = self._find_first_canvas(child)
+                if found is not None:
+                    return found
+        except Exception:
+            pass
+        return None
+
+    def _capture_screen_area(self) -> Optional[Image.Image]:
+        """Let user draw a rectangle on screen and capture that region. Returns PIL Image or None."""
+        if ImageGrab is None:
+            raise RuntimeError("ImageGrab unavailable")
+        sel = {'x0': 0, 'y0': 0, 'x1': 0, 'y1': 0}
+
+        top = tk.Toplevel(self)
+        top.attributes('-fullscreen', True)
+        try:
+            top.attributes('-alpha', 0.2)
+        except Exception:
+            pass
+        top.attributes('-topmost', True)
+        top.configure(bg='black')
+        canvas = tk.Canvas(top, cursor='cross', bg='gray90', highlightthickness=0)
+        canvas.pack(fill=tk.BOTH, expand=True)
+        rect_id = {'id': None}
+
+        def on_down(e):
+            sel['x0'], sel['y0'] = e.x_root, e.y_root
+            sel['x1'], sel['y1'] = e.x_root, e.y_root
+            if rect_id['id'] is not None:
+                canvas.delete(rect_id['id'])
+            rect_id['id'] = canvas.create_rectangle(e.x, e.y, e.x, e.y, outline='red', width=2)
+
+        def on_move(e):
+            sel['x1'], sel['y1'] = e.x_root, e.y_root
+            if rect_id['id'] is not None:
+                canvas.coords(rect_id['id'], sel['x0'] - top.winfo_rootx(), sel['y0'] - top.winfo_rooty(), e.x, e.y)
+
+        def on_up(e):
+            sel['x1'], sel['y1'] = e.x_root, e.y_root
+            top.destroy()
+
+        canvas.bind('<ButtonPress-1>', on_down)
+        canvas.bind('<B1-Motion>', on_move)
+        canvas.bind('<ButtonRelease-1>', on_up)
+        # Cancel with Esc
+        top.bind('<Escape>', lambda e: (top.destroy()))
+
+        # Block until selection done
+        self.wait_window(top)
+
+        x0, y0, x1, y1 = sel['x0'], sel['y0'], sel['x1'], sel['y1']
+        if (x0, y0) == (x1, y1):
+            return None
+        # Normalize bbox
+        left, right = sorted([x0, x1])
+        topy, bottom = sorted([y0, y1])
+        bbox = (left, topy, right, bottom)
+        return ImageGrab.grab(bbox)
+
+    def fetch_reference_links(self, context_text):
+        """Ask Gemini for 3-7 reference links as JSON. Returns list of (title, url)."""
+        try:
+            model = self._ensure_gemini_model()
+        except Exception as e:
+            logging.warning("fetch_reference_links: model unavailable: %s", e)
+            return []
+
+        prompt = (
+            "基于以下内容，给出3到7条可供参考的链接（权威来源优先）。"
+            "输出要求：严格为JSON数组字符串。每个元素为对象，包含 'title' 和 'url' 两个字段；"
+            "如果无法提供title，可以仅输出url字符串。不得输出额外文字。\n\n"
+            f"内容：\n{context_text}"
+        )
+        try:
+            resp = model.generate_content([prompt])
+            text = (getattr(resp, 'text', '') or '').strip()
+        except Exception as e:
+            logging.warning("fetch_reference_links: generation failed: %s", e)
+            return []
+
+        # Try to parse different JSON shapes
+        def _extract_json(s):
+            try:
+                return json.loads(s)
+            except Exception:
+                try:
+                    i = s.find('[')
+                    j = s.rfind(']')
+                    if i != -1 and j != -1 and j > i:
+                        return json.loads(s[i:j+1])
+                except Exception:
+                    pass
+            return []
+
+        data = _extract_json(text)
+        out = []
+        if isinstance(data, list):
+            for item in data:
+                if isinstance(item, dict):
+                    title = str(item.get('title') or '').strip()
+                    url = str(item.get('url') or '').strip()
+                    if url:
+                        out.append((title, url))
+                elif isinstance(item, str):
+                    url = item.strip()
+                    if url:
+                        out.append(("", url))
+                if len(out) >= 7:
+                    break
+        return out
 
     def fetch_followups(self, context_text):
         """Ask Gemini for 3-5 concise follow-up questions (Chinese), returned as a JSON array."""
@@ -1973,6 +2902,82 @@ class ImageBrowser(tk.Tk):
         except Exception as e:
             logging.warning("ask_follow_up failed: %s", e)
 
+    def reconstruct_filename(self, row):
+        """Reconstruct filename from columns starting with 'Field_'.
+        Keeps the original file extension from `row['Name']`.
+        """
+        try:
+            import pandas as _pd  # local import to avoid top-level dependency if unused
+            f_columns = [col for col in row.index if str(col).startswith('Field_')]
+            # Extract non-empty values in order
+            parts = [str(row[col]) for col in f_columns if _pd.notna(row[col]) and str(row[col]).strip()]
+            current_name = str(row['Name'])
+            _base, ext = os.path.splitext(current_name)
+            new_filename = ('_'.join(parts)).replace('\n', '') + ext
+            return new_filename
+        except Exception:
+            # Fallback to original name if anything goes wrong
+            try:
+                return str(row['Name'])
+            except Exception:
+                return ""
+
+    def rename_csv_file(self, old_filepath, new_filename):
+        """Rename a file on disk and return the new absolute path.
+        Preserves directory of `old_filepath`. On failure, returns `old_filepath`.
+        Also renames paired sidecar markdown if it exists and shares the same stem.
+        """
+        try:
+            directory = os.path.dirname(old_filepath)
+            old_filename = os.path.basename(old_filepath)
+            new_filepath = os.path.join(directory, new_filename)
+
+            # If destination exists, confirm overwrite
+            if os.path.exists(new_filepath):
+                if not messagebox.askyesno(
+                    "Overwrite File",
+                    f"{new_filename} already exists. Overwrite?"
+                ):
+                    return old_filepath
+                try:
+                    os.remove(new_filepath)
+                except Exception:
+                    pass
+
+            # Move/rename image
+            os.rename(old_filepath, new_filepath)
+
+            # Try renaming paired markdown if present: <old_stem>.md -> <new_stem>.md
+            try:
+                old_stem, _old_ext = os.path.splitext(old_filename)
+                new_stem, _new_ext = os.path.splitext(new_filename)
+                old_md = os.path.join(directory, f"{old_stem}.md")
+                new_md = os.path.join(directory, f"{new_stem}.md")
+                if os.path.isfile(old_md):
+                    # Apply same overwrite policy for markdown
+                    if os.path.exists(new_md):
+                        try:
+                            os.remove(new_md)
+                        except Exception:
+                            pass
+                    os.rename(old_md, new_md)
+                # Update current markdown pointer if it was pointing to the old md
+                try:
+                    if getattr(self, 'md_current_path', None) == old_md:
+                        self.md_current_path = new_md
+                        if hasattr(self, 'update_markdown_preview'):
+                            self.update_markdown_preview()
+                except Exception:
+                    pass
+            except Exception:
+                # Non-fatal if sidecar rename fails
+                pass
+
+            return new_filepath
+        except Exception as e:
+            logging.warning("Error renaming file: %s", e)
+            return old_filepath
+
     def rename_all_files(self):
         """Rename all files where constructed name differs from current name"""
         try:
@@ -1989,6 +2994,15 @@ class ImageBrowser(tk.Tk):
                     # Update the DataFrame
                     self.df.at[idx, 'Name'] = new_name
                     self.df.at[idx, 'File_Path'] = new_path
+                    
+                    # Update Field_ columns if they exist
+                    name_without_ext = os.path.splitext(new_name)[0]
+                    fields = name_without_ext.split('_')
+                    for i, field in enumerate(fields):
+                        field_name = f"Field_{i+1}"
+                        if field_name in self.df.columns:
+                            self.df.at[idx, field_name] = field
+                    
                     renamed_count += 1
         
             if renamed_count > 0:
@@ -2675,7 +3689,7 @@ class ImageBrowser(tk.Tk):
             self.annotations[image_path].append(self.current_annotation)
             self.current_annotation = None
             
-        # Redraw with all annotations
+        # Redraw annotations
         self.show_annotations()
     
     def show_annotations(self, include_current=False):
@@ -2781,11 +3795,10 @@ class ImageBrowser(tk.Tk):
                         
                 elif annotation["type"] == "rectangle":
                     # Draw rectangle annotation - ensure coordinates are properly ordered
-                    x1, y1 = annotation["start_x"], annotation["start_y"]
-                    x2, y2 = annotation["end_x"], annotation["end_y"]
-                    # Sort coordinates to ensure x1 <= x2 and y1 <= y2
-                    x1, x2 = min(x1, x2), max(x1, x2)
-                    y1, y2 = min(y1, y2), max(y1, y2)
+                    x1, y1 = min(annotation["start_x"], annotation["end_x"]), min(annotation["start_y"], annotation["end_y"])
+                    x2, y2 = max(annotation["start_x"], annotation["end_x"]), max(annotation["start_y"], annotation["end_y"])
+                    
+                    # Draw rectangle
                     draw.rectangle([(x1, y1), (x2, y2)],
                                  outline=color, width=line_width)
                     
@@ -2805,11 +3818,10 @@ class ImageBrowser(tk.Tk):
                         
                 elif annotation["type"] == "circle":
                     # Draw circle annotation (ellipse in PIL) - ensure coordinates are properly ordered
-                    x1, y1 = annotation["start_x"], annotation["start_y"]
-                    x2, y2 = annotation["end_x"], annotation["end_y"]
-                    # Sort coordinates to ensure x1 <= x2 and y1 <= y2
-                    x1, x2 = min(x1, x2), max(x1, x2)
-                    y1, y2 = min(y1, y2), max(y1, y2)
+                    x1, y1 = min(annotation["start_x"], annotation["end_x"]), min(annotation["start_y"], annotation["end_y"])
+                    x2, y2 = max(annotation["start_x"], annotation["end_x"]), max(annotation["start_y"], annotation["end_y"])
+                    
+                    # Draw ellipse
                     draw.ellipse([(x1, y1), (x2, y2)],
                                outline=color, width=line_width)
                     
@@ -3210,12 +4222,16 @@ class ImageBrowser(tk.Tk):
             
         except Exception as e:
             print(f"Error saving annotated image: {e}")
-            traceback.print_exc()
             messagebox.showerror("Error", f"Failed to save annotated image: {str(e)}")
     
     def select_cell(self, row, col):
         """Select a grid cell and make its image the selected image for further actions"""
         try:
+            # Autosave current markdown before switching selection
+            try:
+                self._autosave_markdown_if_dirty()
+            except Exception:
+                pass
             # Update the selected cell
             self.selected_cell = (row, col)
             print(f"Selected cell: [{row}, {col}]")  # Debug print
@@ -3236,11 +4252,53 @@ class ImageBrowser(tk.Tk):
                 if hasattr(label, 'image_path') and label.image_path is not None:
                     # Set this image as the selected image for further actions
                     self.current_image_path = label.image_path
+                    # If we have a pre-rendered base_image (e.g., PDF/SVG/video/audio/text previews), reuse it
+                    if hasattr(label, 'base_image') and label.base_image is not None:
+                        try:
+                            self.original_image = label.base_image
+                            # Also update self.current_image to maintain consistency
+                            self.current_image = self.current_image_path
+                            print(f"Selected image (preview): {self.current_image_path}")  # Debug print
+                            
+                            # Switch associated markdown to sidecar (blank if unavailable)
+                            try:
+                                self._switch_markdown_for_selection(self.current_image_path)
+                            except Exception:
+                                pass
+                            
+                            # Reset zoom and pan for the newly selected image
+                            self.zoom_level = 1.0
+                            self.crop_x = 0
+                            self.crop_y = 0
+                            
+                            # If annotation mode is active, show annotations for this image
+                            if self.annotation_mode:
+                                self.show_annotations()
+                            # Update pdf controls visibility/state
+                            try:
+                                self._update_pdf_controls(label)
+                            except Exception:
+                                pass
+                            
+                            # Return True to indicate successful selection with image
+                            return True
+                        except Exception as e:
+                            print(f"Error assigning preview image in select_cell: {e}")
+                            self.current_image_path = None
+                            self.original_image = None
+                            self.current_image = None
+                    # Fallback: attempt to open from disk (for native image formats)
                     try:
                         self.original_image = Image.open(self.current_image_path)
                         # Also update self.current_image to maintain consistency
                         self.current_image = self.current_image_path
                         print(f"Selected image: {self.current_image_path}")  # Debug print
+                        
+                        # Switch associated markdown to sidecar (blank if unavailable)
+                        try:
+                            self._switch_markdown_for_selection(self.current_image_path)
+                        except Exception:
+                            pass
                         
                         # Reset zoom and pan for the newly selected image
                         self.zoom_level = 1.0
@@ -3250,6 +4308,11 @@ class ImageBrowser(tk.Tk):
                         # If annotation mode is active, show annotations for this image
                         if self.annotation_mode:
                             self.show_annotations()
+                        # Non-PDF image -> hide pdf controls
+                        try:
+                            self._hide_pdf_controls()
+                        except Exception:
+                            pass
                         
                         # Return True to indicate successful selection with image
                         return True
@@ -3261,6 +4324,10 @@ class ImageBrowser(tk.Tk):
                         self.current_image = None
             
             # Return False to indicate successful selection but no image
+            try:
+                self._hide_pdf_controls()
+            except Exception:
+                pass
             return False
             
         except Exception as e:
@@ -3352,63 +4419,8 @@ class ImageBrowser(tk.Tk):
             return
 
         try:
-            moved_files = []
-            for row in selected_rows:
-                if row < len(self.df):
-                    filename = self.df.iloc[row]['Name']
-                    src_path = self.df.iloc[row]['File_Path']  # Use full file path from DataFrame
-                    dst_path = os.path.join(dest_dir, filename)
-                    
-                    # Check if file already exists in destination
-                    if os.path.exists(dst_path):
-                        if not messagebox.askyesno("File Exists", 
-                            f"File {filename} already exists in destination.\nDo you want to overwrite it?"):
-                            continue
-                    
-                    # Move the file
-                    shutil.move(src_path, dst_path)
-                    moved_files.append(filename)
-                    
-                    # Clear image display if it was the moved image
-                    if self.current_image == src_path and self.selected_cell is not None:
-                        self.current_image = None
-                        row, col = self.selected_cell
-                        _, label = self.grid_cells[row][col]
-                        if label:
-                            label.configure(image='')
-                            label.image = None
-
-            # Update the DataFrame and table
-            if moved_files:
-                self.df = self.df[~self.df['Name'].isin(moved_files)]
-                self.table.model.df = self.df
-                self.table.redraw()
-                
-                # Update image files list
-                self.image_files = [f for f in self.image_files if f not in moved_files]
-                
-                # Show success message with count of moved files
-                messagebox.showinfo("Success", f"Moved {len(moved_files)} files to:\n{dest_dir}")
-                
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to move files:\n{str(e)}")
-
-    def delete_selected_files(self):
-        """Delete selected files"""
-        # Get selected rows from the table's multiplerowlist
-        selected_rows = self.table.multiplerowlist
-        if not selected_rows:
-            messagebox.showinfo("Info", "Please select files to delete")
-            return
-
-        # Show confirmation dialog with count of files
-        if not messagebox.askyesno("Confirm Delete", 
-                               f"Are you sure you want to delete {len(selected_rows)} selected files?",
-                               icon='warning'):
-            return
-
-        deleted_files = []
-        try:
+            moved_files = []  # list of filenames moved (for DataFrame removal)
+            moved_paths = []  # list of full source paths moved (for self.image_files update)
             for row in selected_rows:
                 if row < len(self.df):
                     filename = self.df.iloc[row]['Name']
@@ -3418,7 +4430,7 @@ class ImageBrowser(tk.Tk):
                     try:
                         # Delete the file
                         os.remove(filepath)
-                        deleted_files.append(filename)
+                        moved_files.append(filename)
                         
                         # Clear image display if it was one of the deleted images
                         if self.current_image == filepath and self.selected_cell is not None:
@@ -3433,15 +4445,15 @@ class ImageBrowser(tk.Tk):
                         messagebox.showerror("Error", f"Failed to delete file {filename}:\n{str(e)}")
 
             # Update the DataFrame and table
-            if deleted_files:
-                self.df = self.df[~self.df['Name'].isin(deleted_files)]
+            if moved_files:
+                self.df = self.df[~self.df['Name'].isin(moved_files)]
                 self.table.model.df = self.df
                 self.table.redraw()
                 
                 # Update image files list
-                self.image_files = [f for f in self.image_files if f not in deleted_files]
+                self.image_files = [f for f in self.image_files if f not in moved_files]
                 
-                messagebox.showinfo("Success", f"Deleted {len(deleted_files)} files")
+                messagebox.showinfo("Success", f"Deleted {len(moved_files)} files")
                 
         except Exception as e:
             messagebox.showerror("Error", f"Error during deletion:\n{str(e)}")
@@ -3516,12 +4528,15 @@ class ImageBrowser(tk.Tk):
             self.create_grid()
 
     def update_file_list(self):
-        """Update the list of CSV files"""
+        """Update a simple list of files in the current directory (unused helper)."""
         print("\n=== Updating file list ===")  # Debug print
-        files = os.listdir(self.current_directory)
-        self.csv_files = [f for f in files if f.lower().endswith('.png')]
-        print(f"Found {len(self.csv_files)} CSV files")  # Debug print
-
+        try:
+            files = os.listdir(self.current_directory)
+            self.csv_files = [f for f in files if os.path.isfile(os.path.join(self.current_directory, f))]
+            print(f"Found {len(self.csv_files)} files")  # Debug print
+        except Exception as e:
+            self.csv_files = []
+            print(f"Error updating file list: {e}")
     def update_grid_size(self):
         try:
             new_rows = max(1, min(10, int(self.rows_var.get())))
@@ -3751,6 +4766,11 @@ class ImageBrowser(tk.Tk):
     def on_recent_folder_selected(self, event=None):
         """Handle selection of a folder from the recent folders dropdown"""
         try:
+            # Autosave current markdown before changing folder
+            try:
+                self._autosave_markdown_if_dirty()
+            except Exception:
+                pass
             # Get the selected index
             selected_index = self.recent_folders_dropdown.current()
             
@@ -3811,6 +4831,11 @@ if __name__ == "__main__":
         def on_closing():
             logging.info("Application is closing")
             try:
+                # Autosave markdown on close
+                try:
+                    app._autosave_markdown_if_dirty()
+                except Exception:
+                    pass
                 # Destroy all widgets
                 for widget in app.winfo_children():
                     widget.destroy()
