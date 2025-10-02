@@ -589,15 +589,18 @@ class PlotViewer(Frame):
                 for i, (name, group) in enumerate(groups):
                     color = cmap(float(i)/num_groups)
                     group = group.drop(by, axis=1)  # Remove groupby column
+                    kwargs['color'] = color
+                    kwargs['label'] = str(name)
                     if errorbars:
                         errs = group.std()
-                        kwargs['color'] = color
                         self._doplot(group, self.ax, kind, False, errorbars, useindex=None,
-                                   bw=bw, yerr=errs, kwargs=kwargs, label=str(name))
+                                   bw=bw, yerr=errs, kwargs=kwargs)
                     else:
-                        kwargs['color'] = color
                         self._doplot(group, self.ax, kind, False, errorbars, useindex=None,
-                                   bw=bw, yerr=None, kwargs=kwargs, label=str(name))
+                                   bw=bw, yerr=None, kwargs=kwargs)
+                if kwargs['legend'] == True:
+                    handles, labels = self.ax.get_legend_handles_labels()
+                    self.ax.legend(handles, labels)
             elif kind == 'scatter':
                 #we plot multiple groups and series in different colors
                 #this logic could be placed in the scatter method?
@@ -647,14 +650,27 @@ class PlotViewer(Frame):
         #annotation optons are separate
         lkwds.update(kwds)
  
-        #table = lkwds['table']
-        '''if table == True:
-            #from pandas.tools.plotting import table
+        if self.styleopts.kwds.get('table') == True:
             from pandas.plotting import table
-            if self.table.child != None:
+            if isinstance(axs, (list, np.ndarray)):
+                ax_for_table = axs[0]
+            else:
+                ax_for_table = axs
+
+            if hasattr(self.table, 'child') and self.table.child is not None:
                 tabledata = self.table.child.model.df
-                table(axs, np.round(tabledata, 2),
-                      loc='upper left', colWidths=[0.1 for i in tabledata.columns])'''
+            else:
+                tabledata = self.data
+
+            # The plot is shrunk to make room for the table
+            box = ax_for_table.get_position()
+            ax_for_table.set_position([box.x0, box.y0 + box.height * 0.1,
+                                 box.width, box.height * 0.9])
+
+            the_table = table(ax_for_table, np.round(tabledata.head(), 2),
+                  loc='bottom', colWidths=[0.1 for i in tabledata.columns])
+            the_table.auto_set_font_size(False)
+            the_table.set_fontsize(8)
  
         self.setFigureOptions(axs_list, lkwds) # Pass axs_list (could be single ax or list)
         scf = 12/kwds['fontsize']
@@ -744,7 +760,7 @@ class PlotViewer(Frame):
                 kwargs[k] = None
         return kwargs
  
-    def _doplot(self, data, ax, kind, subplots, errorbars, useindex, bw, yerr, kwargs, label=None):
+    def _doplot(self, data, ax, kind, subplots, errorbars, useindex, bw, yerr, kwargs):
         """Core plotting method where the individual plot functions are called"""
  
         kwargs = kwargs.copy()
@@ -882,42 +898,6 @@ class PlotViewer(Frame):
  
             axs = data.plot(ax=ax, layout=layout, yerr=yerr, style=styles, cmap=cmap,
                              **kwargs)
-            
-            if label is not None:
-                # Get current handles and labels
-                handles, labels = axs.get_legend_handles_labels()
-                
-                # If you want to append the new label to existing legend text
-                # Update label for the current group curve only
-                # Determine how many new labels correspond to the new group
-                new_labels_count = len(data.columns)  # Assuming each column represents a new curve for the group
-
-                # Update only the last new_labels_count labels for the existing curves
-                if isinstance(label, str):
-                    for i in range(-new_labels_count, 0):  # Update the last new_labels_count labels
-                        labels[i] = f"{labels[i]} {label}"  # Update the label
-                elif isinstance(label, (list, tuple)):
-                    for i in range(-new_labels_count, 0):  # Update the last new_labels_count labels
-                        labels[i] = f"{labels[i]} {label[i + new_labels_count]}"  # Update the label
-
-                # Update the total number of curves
-                if not hasattr(self, 'total_curves'):
-                    self.total_curves = 0  # Initialize if it doesn't exist
-                
-                self.total_curves += new_labels_count  # Increment total curves by the number of new curves
-                
-                if not hasattr(self, 'local_labels'):
-                    self.local_labels = []  # Initialize local_labels if it doesn't exist
-                self.local_labels.extend(labels[-new_labels_count:])  # Append the last new_labels_count of labels to local version
-                # axs.legend(handles, self.local_labels[-1], loc='best', frameon=True) #False, bbox_to_anchor=(0.5, 0.5))  # Refresh the chart with the latest local labels and adjust position
-                axs.legend(handles, self.local_labels, loc='best', frameon=True) 
-                
-            # Restore the legend to compare with the local ones
-            if hasattr(self, 'local_labels'):
-                handles, labels = axs.get_legend_handles_labels()
-            
-            # Customize legend after plotting
-            # axs.legend(loc='best', title='My Legend', frameon=True)
 
         # Handle case where axs is a list of axes returned by pandas plot
         if isinstance(axs, (list, np.ndarray)):
@@ -1832,7 +1812,7 @@ class AnnotationOptions(TkOptions):
         frame = LabelFrame(self.main, text='add objects')
         v = self.objectvar = StringVar()
         v.set('textbox')
-        w = Combobox(frame, values=['textbox'],#'arrow'],
+        w = Combobox(frame, values=['textbox', 'arrow'],
                          textvariable=v,width=14)
         Label(frame,text='add object').pack()
         w.pack(fill=BOTH,pady=2)
@@ -1929,10 +1909,34 @@ class AnnotationOptions(TkOptions):
         fig = self.parent.fig
         canvas = self.parent.canvas
         ax = fig.get_axes()[0]
-        ax.arrow(0.2, 0.2, 0.5, 0.5, fc='k', ec='k',
+
+        if hasattr(self, 'arrows') == False:
+            self.arrows = {}
+
+        self.applyOptions()
+        if kwds == None:
+            kwds = self.kwds
+            kwds['xycoords'] = self.coordsvar.get()
+
+        xycoords = kwds['xycoords']
+        if 'xy' in kwds:
+            xy = kwds['xy']
+        else:
+            xy=(.2, .2)
+            xycoords='axes fraction'
+
+        an = ax.arrow(xy[0], xy[1], 0.5, 0.5, fc='k', ec='k',
                  transform=ax.transAxes)
+
+        if key == None:
+            import uuid
+            key = str(uuid.uuid4().fields[0])
+
+        an._id = key
+        if key not in self.arrows:
+            self.arrows[key] = kwds
+
         canvas.draw()
-        #self.lines.append(line)
         return
 
     def redraw(self):
@@ -1942,6 +1946,9 @@ class AnnotationOptions(TkOptions):
         #print (self.textboxes)
         for key in self.textboxes:
             self.addTextBox(self.textboxes[key], key)
+        if hasattr(self, 'arrows'):
+            for key in self.arrows:
+                self.addArrow(self.arrows[key], key)
         return
 
 class ExtraOptions(TkOptions):
@@ -1957,7 +1964,7 @@ class ExtraOptions(TkOptions):
                               'axis tick positions':['major x-ticks','major y-ticks',
                                                    'minor x-ticks','minor y-ticks'],
                               'tick label format':['formatter','symbol','precision','date format'],
-                              #'tables':['table']
+                              'tables':['table']
                              }
         self.groups = OrderedDict(sorted(grps.items()))
         opts = self.opts = {'xmin':{'type':'entry','default':'','label':'x min'},
@@ -1972,7 +1979,7 @@ class ExtraOptions(TkOptions):
                             'symbol':{'type':'entry','default':''},
                             'precision':{'type':'entry','default':0},
                             'date format':{'type':'combobox','items':datefmts,'default':''},
-                            #'table':{'type':'checkbutton','default':0,'label':'show table'},
+                            'table':{'type':'checkbutton','default':0,'label':'show table'},
                             }
         self.kwds = {}
         return
@@ -2027,7 +2034,7 @@ class AnimateOptions(TkOptions):
         datacols = list(df.columns)
         self.groups = grps = {'data window':['increment','window','startrow','delay'],
                               'display':['expand','usexrange','useyrange','tableupdate','smoothing','columntitle'],
-                              #'3d mode':['rotate axis','degrees'],
+                              '3d mode':['rotate axis','degrees'],
                               'record video':['savevideo','codec','fps','filename']
                              }
         self.groups = OrderedDict(sorted(grps.items()))
@@ -2042,9 +2049,9 @@ class AnimateOptions(TkOptions):
                             'useyrange':{'type':'checkbutton','default':0,'label':'use full y range'},
                             'smoothing':{'type':'checkbutton','default':0,'label':'smoothing'},
                             'columntitle':{'type':'combobox','default':'','items':datacols,'label':'column data as title'},
-                            #'source':{'type':'entry','default':'','width':30},
-                            #'rotate axis':{'type':'combobox','default':'x','items':['x','y','z'],'label':'rotate axis'},
-                            #'degrees':{'type':'entry','default':5},
+                            'source':{'type':'entry','default':'','width':30},
+                            'rotate axis':{'type':'combobox','default':'x','items':['x','y','z'],'label':'rotate axis'},
+                            'degrees':{'type':'entry','default':5},
                             'savevideo':{'type':'checkbutton','default':0,'label':'save as video'},
                             'codec':{'type':'combobox','default':'default','items': codecs},
                             'fps':{'type':'entry','default':15},
@@ -2148,6 +2155,15 @@ class AnimateOptions(TkOptions):
                 ymin = df.min(numeric_only=True).min()
                 ymax = df.max(numeric_only=True).max()
                 self.parent.ax.set_ylim(ymin,ymax)
+
+            if self.parent.globalopts['3D plot'] == True:
+                axis = kwds['rotate axis']
+                deg = kwds['degrees']
+                if axis == 'x':
+                    self.parent.ax.view_init(elev=self.parent.ax.elev, azim=self.parent.ax.azim+deg)
+                elif axis == 'y':
+                    self.parent.ax.view_init(elev=self.parent.ax.elev+deg, azim=self.parent.ax.azim)
+
             #finally draw the plot
             self.parent.canvas.draw()
 
