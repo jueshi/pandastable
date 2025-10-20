@@ -70,7 +70,8 @@ valid_kwds = {'line': ['alpha', 'colormap', 'grid', 'legend', 'linestyle','ms',
             'area': ['alpha','colormap','grid','linewidth','legend','stacked',
                      'kind','rot','logx','sharex','sharey','subplots'],
             'density': ['alpha', 'colormap', 'grid', 'legend', 'linestyle',
-                         'linewidth', 'marker', 'subplots', 'rot', 'kind'],
+                         'linewidth', 'marker', 'subplots', 'rot', 'kind',
+                         'bw_method', 'fill', 'show_rug'],
             'boxplot': ['rot','grid','logy','colormap','alpha','linewidth','legend',
                         'subplots','edgecolor','sharex','sharey'],
             'violinplot': ['rot','grid','logy','colormap','alpha','linewidth','legend',
@@ -81,7 +82,26 @@ valid_kwds = {'line': ['alpha', 'colormap', 'grid', 'legend', 'linestyle','ms',
             'contour': ['linewidth','colormap','alpha','subplots'],
             'imshow': ['colormap','alpha'],
             'venn': ['colormap','alpha'],
-            'radviz': ['linewidth','marker','edgecolor','s','colormap','alpha']
+            'radviz': ['linewidth','marker','edgecolor','s','colormap','alpha'],
+            'shmoo': ['alpha', 'colormap', 'grid', 'colorbar',
+                     'x_param', 'y_param', 'z_param', 'threshold_min', 'threshold_max',
+                     'show_contours', 'contour_levels', 'interpolation', 'show_stats',
+                     'marker_size', 'show_markers'],
+            'bathtub': ['alpha', 'colormap', 'grid', 'legend', 'linewidth',
+                       'ber_target', 'show_margins', 'x_axis_type', 'show_target_line',
+                       'margin_style', 'dual_curve'],
+            'sparam': ['alpha', 'colormap', 'grid', 'legend', 'linewidth',
+                      'log_freq', 'show_phase', 'spec_limit', 'limit_type',
+                      'nyquist_marker', 'data_rate', 'freq_range', 'db_range'],
+            'gantt': ['alpha', 'colormap', 'grid', 'legend',
+                     'show_progress', 'show_today', 'date_format', 'bar_height',
+                     'show_milestones', 'group_by', 'sort_by'],
+            'eye': ['alpha', 'colormap', 'grid', 'persistence', 'ui_width',
+                   'sample_rate', 'bit_rate', 'show_mask', 'mask_margin',
+                   'color_mode', 'overlay_count'],
+            'jitter': ['alpha', 'colormap', 'grid', 'legend', 'bins',
+                      'show_stats', 'show_gaussian', 'show_dual_dirac',
+                      'tj_separation', 'show_components']
             }
 
 def get_defaults(name):
@@ -273,6 +293,11 @@ class PlotViewer(Frame):
         #print (self.table.getSelectedRows())
         if data is None:
             self.data = self.table.getSelectedDataFrame()
+            # For shmoo plots, use full dataframe if selection is too small
+            kind = self.mplopts.kwds.get('kind', 'line')
+            if kind == 'shmoo' and len(self.data.columns) < 3:
+                print("DEBUG: Shmoo plot needs 3+ columns, using full dataframe")
+                self.data = self.table.model.df
         else:
             self.data = data
         self.updateStyle()
@@ -840,6 +865,27 @@ class PlotViewer(Frame):
                 kwargs['marker'] = 'o'
             col = data.columns[-1]
             axs = pd.plotting.radviz(data, col, ax=ax, **kwargs)
+        elif kind == 'density':
+            print("DEBUG: Calling density plot")
+            axs = self.density(data, ax, kwargs)
+        elif kind == 'shmoo':
+            print("DEBUG: Calling shmoo plot")
+            axs = self.shmoo(data, ax, kwargs)
+        elif kind == 'bathtub':
+            print("DEBUG: Calling bathtub plot")
+            axs = self.bathtub(data, ax, kwargs)
+        elif kind == 'sparam':
+            print("DEBUG: Calling S-parameter plot")
+            axs = self.sparam(data, ax, kwargs)
+        elif kind == 'gantt':
+            print("DEBUG: Calling Gantt chart")
+            axs = self.gantt(data, ax, kwargs)
+        elif kind == 'eye':
+            print("DEBUG: Calling Eye diagram")
+            axs = self.eye(data, ax, kwargs)
+        elif kind == 'jitter':
+            print("DEBUG: Calling Jitter histogram")
+            axs = self.jitter(data, ax, kwargs)
         else:
             #line, bar and area plots
             if useindex == False:
@@ -1131,6 +1177,1287 @@ class PlotViewer(Frame):
             v = venn3([set(x), set(y), set(z)], set_labels=labels, ax=ax)
         ax.axis('off')
         ax.set_axis_off()
+        return ax
+
+    def bathtub(self, df, ax, kwds):
+        """Create bathtub curve plot for SerDes BER analysis.
+        
+        A bathtub curve shows Bit Error Rate (BER) vs sampling point position,
+        used to measure timing margins in high-speed serial links.
+        
+        Parameters:
+        -----------
+        df : pandas.DataFrame
+            Data with sample points and BER values
+        ax : matplotlib.axes.Axes
+            Axes object to plot on
+        kwds : dict
+            Plotting keywords
+            
+        Returns:
+        --------
+        ax : matplotlib.axes.Axes
+        """
+        from scipy import interpolate
+        
+        print(f"DEBUG: bathtub() called with {len(df)} rows, {len(df.columns)} columns")
+        print(f"DEBUG: Columns: {list(df.columns)}")
+        
+        # Get options
+        ber_target_str = kwds.get('ber_target', '1e-12')
+        show_margins = kwds.get('show_margins', True)
+        x_axis_type = kwds.get('x_axis_type', 'UI')
+        show_target_line = kwds.get('show_target_line', True)
+        margin_style = kwds.get('margin_style', 'arrows')
+        dual_curve = kwds.get('dual_curve', False)
+        grid = kwds.get('grid', True)
+        legend = kwds.get('legend', True)
+        
+        # Parse BER target
+        try:
+            ber_target = float(ber_target_str)
+        except (ValueError, TypeError):
+            ber_target = 1e-12
+        
+        # Get numeric data
+        data = df._get_numeric_data()
+        
+        if len(data.columns) < 2:
+            self.showWarning('Bathtub plot requires at least 2 columns (Sample Point, BER)')
+            return ax
+        
+        # Auto-detect columns
+        x_col = data.columns[0]  # Sample point (UI, ps, or mV)
+        
+        # Check if dual curve (3 columns: x, ber_left, ber_right)
+        if len(data.columns) >= 3 and dual_curve:
+            y_cols = [data.columns[1], data.columns[2]]
+            labels = [data.columns[1], data.columns[2]]
+        else:
+            y_cols = [data.columns[1]]
+            labels = [data.columns[1]]
+        
+        x_data = data[x_col].values
+        
+        # Plot each BER curve
+        for i, y_col in enumerate(y_cols):
+            y_data = data[y_col].values
+            
+            # Remove NaN values
+            mask = ~(np.isnan(x_data) | np.isnan(y_data))
+            x_clean = x_data[mask]
+            y_clean = y_data[mask]
+            
+            if len(x_clean) < 2:
+                continue
+            
+            # Sort by x for proper plotting
+            sort_idx = np.argsort(x_clean)
+            x_clean = x_clean[sort_idx]
+            y_clean = y_clean[sort_idx]
+            
+            # Plot BER curve
+            ax.semilogy(x_clean, y_clean, marker='o', linewidth=2, label=labels[i])
+            
+            # Calculate margin at target BER
+            if show_margins and len(x_clean) > 2:
+                try:
+                    # Interpolate in log space
+                    log_y = np.log10(y_clean)
+                    log_target = np.log10(ber_target)
+                    
+                    # Find crossings
+                    f = interpolate.interp1d(x_clean, log_y, kind='linear', fill_value='extrapolate')
+                    
+                    # Find left and right crossings
+                    x_fine = np.linspace(x_clean.min(), x_clean.max(), 1000)
+                    y_fine = f(x_fine)
+                    
+                    # Find where curve crosses target
+                    crossings = []
+                    for j in range(len(y_fine)-1):
+                        if (y_fine[j] >= log_target and y_fine[j+1] < log_target) or \
+                           (y_fine[j] <= log_target and y_fine[j+1] > log_target):
+                            # Linear interpolation to find exact crossing
+                            x_cross = x_fine[j] + (log_target - y_fine[j]) * (x_fine[j+1] - x_fine[j]) / (y_fine[j+1] - y_fine[j])
+                            crossings.append(x_cross)
+                    
+                    if len(crossings) >= 2:
+                        left_margin = crossings[0]
+                        right_margin = crossings[-1]
+                        margin = right_margin - left_margin
+                        
+                        # Draw margin annotation
+                        if margin_style == 'arrows':
+                            ax.annotate('', xy=(right_margin, ber_target), xytext=(left_margin, ber_target),
+                                      arrowprops=dict(arrowstyle='<->', color='red', lw=2))
+                            ax.text((left_margin + right_margin)/2, ber_target*2, 
+                                  f'Margin: {margin:.3f} {x_axis_type}',
+                                  ha='center', va='bottom', color='red', fontweight='bold')
+                        elif margin_style == 'lines':
+                            ax.axvline(left_margin, color='red', linestyle='--', alpha=0.7)
+                            ax.axvline(right_margin, color='red', linestyle='--', alpha=0.7)
+                        elif margin_style == 'shaded':
+                            ax.axvspan(left_margin, right_margin, alpha=0.2, color='green')
+                
+                except Exception as e:
+                    print(f"Warning: Could not calculate margin: {e}")
+        
+        # Show target BER line
+        if show_target_line:
+            ax.axhline(ber_target, color='gray', linestyle='--', linewidth=1, 
+                      label=f'Target BER: {ber_target:.0e}')
+        
+        # Labels and formatting
+        ax.set_xlabel(f'Sample Point ({x_axis_type})', fontsize=12)
+        ax.set_ylabel('Bit Error Rate (BER)', fontsize=12)
+        ax.set_title('Bathtub Curve', fontsize=14, fontweight='bold')
+        
+        if grid:
+            ax.grid(True, alpha=0.3, which='both')
+        
+        if legend:
+            ax.legend(loc='best')
+        
+        # Set y-axis limits for better visibility
+        if len(y_cols) > 0:
+            all_y = np.concatenate([data[col].dropna().values for col in y_cols])
+            if len(all_y) > 0:
+                y_min = max(all_y.min(), 1e-18)
+                y_max = min(all_y.max(), 1e-1)
+                ax.set_ylim(y_min/10, y_max*10)
+        
+        return ax
+
+    def sparam(self, df, ax, kwds):
+        """Create S-parameter plot for channel characterization.
+        
+        S-parameters show frequency response of channels, typically
+        insertion loss (S21) and return loss (S11/S22).
+        
+        Parameters:
+        -----------
+        df : pandas.DataFrame
+            Data with frequency and S-parameter values
+        ax : matplotlib.axes.Axes
+            Axes object to plot on
+        kwds : dict
+            Plotting keywords
+            
+        Returns:
+        --------
+        ax : matplotlib.axes.Axes
+        """
+        from scipy import interpolate
+        
+        print(f"DEBUG: sparam() called with {len(df)} rows, {len(df.columns)} columns")
+        print(f"DEBUG: Columns: {list(df.columns)}")
+        
+        # Get options
+        log_freq = kwds.get('log_freq', True)
+        show_phase = kwds.get('show_phase', False)
+        spec_limit_str = kwds.get('spec_limit', '')
+        limit_type = kwds.get('limit_type', 'None')
+        nyquist_marker = kwds.get('nyquist_marker', False)
+        data_rate_str = kwds.get('data_rate', '')
+        freq_range_str = kwds.get('freq_range', '')
+        db_range_str = kwds.get('db_range', '')
+        grid = kwds.get('grid', True)
+        legend = kwds.get('legend', True)
+        
+        # Parse spec limit
+        spec_limit = None
+        if spec_limit_str:
+            try:
+                spec_limit = float(spec_limit_str)
+            except (ValueError, TypeError):
+                pass
+        
+        # Parse data rate for Nyquist
+        data_rate = None
+        if data_rate_str:
+            try:
+                data_rate = float(data_rate_str)
+            except (ValueError, TypeError):
+                pass
+        
+        # Get numeric data
+        data = df._get_numeric_data()
+        
+        if len(data.columns) < 2:
+            self.showWarning('S-parameter plot requires at least 2 columns (Frequency, S-parameter)')
+            return ax
+        
+        # Auto-detect frequency column (first column)
+        freq_col = data.columns[0]
+        freq_data = data[freq_col].values
+        
+        # Auto-detect and convert frequency units
+        if freq_data.max() > 1000:  # Likely MHz or Hz
+            if freq_data.max() > 1e6:
+                freq_ghz = freq_data / 1e9  # Hz to GHz
+                print(f"DEBUG: Converted frequency from Hz to GHz")
+            else:
+                freq_ghz = freq_data / 1000  # MHz to GHz
+                print(f"DEBUG: Converted frequency from MHz to GHz")
+        else:
+            freq_ghz = freq_data  # Already in GHz
+        
+        # Get S-parameter columns (all except first)
+        sparam_cols = data.columns[1:]
+        
+        # Plot each S-parameter
+        for col in sparam_cols:
+            sparam_data = data[col].values
+            
+            # Remove NaN values
+            mask = ~(np.isnan(freq_ghz) | np.isnan(sparam_data))
+            freq_clean = freq_ghz[mask]
+            sparam_clean = sparam_data[mask]
+            
+            if len(freq_clean) < 2:
+                continue
+            
+            # Sort by frequency
+            sort_idx = np.argsort(freq_clean)
+            freq_clean = freq_clean[sort_idx]
+            sparam_clean = sparam_clean[sort_idx]
+            
+            # Plot S-parameter
+            if log_freq:
+                ax.semilogx(freq_clean, sparam_clean, linewidth=2, label=col, marker='o', markersize=3)
+            else:
+                ax.plot(freq_clean, sparam_clean, linewidth=2, label=col, marker='o', markersize=3)
+        
+        # Add spec limit line
+        if spec_limit is not None and limit_type != 'None':
+            if limit_type == 'Horizontal':
+                ax.axhline(spec_limit, color='red', linestyle='--', linewidth=2, 
+                          label=f'Spec Limit: {spec_limit} dB')
+            elif limit_type == 'Vertical' and data_rate is not None:
+                nyquist_ghz = data_rate / 2
+                ax.axvline(nyquist_ghz, color='red', linestyle='--', linewidth=2,
+                          label=f'Nyquist: {nyquist_ghz} GHz')
+        
+        # Add Nyquist marker
+        if nyquist_marker and data_rate is not None:
+            nyquist_ghz = data_rate / 2
+            ax.axvline(nyquist_ghz, color='orange', linestyle=':', linewidth=2,
+                      label=f'Nyquist: {nyquist_ghz} GHz')
+        
+        # Labels and formatting
+        ax.set_xlabel('Frequency (GHz)', fontsize=12)
+        ax.set_ylabel('Magnitude (dB)', fontsize=12)
+        ax.set_title('S-Parameter Plot', fontsize=14, fontweight='bold')
+        
+        if grid:
+            ax.grid(True, alpha=0.3, which='both')
+        
+        if legend:
+            ax.legend(loc='best')
+        
+        # Set axis ranges if specified
+        if freq_range_str:
+            try:
+                freq_min, freq_max = map(float, freq_range_str.split('-'))
+                ax.set_xlim(freq_min, freq_max)
+            except:
+                pass
+        
+        if db_range_str:
+            try:
+                db_min, db_max = map(float, db_range_str.split('-'))
+                ax.set_ylim(db_min, db_max)
+            except:
+                pass
+        
+        return ax
+
+    def gantt(self, df, ax, kwds):
+        """Create Gantt chart for project timeline visualization.
+        
+        A Gantt chart displays project tasks as horizontal bars along a timeline,
+        showing task durations, dependencies, and progress.
+        
+        Parameters:
+        -----------
+        df : pandas.DataFrame
+            Data with task information
+        ax : matplotlib.axes.Axes
+            Axes object to plot on
+        kwds : dict
+            Plotting keywords
+            
+        Returns:
+        --------
+        ax : matplotlib.axes.Axes
+        """
+        import matplotlib.dates as mdates
+        from datetime import datetime, timedelta
+        
+        print(f"DEBUG: gantt() called with {len(df)} rows, {len(df.columns)} columns")
+        print(f"DEBUG: Columns: {list(df.columns)}")
+        
+        # Get options
+        show_progress = kwds.get('show_progress', True)
+        show_today = kwds.get('show_today', True)
+        date_format = kwds.get('date_format', '%Y-%m-%d')
+        bar_height = kwds.get('bar_height', 0.8)
+        show_milestones = kwds.get('show_milestones', True)
+        group_by = kwds.get('group_by', '')
+        sort_by = kwds.get('sort_by', 'start_date')
+        colormap = kwds.get('colormap', 'tab10')
+        grid = kwds.get('grid', True)
+        legend = kwds.get('legend', True)
+        
+        # Identify required columns
+        # Expected columns: Task, Start, End (or Duration), Progress (optional), Status (optional)
+        data = df.copy()
+        
+        # Try to identify task name column
+        task_col = None
+        for col in ['Task', 'task', 'Task_Name', 'task_name', 'Name', 'name']:
+            if col in data.columns:
+                task_col = col
+                break
+        
+        if task_col is None and len(data.columns) > 0:
+            task_col = data.columns[0]
+        
+        # Try to identify start date column
+        start_col = None
+        for col in ['Start', 'start', 'Start_Date', 'start_date', 'Begin', 'begin']:
+            if col in data.columns:
+                start_col = col
+                break
+        
+        # Try to identify end date column
+        end_col = None
+        for col in ['End', 'end', 'End_Date', 'end_date', 'Finish', 'finish']:
+            if col in data.columns:
+                end_col = col
+                break
+        
+        # Try to identify duration column
+        duration_col = None
+        for col in ['Duration', 'duration', 'Days', 'days']:
+            if col in data.columns:
+                duration_col = col
+                break
+        
+        # Try to identify progress column
+        progress_col = None
+        for col in ['Progress', 'progress', 'Complete', 'complete', 'Completion', 'completion']:
+            if col in data.columns:
+                progress_col = col
+                break
+        
+        # Try to identify status column
+        status_col = None
+        for col in ['Status', 'status', 'State', 'state']:
+            if col in data.columns:
+                status_col = col
+                break
+        
+        # Validate required columns
+        if task_col is None or start_col is None:
+            self.showWarning('Gantt chart requires at least Task and Start columns')
+            return ax
+        
+        # Convert dates
+        try:
+            data[start_col] = pd.to_datetime(data[start_col])
+        except Exception as e:
+            self.showWarning(f'Could not parse start dates: {str(e)}')
+            return ax
+        
+        # Calculate end dates if not provided
+        if end_col is None and duration_col is not None:
+            # Calculate end from start + duration
+            try:
+                data['_end_date'] = data[start_col] + pd.to_timedelta(data[duration_col], unit='D')
+                end_col = '_end_date'
+            except Exception as e:
+                self.showWarning(f'Could not calculate end dates from duration: {str(e)}')
+                return ax
+        elif end_col is not None:
+            try:
+                data[end_col] = pd.to_datetime(data[end_col])
+            except Exception as e:
+                self.showWarning(f'Could not parse end dates: {str(e)}')
+                return ax
+        else:
+            # Default to 1 day duration
+            data['_end_date'] = data[start_col] + timedelta(days=1)
+            end_col = '_end_date'
+        
+        # Calculate duration in days
+        data['_duration'] = (data[end_col] - data[start_col]).dt.days
+        
+        # Handle progress
+        if progress_col and show_progress:
+            try:
+                data['_progress'] = pd.to_numeric(data[progress_col], errors='coerce').fillna(0)
+                # Ensure progress is between 0 and 100
+                data['_progress'] = data['_progress'].clip(0, 100) / 100.0
+            except:
+                data['_progress'] = 0
+        else:
+            data['_progress'] = 0
+        
+        # Sort data
+        if sort_by and sort_by != 'none':
+            if sort_by == 'start_date':
+                data = data.sort_values(start_col)
+            elif sort_by == 'end_date':
+                data = data.sort_values(end_col)
+            elif sort_by == 'task_name':
+                data = data.sort_values(task_col)
+            elif sort_by == 'duration':
+                data = data.sort_values('_duration')
+        
+        # Group by if specified
+        if group_by and group_by in data.columns:
+            data = data.sort_values([group_by, start_col])
+        
+        # Create color map
+        if status_col:
+            unique_statuses = data[status_col].unique()
+            cmap = plt.get_cmap(colormap)
+            colors = {status: cmap(i / len(unique_statuses)) for i, status in enumerate(unique_statuses)}
+        else:
+            colors = None
+        
+        # Plot bars
+        y_pos = np.arange(len(data))
+        
+        for idx, (i, row) in enumerate(data.iterrows()):
+            start = row[start_col]
+            end = row[end_col]
+            duration = row['_duration']
+            progress = row['_progress']
+            
+            # Determine color
+            if colors and status_col:
+                color = colors[row[status_col]]
+            else:
+                color = '#4A90E2'  # Default blue
+            
+            # Plot full bar (background)
+            ax.barh(y_pos[idx], duration, left=mdates.date2num(start), 
+                   height=bar_height, color=color, alpha=0.3, edgecolor='black', linewidth=0.5)
+            
+            # Plot progress bar if enabled
+            if show_progress and progress > 0:
+                progress_duration = duration * progress
+                ax.barh(y_pos[idx], progress_duration, left=mdates.date2num(start),
+                       height=bar_height, color=color, alpha=0.8, edgecolor='black', linewidth=0.5)
+        
+        # Add today line
+        if show_today:
+            today = datetime.now()
+            ax.axvline(mdates.date2num(today), color='red', linestyle='--', linewidth=2, 
+                      label='Today', alpha=0.7)
+        
+        # Format x-axis as dates
+        ax.xaxis.set_major_formatter(mdates.DateFormatter(date_format))
+        ax.xaxis.set_major_locator(mdates.AutoDateLocator())
+        
+        # Rotate date labels
+        plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
+        
+        # Set y-axis labels
+        ax.set_yticks(y_pos)
+        ax.set_yticklabels(data[task_col].values)
+        
+        # Invert y-axis so first task is at top
+        ax.invert_yaxis()
+        
+        # Labels and title
+        ax.set_xlabel('Date', fontsize=12)
+        ax.set_ylabel('Tasks', fontsize=12)
+        ax.set_title('Gantt Chart', fontsize=14, fontweight='bold')
+        
+        # Grid
+        if grid:
+            ax.grid(True, alpha=0.3, axis='x')
+        
+        # Legend
+        if legend and colors and status_col:
+            from matplotlib.patches import Patch
+            legend_elements = [Patch(facecolor=colors[status], label=status) 
+                             for status in unique_statuses]
+            if show_today:
+                from matplotlib.lines import Line2D
+                legend_elements.append(Line2D([0], [0], color='red', linestyle='--', label='Today'))
+            ax.legend(handles=legend_elements, loc='best')
+        elif legend and show_today:
+            ax.legend()
+        
+        # Tight layout
+        plt.tight_layout()
+        
+        return ax
+
+    def eye(self, df, ax, kwds):
+        """Create eye diagram for SerDes signal quality visualization.
+        
+        An eye diagram shows signal transitions overlaid at the bit period,
+        revealing signal integrity issues like jitter, noise, and ISI.
+        
+        Parameters:
+        -----------
+        df : pandas.DataFrame
+            Data with time and voltage samples
+        ax : matplotlib.axes.Axes
+            Axes object to plot on
+        kwds : dict
+            Plotting keywords
+            
+        Returns:
+        --------
+        ax : matplotlib.axes.Axes
+        """
+        print(f"DEBUG: eye() called with {len(df)} rows, {len(df.columns)} columns")
+        print(f"DEBUG: Columns: {list(df.columns)}")
+        
+        # Get options
+        persistence = int(kwds.get('persistence', 100))  # Convert to int for histogram
+        ui_width = kwds.get('ui_width', 1.0)
+        sample_rate = kwds.get('sample_rate', '')
+        bit_rate = kwds.get('bit_rate', '')
+        show_mask = kwds.get('show_mask', False)
+        mask_margin = kwds.get('mask_margin', 0.3)
+        color_mode = kwds.get('color_mode', 'density')
+        overlay_count = int(kwds.get('overlay_count', 100))  # Convert to int
+        colormap = kwds.get('colormap', 'hot')
+        grid = kwds.get('grid', True)
+        
+        # Identify time and voltage columns
+        data = df.copy()
+        
+        # Try to identify time column
+        time_col = None
+        for col in ['Time', 'time', 'Time_s', 'time_s', 't']:
+            if col in data.columns:
+                time_col = col
+                break
+        
+        if time_col is None and len(data.columns) > 0:
+            time_col = data.columns[0]
+        
+        # Try to identify voltage column
+        voltage_col = None
+        for col in ['Voltage', 'voltage', 'V', 'v', 'Signal', 'signal', 'Amplitude', 'amplitude']:
+            if col in data.columns:
+                voltage_col = col
+                break
+        
+        if voltage_col is None and len(data.columns) > 1:
+            voltage_col = data.columns[1]
+        
+        # Validate columns
+        if time_col is None or voltage_col is None:
+            self.showWarning('Eye diagram requires Time and Voltage columns')
+            return ax
+        
+        # Get time and voltage data
+        try:
+            time = pd.to_numeric(data[time_col], errors='coerce').dropna().values
+            voltage = pd.to_numeric(data[voltage_col], errors='coerce').dropna().values
+            
+            # Ensure same length
+            min_len = min(len(time), len(voltage))
+            time = time[:min_len]
+            voltage = voltage[:min_len]
+            
+        except Exception as e:
+            self.showWarning(f'Could not parse time/voltage data: {str(e)}')
+            return ax
+        
+        # Calculate UI (Unit Interval) period
+        if bit_rate:
+            try:
+                bit_rate_val = float(bit_rate)
+                ui_period = 1.0 / bit_rate_val  # in nanoseconds if bit_rate in Gbps
+            except:
+                self.showWarning('Invalid bit rate value')
+                return ax
+        elif sample_rate:
+            try:
+                sample_rate_val = float(sample_rate)
+                # Estimate UI from data
+                time_span = time[-1] - time[0]
+                num_samples = len(time)
+                sample_period = time_span / num_samples
+                # Assume at least 10 samples per UI
+                ui_period = sample_period * 10
+            except:
+                self.showWarning('Invalid sample rate value')
+                return ax
+        else:
+            # Auto-detect UI from data
+            time_span = time[-1] - time[0]
+            # Assume data spans multiple UIs, estimate from total span
+            estimated_uis = max(10, int(time_span / (time[1] - time[0]) / 10))
+            ui_period = time_span / estimated_uis
+        
+        # Apply UI width scaling
+        ui_period *= ui_width
+        
+        # Normalize time to UI periods
+        time_normalized = (time - time[0]) % ui_period
+        
+        # Create eye diagram based on color mode
+        if color_mode == 'density':
+            # 2D histogram for density plot
+            try:
+                h, xedges, yedges = np.histogram2d(time_normalized, voltage, bins=persistence)
+                h = h.T  # Transpose for correct orientation
+                
+                # Plot as image
+                extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]]
+                im = ax.imshow(h, extent=extent, origin='lower', aspect='auto',
+                              cmap=colormap, interpolation='bilinear')
+                
+                # Add colorbar
+                plt.colorbar(im, ax=ax, label='Sample Density')
+                
+            except Exception as e:
+                self.showWarning(f'Error creating density plot: {str(e)}')
+                return ax
+                
+        elif color_mode == 'overlay':
+            # Overlay multiple traces
+            # Split data into segments of one UI each
+            num_uis = int((time[-1] - time[0]) / ui_period)
+            samples_per_ui = len(time) // num_uis
+            
+            # Limit number of overlays
+            step = max(1, num_uis // overlay_count)
+            
+            for i in range(0, num_uis, step):
+                start_idx = i * samples_per_ui
+                end_idx = min((i + 1) * samples_per_ui, len(time))
+                
+                if end_idx > start_idx:
+                    t_segment = time_normalized[start_idx:end_idx]
+                    v_segment = voltage[start_idx:end_idx]
+                    ax.plot(t_segment, v_segment, color='blue', alpha=0.1, linewidth=0.5)
+        
+        else:  # single
+            # Plot all points as scatter
+            ax.scatter(time_normalized, voltage, s=1, alpha=0.5, c='blue')
+        
+        # Add eye mask if requested
+        if show_mask:
+            v_min, v_max = voltage.min(), voltage.max()
+            v_range = v_max - v_min
+            v_mid = (v_max + v_min) / 2
+            
+            # Standard eye mask (hexagonal shape)
+            mask_x = [0, ui_period * 0.2, ui_period * 0.5, ui_period * 0.8, ui_period, ui_period]
+            mask_y_top = [v_mid + v_range * mask_margin] * 6
+            mask_y_bot = [v_mid - v_range * mask_margin] * 6
+            
+            ax.fill_between(mask_x, mask_y_bot, mask_y_top, color='red', alpha=0.3, label='Mask')
+        
+        # Labels and formatting
+        ax.set_xlabel('Time (UI)', fontsize=12)
+        ax.set_ylabel('Voltage', fontsize=12)
+        ax.set_title('Eye Diagram', fontsize=14, fontweight='bold')
+        
+        # Set x-axis limits to one UI
+        ax.set_xlim(0, ui_period)
+        
+        # Grid
+        if grid:
+            ax.grid(True, alpha=0.3)
+        
+        # Add UI markers
+        ax.axvline(ui_period / 2, color='gray', linestyle='--', linewidth=1, alpha=0.5, label='UI Center')
+        
+        # Legend
+        if show_mask:
+            ax.legend(loc='upper right')
+        
+        plt.tight_layout()
+        
+        return ax
+
+    def jitter(self, df, ax, kwds):
+        """Create jitter histogram for timing analysis.
+        
+        A jitter histogram shows the distribution of timing errors,
+        separating random jitter (RJ) and deterministic jitter (DJ).
+        
+        Parameters:
+        -----------
+        df : pandas.DataFrame
+            Data with jitter measurements
+        ax : matplotlib.axes.Axes
+            Axes object to plot on
+        kwds : dict
+            Plotting keywords
+            
+        Returns:
+        --------
+        ax : matplotlib.axes.Axes
+        """
+        from scipy import stats
+        from scipy.optimize import curve_fit
+        
+        print(f"DEBUG: jitter() called with {len(df)} rows, {len(df.columns)} columns")
+        print(f"DEBUG: Columns: {list(df.columns)}")
+        
+        # Get options
+        bins = int(kwds.get('bins', 100))  # Convert to int for histogram
+        show_stats = kwds.get('show_stats', True)
+        show_gaussian = kwds.get('show_gaussian', True)
+        show_dual_dirac = kwds.get('show_dual_dirac', False)
+        tj_separation = kwds.get('tj_separation', '')
+        show_components = kwds.get('show_components', False)
+        colormap = kwds.get('colormap', 'viridis')
+        grid = kwds.get('grid', True)
+        legend = kwds.get('legend', True)
+        
+        # Identify jitter column
+        data = df.copy()
+        
+        # Try to identify jitter column
+        jitter_col = None
+        for col in ['Jitter', 'jitter', 'TJ', 'tj', 'Timing_Error', 'timing_error', 'Error', 'error']:
+            if col in data.columns:
+                jitter_col = col
+                break
+        
+        if jitter_col is None and len(data.columns) > 0:
+            jitter_col = data.columns[0]
+        
+        # Get jitter data
+        try:
+            jitter_data = pd.to_numeric(data[jitter_col], errors='coerce').dropna().values
+        except Exception as e:
+            self.showWarning(f'Could not parse jitter data: {str(e)}')
+            return ax
+        
+        if len(jitter_data) == 0:
+            self.showWarning('No valid jitter data found')
+            return ax
+        
+        # Create histogram
+        counts, bin_edges, patches = ax.hist(jitter_data, bins=bins, density=True, 
+                                             alpha=0.7, color='steelblue', edgecolor='black', 
+                                             linewidth=0.5, label='Jitter Data')
+        
+        # Calculate statistics
+        mean_jitter = np.mean(jitter_data)
+        std_jitter = np.std(jitter_data)
+        rms_jitter = np.sqrt(np.mean(jitter_data**2))
+        
+        # Fit Gaussian if requested
+        if show_gaussian:
+            # Gaussian function
+            def gaussian(x, amp, mean, std):
+                return amp * np.exp(-((x - mean)**2) / (2 * std**2))
+            
+            # Fit
+            bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+            try:
+                popt, _ = curve_fit(gaussian, bin_centers, counts, 
+                                   p0=[counts.max(), mean_jitter, std_jitter])
+                
+                # Plot fitted Gaussian
+                x_fit = np.linspace(jitter_data.min(), jitter_data.max(), 200)
+                y_fit = gaussian(x_fit, *popt)
+                ax.plot(x_fit, y_fit, 'r-', linewidth=2, label=f'Gaussian Fit (σ={popt[2]:.3f})')
+                
+            except Exception as e:
+                print(f"Gaussian fit failed: {e}")
+        
+        # Dual-Dirac model for DJ separation
+        if show_dual_dirac and tj_separation:
+            try:
+                tj_sep = float(tj_separation)
+                
+                # Dual-Dirac function: two Gaussians separated by DJ
+                def dual_dirac(x, amp1, amp2, mean, rj_std, dj):
+                    g1 = amp1 * np.exp(-((x - (mean - dj/2))**2) / (2 * rj_std**2))
+                    g2 = amp2 * np.exp(-((x - (mean + dj/2))**2) / (2 * rj_std**2))
+                    return g1 + g2
+                
+                # Fit
+                bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+                popt, _ = curve_fit(dual_dirac, bin_centers, counts,
+                                   p0=[counts.max()/2, counts.max()/2, mean_jitter, std_jitter/2, tj_sep])
+                
+                # Plot fitted dual-Dirac
+                x_fit = np.linspace(jitter_data.min(), jitter_data.max(), 200)
+                y_fit = dual_dirac(x_fit, *popt)
+                ax.plot(x_fit, y_fit, 'g--', linewidth=2, 
+                       label=f'Dual-Dirac (RJ={popt[3]:.3f}, DJ={popt[4]:.3f})')
+                
+                # Show components if requested
+                if show_components:
+                    rj_component = popt[0] * np.exp(-((x_fit - popt[2])**2) / (2 * popt[3]**2))
+                    ax.plot(x_fit, rj_component, 'b:', linewidth=1.5, label='RJ Component', alpha=0.7)
+                    
+            except Exception as e:
+                print(f"Dual-Dirac fit failed: {e}")
+        
+        # Add statistics text box
+        if show_stats:
+            stats_text = f'Mean: {mean_jitter:.3f}\n'
+            stats_text += f'Std Dev: {std_jitter:.3f}\n'
+            stats_text += f'RMS: {rms_jitter:.3f}\n'
+            stats_text += f'Peak-Peak: {jitter_data.max() - jitter_data.min():.3f}'
+            
+            # Add text box
+            props = dict(boxstyle='round', facecolor='wheat', alpha=0.8)
+            ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, fontsize=10,
+                   verticalalignment='top', bbox=props)
+        
+        # Labels and formatting
+        ax.set_xlabel('Jitter (ps)', fontsize=12)
+        ax.set_ylabel('Probability Density', fontsize=12)
+        ax.set_title('Jitter Histogram', fontsize=14, fontweight='bold')
+        
+        # Grid
+        if grid:
+            ax.grid(True, alpha=0.3, axis='y')
+        
+        # Legend
+        if legend:
+            ax.legend(loc='upper right')
+        
+        plt.tight_layout()
+        
+        return ax
+
+    def density(self, df, ax, kwds):
+        """Create kernel density estimation plot.
+        
+        This method creates smooth density curves for numeric data using
+        kernel density estimation (KDE). Supports multiple columns with
+        overlaid densities.
+        
+        Parameters:
+        -----------
+        df : pandas.DataFrame
+            Data to plot. All numeric columns will be used.
+        ax : matplotlib.axes.Axes
+            Axes object to plot on
+        kwds : dict
+            Plotting keywords including:
+            - bw_method: str or float, bandwidth method ('scott', 'silverman', or numeric)
+            - fill: bool, whether to fill under the curve
+            - show_rug: bool, whether to show rug plot
+            - alpha: float, transparency (0-1)
+            - colormap: str, colormap name
+            - linewidth: float, line width
+            - grid: bool, show grid
+            - legend: bool, show legend
+            - subplots: bool, create separate subplots
+            
+        Returns:
+        --------
+        ax or list of axes
+        """
+        
+        # Get parameters
+        bw_method = kwds.get('bw_method', 'scott')
+        fill = kwds.get('fill', False)
+        show_rug = kwds.get('show_rug', False)
+        alpha = kwds.get('alpha', 0.7)
+        cmap = plt.cm.get_cmap(kwds.get('colormap', 'tab10'))
+        lw = kwds.get('linewidth', 1.5)
+        grid = kwds.get('grid', False)
+        legend = kwds.get('legend', True)
+        subplots = kwds.get('subplots', False)
+        
+        # Get numeric data only
+        data = df._get_numeric_data()
+        
+        if len(data.columns) == 0:
+            self.showWarning('No numeric data to plot')
+            return ax
+        
+        # Check if scipy is available for KDE
+        try:
+            from scipy import stats
+            use_scipy = True
+        except ImportError:
+            use_scipy = False
+            # Fall back to pandas built-in density plot
+            if not subplots:
+                for i, col in enumerate(data.columns):
+                    color = cmap(float(i) / len(data.columns))
+                    data[col].plot.density(ax=ax, color=color, linewidth=lw, 
+                                          alpha=alpha, label=col)
+                if legend:
+                    ax.legend()
+                if grid:
+                    ax.grid(True, alpha=0.3)
+                ax.set_ylabel('Density')
+                return ax
+        
+        # Create subplots if requested
+        if subplots:
+            n_cols = len(data.columns)
+            n_rows = int(np.ceil(np.sqrt(n_cols)))
+            n_cols_grid = int(np.ceil(n_cols / n_rows))
+            
+            fig = ax.get_figure()
+            fig.clear()
+            axes = []
+            
+            for i, col in enumerate(data.columns):
+                ax_sub = fig.add_subplot(n_rows, n_cols_grid, i + 1)
+                axes.append(ax_sub)
+                
+                # Get data for this column, remove NaN
+                col_data = data[col].dropna()
+                
+                if len(col_data) < 2:
+                    ax_sub.text(0.5, 0.5, 'Insufficient data', 
+                               ha='center', va='center', transform=ax_sub.transAxes)
+                    ax_sub.set_title(col)
+                    continue
+                
+                # Compute KDE
+                if use_scipy:
+                    try:
+                        kde = stats.gaussian_kde(col_data, bw_method=bw_method)
+                        x_range = np.linspace(col_data.min(), col_data.max(), 200)
+                        density_vals = kde(x_range)
+                        
+                        # Plot
+                        color = cmap(float(i) / n_cols)
+                        ax_sub.plot(x_range, density_vals, color=color, linewidth=lw, alpha=alpha)
+                        
+                        if fill:
+                            ax_sub.fill_between(x_range, density_vals, alpha=alpha*0.5, color=color)
+                        
+                        if show_rug:
+                            # Add rug plot at bottom
+                            y_min = ax_sub.get_ylim()[0]
+                            ax_sub.plot(col_data, [y_min] * len(col_data), '|', 
+                                       color=color, alpha=0.5, markersize=10)
+                        
+                    except Exception as e:
+                        ax_sub.text(0.5, 0.5, f'Error: {str(e)}', 
+                                   ha='center', va='center', transform=ax_sub.transAxes)
+                
+                ax_sub.set_title(col)
+                ax_sub.set_ylabel('Density')
+                if grid:
+                    ax_sub.grid(True, alpha=0.3)
+            
+            # Remove empty subplots
+            for i in range(len(data.columns), len(axes)):
+                fig.delaxes(axes[i])
+            
+            plt.tight_layout()
+            return axes
+        
+        else:
+            # Single plot with multiple densities
+            for i, col in enumerate(data.columns):
+                # Get data for this column, remove NaN
+                col_data = data[col].dropna()
+                
+                if len(col_data) < 2:
+                    continue
+                
+                color = cmap(float(i) / len(data.columns))
+                
+                if use_scipy:
+                    try:
+                        # Compute KDE
+                        kde = stats.gaussian_kde(col_data, bw_method=bw_method)
+                        x_range = np.linspace(col_data.min(), col_data.max(), 200)
+                        density_vals = kde(x_range)
+                        
+                        # Plot
+                        ax.plot(x_range, density_vals, color=color, linewidth=lw, 
+                               alpha=alpha, label=col)
+                        
+                        if fill:
+                            ax.fill_between(x_range, density_vals, alpha=alpha*0.3, color=color)
+                        
+                        if show_rug:
+                            # Add rug plot at bottom
+                            y_min = ax.get_ylim()[0]
+                            ax.plot(col_data, [y_min] * len(col_data), '|', 
+                                   color=color, alpha=0.3, markersize=8)
+                    
+                    except Exception as e:
+                        print(f"Error plotting density for {col}: {e}")
+                        continue
+            
+            if legend and len(data.columns) > 1:
+                ax.legend()
+            
+            ax.set_ylabel('Density')
+            ax.set_xlabel('Value')
+            
+            if grid:
+                ax.grid(True, alpha=0.3)
+            
+            return ax
+
+    def shmoo(self, df, ax, kwds):
+        """Create 2D shmoo plot for parameter sweep visualization.
+        
+        A shmoo plot visualizes the results of a 2D parameter sweep, typically
+        showing pass/fail regions or measurement values across a grid of test conditions.
+        Common in semiconductor testing, hardware validation, and system characterization.
+        
+        Parameters:
+        -----------
+        df : pandas.DataFrame
+            Data to plot. Must contain at least 3 columns for X, Y, and Z values.
+        ax : matplotlib.axes.Axes
+            Axes object to plot on
+        kwds : dict
+            Plotting keywords
+            
+        Returns:
+        --------
+        ax : matplotlib.axes.Axes
+        """
+        
+        print(f"DEBUG: shmoo() called with {len(df)} rows, {len(df.columns)} columns")
+        print(f"DEBUG: Columns: {list(df.columns)}")
+        print(f"DEBUG: kwds keys: {list(kwds.keys())}")
+        
+        # Get parameters
+        x_param = kwds.get('x_param', None)
+        y_param = kwds.get('y_param', None)
+        z_param = kwds.get('z_param', None)
+        
+        print(f"DEBUG: x_param={x_param}, y_param={y_param}, z_param={z_param}")
+        threshold_min = kwds.get('threshold_min', None)
+        threshold_max = kwds.get('threshold_max', None)
+        cmap_name = kwds.get('colormap', 'RdYlGn')
+        show_contours = kwds.get('show_contours', False)
+        contour_levels = kwds.get('contour_levels', 10)
+        interpolation = kwds.get('interpolation', 'nearest')
+        show_stats = kwds.get('show_stats', False)
+        grid = kwds.get('grid', True)
+        show_colorbar = kwds.get('colorbar', True)
+        marker_size = kwds.get('marker_size', 50)
+        show_markers = kwds.get('show_markers', False)
+        
+        # Convert threshold strings to floats if needed
+        if threshold_min is not None and threshold_min != '':
+            try:
+                threshold_min = float(threshold_min)
+            except (ValueError, TypeError):
+                threshold_min = None
+        else:
+            threshold_min = None
+            
+        if threshold_max is not None and threshold_max != '':
+            try:
+                threshold_max = float(threshold_max)
+            except (ValueError, TypeError):
+                threshold_max = None
+        else:
+            threshold_max = None
+        
+        # Get numeric data only
+        data = df._get_numeric_data()
+        
+        if len(data.columns) < 3:
+            self.showWarning('Shmoo plot requires at least 3 numeric columns (X, Y, Z)')
+            return ax
+        
+        # Auto-select columns if not specified
+        if x_param is None or x_param == '' or x_param not in data.columns:
+            x_param = data.columns[0]
+        if y_param is None or y_param == '' or y_param not in data.columns:
+            y_param = data.columns[1]
+        if z_param is None or z_param == '' or z_param not in data.columns:
+            z_param = data.columns[2]
+        
+        # Extract data
+        x_data = data[x_param].values
+        y_data = data[y_param].values
+        z_data = data[z_param].values
+        
+        # Remove NaN values
+        mask = ~(np.isnan(x_data) | np.isnan(y_data) | np.isnan(z_data))
+        x_data = x_data[mask]
+        y_data = y_data[mask]
+        z_data = z_data[mask]
+        
+        if len(x_data) == 0:
+            self.showWarning('No valid data points after removing NaN values')
+            return ax
+        
+        # Check if data is on a regular grid
+        x_unique = np.unique(x_data)
+        y_unique = np.unique(y_data)
+        
+        is_regular_grid = (len(x_data) == len(x_unique) * len(y_unique))
+        
+        if is_regular_grid:
+            # Data is on a regular grid - reshape for pcolormesh
+            try:
+                # Create meshgrid
+                X, Y = np.meshgrid(x_unique, y_unique)
+                
+                # Reshape Z data to match grid
+                Z = np.full((len(y_unique), len(x_unique)), np.nan)
+                for i, (x, y, z) in enumerate(zip(x_data, y_data, z_data)):
+                    xi = np.where(x_unique == x)[0][0]
+                    yi = np.where(y_unique == y)[0][0]
+                    Z[yi, xi] = z
+                
+                # Create the plot using pcolormesh for regular grids
+                if threshold_min is not None and threshold_max is not None:
+                    # Create pass/fail colormap
+                    from matplotlib import colors as mcolors
+                    norm = mcolors.BoundaryNorm([z_data.min(), threshold_min, threshold_max, z_data.max()], 
+                                               ncolors=256)
+                    cmap = plt.cm.get_cmap(cmap_name)
+                else:
+                    norm = None
+                    cmap = plt.cm.get_cmap(cmap_name)
+                
+                mesh = ax.pcolormesh(X, Y, Z, cmap=cmap, norm=norm, shading='auto')
+                
+                if show_colorbar:
+                    self.fig.colorbar(mesh, ax=ax, label=z_param)
+                
+                # Add contour lines if requested
+                if show_contours:
+                    try:
+                        contour_levels_int = int(contour_levels)
+                        contours = ax.contour(X, Y, Z, levels=contour_levels_int, colors='black', 
+                                             linewidths=0.5, alpha=0.5)
+                        ax.clabel(contours, inline=True, fontsize=8)
+                    except:
+                        pass
+                
+            except Exception as e:
+                self.showWarning(f'Error creating regular grid plot: {str(e)}')
+                return ax
+        
+        else:
+            # Irregular grid - use scatter plot or interpolation
+            try:
+                if interpolation != 'none':
+                    from scipy.interpolate import griddata
+                    
+                    # Create regular grid for interpolation
+                    xi = np.linspace(x_data.min(), x_data.max(), 100)
+                    yi = np.linspace(y_data.min(), y_data.max(), 100)
+                    Xi, Yi = np.meshgrid(xi, yi)
+                    
+                    # Interpolate Z values
+                    method = 'cubic' if interpolation == 'cubic' else 'linear'
+                    Zi = griddata((x_data, y_data), z_data, (Xi, Yi), method=method)
+                    
+                    if threshold_min is not None and threshold_max is not None:
+                        from matplotlib import colors as mcolors
+                        norm = mcolors.BoundaryNorm([z_data.min(), threshold_min, threshold_max, z_data.max()], 
+                                                   ncolors=256)
+                        cmap = plt.cm.get_cmap(cmap_name)
+                    else:
+                        norm = None
+                        cmap = plt.cm.get_cmap(cmap_name)
+                    
+                    mesh = ax.pcolormesh(Xi, Yi, Zi, cmap=cmap, norm=norm, shading='auto')
+                    
+                    if show_colorbar:
+                        self.fig.colorbar(mesh, ax=ax, label=z_param)
+                    
+                    if show_contours:
+                        try:
+                            contour_levels_int = int(contour_levels)
+                            contours = ax.contour(Xi, Yi, Zi, levels=contour_levels_int, colors='black', 
+                                                 linewidths=0.5, alpha=0.5)
+                            ax.clabel(contours, inline=True, fontsize=8)
+                        except:
+                            pass
+                    
+                    # Optionally show original data points
+                    if show_markers:
+                        ax.scatter(x_data, y_data, c='black', s=10, marker='o', alpha=0.5)
+                else:
+                    # Just use scatter plot
+                    if threshold_min is not None and threshold_max is not None:
+                        colors_array = np.where((z_data >= threshold_min) & (z_data <= threshold_max), 
+                                              'green', 'red')
+                        scatter = ax.scatter(x_data, y_data, c=colors_array, s=marker_size, 
+                                           edgecolors='black', linewidth=0.5)
+                    else:
+                        scatter = ax.scatter(x_data, y_data, c=z_data, cmap=cmap_name, 
+                                           s=marker_size, edgecolors='black', linewidth=0.5)
+                        if show_colorbar:
+                            self.fig.colorbar(scatter, ax=ax, label=z_param)
+                        
+            except ImportError:
+                # Scipy not available, fall back to scatter plot
+                if threshold_min is not None and threshold_max is not None:
+                    colors_array = np.where((z_data >= threshold_min) & (z_data <= threshold_max), 
+                                          'green', 'red')
+                    scatter = ax.scatter(x_data, y_data, c=colors_array, s=marker_size, 
+                                       edgecolors='black', linewidth=0.5)
+                else:
+                    scatter = ax.scatter(x_data, y_data, c=z_data, cmap=cmap_name, 
+                                       s=marker_size, edgecolors='black', linewidth=0.5)
+                    if show_colorbar:
+                        self.fig.colorbar(scatter, ax=ax, label=z_param)
+            
+            except Exception as e:
+                self.showWarning(f'Error creating irregular grid plot: {str(e)}')
+                return ax
+        
+        # Set labels
+        ax.set_xlabel(x_param, fontsize=12, fontweight='bold')
+        ax.set_ylabel(y_param, fontsize=12, fontweight='bold')
+        ax.set_title(f'Shmoo Plot: {z_param}', fontsize=14, pad=15)
+        
+        # Add grid
+        if grid:
+            ax.grid(True, alpha=0.3, linestyle='--')
+        
+        # Add statistics if requested
+        if show_stats:
+            if threshold_min is not None and threshold_max is not None:
+                pass_mask = (z_data >= threshold_min) & (z_data <= threshold_max)
+                pass_count = np.sum(pass_mask)
+                total_count = len(z_data)
+                pass_rate = 100.0 * pass_count / total_count if total_count > 0 else 0
+                
+                # Calculate margins
+                if pass_count > 0:
+                    margin_min = np.min(z_data[pass_mask] - threshold_min)
+                    margin_max = np.min(threshold_max - z_data[pass_mask])
+                else:
+                    margin_min = margin_max = 0
+                
+                stats_text = f'Pass: {pass_count}/{total_count} ({pass_rate:.1f}%)\n'
+                stats_text += f'Min Margin: {margin_min:.3f}\n'
+                stats_text += f'Max Margin: {margin_max:.3f}'
+                
+                # Add text box with statistics
+                props = dict(boxstyle='round', facecolor='wheat', alpha=0.8)
+                ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, fontsize=10,
+                       verticalalignment='top', bbox=props)
+            else:
+                stats_text = f'Points: {len(z_data)}\n'
+                stats_text += f'Min: {z_data.min():.3f}\n'
+                stats_text += f'Max: {z_data.max():.3f}\n'
+                stats_text += f'Mean: {z_data.mean():.3f}'
+                
+                props = dict(boxstyle='round', facecolor='wheat', alpha=0.8)
+                ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, fontsize=10,
+                       verticalalignment='top', bbox=props)
+        
         return ax
 
     def contourData(self, data):
@@ -1461,7 +2788,7 @@ class MPLBaseOptions(TkOptions):
         the selected prefs"""
 
     kinds = ['line', 'scatter', 'bar', 'barh', 'pie', 'histogram', 'boxplot', 'violinplot', 'dotplot',
-             'heatmap', 'area', 'hexbin', 'contour', 'imshow', 'scatter_matrix', 'density', 'radviz', 'venn']
+             'heatmap', 'area', 'hexbin', 'contour', 'imshow', 'scatter_matrix', 'density', 'radviz', 'venn', 'shmoo', 'bathtub', 'sparam', 'gantt', 'eye', 'jitter']
     legendlocs = ['best','upper right','upper left','lower left','lower right','right','center left',
                 'center right','lower center','upper center','center']
     defaultfont = 'monospace'
@@ -1483,8 +2810,22 @@ class MPLBaseOptions(TkOptions):
                 'sizes':['fontsize','ms','linewidth'],
                 'general':['kind','bins','stacked','subplots','use_index','errorbars'],
                 'axes':['grid','legend','showxlabels','showylabels','sharex','sharey','logx','logy'],
-                'colors':['colormap','bw','clrcol','cscale','colorbar']}
-        order = ['general','data','axes','sizes','formats','colors']
+                'colors':['colormap','bw','clrcol','cscale','colorbar'],
+                'density':['bw_method','fill','show_rug'],
+                'shmoo':['x_param','y_param','z_param','threshold_min','threshold_max',
+                        'show_contours','contour_levels','interpolation','show_stats',
+                        'marker_size','show_markers'],
+                'bathtub':['ber_target','show_margins','x_axis_type','show_target_line',
+                          'margin_style','dual_curve'],
+                'sparam':['log_freq','show_phase','spec_limit','limit_type',
+                         'nyquist_marker','data_rate','freq_range','db_range'],
+                'gantt':['show_progress','show_today','date_format','bar_height',
+                        'show_milestones','group_by','sort_by'],
+                'eye':['persistence','ui_width','sample_rate','bit_rate','show_mask',
+                      'mask_margin','color_mode','overlay_count'],
+                'jitter':['bins','show_stats','show_gaussian','show_dual_dirac',
+                         'tj_separation','show_components']}
+        order = ['general','data','axes','sizes','formats','colors','density','shmoo','bathtub','sparam','gantt','eye','jitter']
         self.groups = OrderedDict((key, grps[key]) for key in order)
         opts = self.opts = {'font':{'type':'combobox','default':self.defaultfont,'items':fonts},
                 'fontsize':{'type':'scale','default':12,'range':(5,40),'interval':1,'label':'font size'},
@@ -1518,6 +2859,71 @@ class MPLBaseOptions(TkOptions):
                 'by2':{'type':'combobox','items':datacols,'label':'group by 2','default':''},
                 'labelcol':{'type':'combobox','items':datacols,'label':'point labels','default':''},
                 'pointsizes':{'type':'combobox','items':datacols,'label':'point sizes','default':''},
+                'bw_method':{'type':'combobox','default':'scott',
+                            'items':['scott','silverman','0.1','0.2','0.5','1.0'],
+                            'label':'bandwidth method'},
+                'fill':{'type':'checkbutton','default':0,'label':'fill under curve'},
+                'show_rug':{'type':'checkbutton','default':0,'label':'show rug plot'},
+                'x_param':{'type':'combobox','items':datacols,'label':'X parameter','default':''},
+                'y_param':{'type':'combobox','items':datacols,'label':'Y parameter','default':''},
+                'z_param':{'type':'combobox','items':datacols,'label':'Z value','default':''},
+                'threshold_min':{'type':'entry','default':'','width':10,'label':'min threshold'},
+                'threshold_max':{'type':'entry','default':'','width':10,'label':'max threshold'},
+                'show_contours':{'type':'checkbutton','default':0,'label':'show contours'},
+                'contour_levels':{'type':'entry','default':10,'width':10,'label':'contour levels'},
+                'interpolation':{'type':'combobox','default':'nearest',
+                               'items':['none','nearest','bilinear','cubic'],
+                               'label':'interpolation'},
+                'show_stats':{'type':'checkbutton','default':0,'label':'show statistics'},
+                'marker_size':{'type':'scale','default':50,'range':(10,200),'interval':10,'label':'marker size'},
+                'show_markers':{'type':'checkbutton','default':0,'label':'show markers'},
+                'ber_target':{'type':'entry','default':'1e-12','width':10,'label':'BER target'},
+                'show_margins':{'type':'checkbutton','default':1,'label':'show margins'},
+                'x_axis_type':{'type':'combobox','default':'UI',
+                              'items':['UI','Time (ps)','Voltage (mV)'],
+                              'label':'X-axis type'},
+                'show_target_line':{'type':'checkbutton','default':1,'label':'show target line'},
+                'margin_style':{'type':'combobox','default':'arrows',
+                               'items':['arrows','lines','shaded'],
+                               'label':'margin style'},
+                'dual_curve':{'type':'checkbutton','default':0,'label':'dual curve (L/R)'},
+                'log_freq':{'type':'checkbutton','default':1,'label':'log frequency'},
+                'show_phase':{'type':'checkbutton','default':0,'label':'show phase'},
+                'spec_limit':{'type':'entry','default':'','width':10,'label':'spec limit (dB)'},
+                'limit_type':{'type':'combobox','default':'None',
+                             'items':['None','Horizontal','Vertical'],
+                             'label':'limit type'},
+                'nyquist_marker':{'type':'checkbutton','default':0,'label':'Nyquist marker'},
+                'data_rate':{'type':'entry','default':'','width':10,'label':'data rate (Gbps)'},
+                'freq_range':{'type':'entry','default':'','width':15,'label':'freq range (GHz)'},
+                'db_range':{'type':'entry','default':'','width':15,'label':'dB range'},
+                'show_progress':{'type':'checkbutton','default':1,'label':'show progress'},
+                'show_today':{'type':'checkbutton','default':1,'label':'show today line'},
+                'date_format':{'type':'combobox','default':'%Y-%m-%d',
+                              'items':['%Y-%m-%d','%m/%d/%Y','%d/%m/%Y','%b %d','%Y-%m'],
+                              'label':'date format'},
+                'bar_height':{'type':'scale','default':0.8,'range':(0.3,1.0),'interval':0.1,'label':'bar height'},
+                'show_milestones':{'type':'checkbutton','default':1,'label':'show milestones'},
+                'group_by':{'type':'entry','default':'','width':15,'label':'group by column'},
+                'sort_by':{'type':'combobox','default':'start_date',
+                          'items':['start_date','end_date','task_name','duration','none'],
+                          'label':'sort by'},
+                'persistence':{'type':'scale','default':100,'range':(10,1000),'interval':10,'label':'persistence'},
+                'ui_width':{'type':'scale','default':1.0,'range':(0.5,2.0),'interval':0.1,'label':'UI width'},
+                'sample_rate':{'type':'entry','default':'','width':15,'label':'sample rate (GS/s)'},
+                'bit_rate':{'type':'entry','default':'','width':15,'label':'bit rate (Gbps)'},
+                'show_mask':{'type':'checkbutton','default':0,'label':'show mask'},
+                'mask_margin':{'type':'scale','default':0.3,'range':(0.1,0.5),'interval':0.05,'label':'mask margin'},
+                'color_mode':{'type':'combobox','default':'density',
+                             'items':['density','overlay','single'],
+                             'label':'color mode'},
+                'overlay_count':{'type':'scale','default':100,'range':(10,1000),'interval':10,'label':'overlay count'},
+                'bins':{'type':'scale','default':100,'range':(20,500),'interval':10,'label':'bins'},
+                'show_stats':{'type':'checkbutton','default':1,'label':'show statistics'},
+                'show_gaussian':{'type':'checkbutton','default':1,'label':'show Gaussian fit'},
+                'show_dual_dirac':{'type':'checkbutton','default':0,'label':'show dual-Dirac'},
+                'tj_separation':{'type':'entry','default':'','width':15,'label':'TJ separation (ps)'},
+                'show_components':{'type':'checkbutton','default':0,'label':'show RJ/DJ components'},
                 }
         self.kwds = {}
         return
@@ -1544,6 +2950,13 @@ class MPLBaseOptions(TkOptions):
         self.widgets['by2']['values'] = cols
         self.widgets['labelcol']['values'] = cols
         self.widgets['clrcol']['values'] = cols
+        # Update shmoo plot parameter dropdowns
+        if 'x_param' in self.widgets:
+            self.widgets['x_param']['values'] = cols
+        if 'y_param' in self.widgets:
+            self.widgets['y_param']['values'] = cols
+        if 'z_param' in self.widgets:
+            self.widgets['z_param']['values'] = cols
         return
 
 class MPL3DOptions(MPLBaseOptions):

@@ -21,6 +21,13 @@
 
 from __future__ import absolute_import, print_function
 import sys, datetime, pickle, gzip
+import os
+
+# Add parent directory to path for direct execution
+if __name__ == '__main__' and not __package__:
+    parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    sys.path.insert(0, parent_dir)
+
 try:
     from tkinter import *
     from tkinter.ttk import *
@@ -40,13 +47,50 @@ from collections import OrderedDict
 import matplotlib
 matplotlib.use('TkAgg')
 import pandas as pd
-import re, os, platform, time
-from .core import Table
-from .data import TableModel
-#from .prefs import Preferences
-from . import images, util, dialogs, plotting, config
-from .dialogs import MultipleValDialog
-from . import plugin
+import re, platform, time
+
+# Helper to determine if we're running directly
+_DIRECT_EXECUTION = __name__ == '__main__' and not __package__
+
+# Import pandastable modules - handle both direct execution and module import
+if _DIRECT_EXECUTION:
+    # Direct execution - use absolute imports
+    from pandastable.core import Table, logfile
+    from pandastable.data import TableModel
+    import pandastable.images as images
+    import pandastable.util as util
+    import pandastable.dialogs as dialogs
+    import pandastable.plotting as plotting
+    import pandastable.config as config
+    from pandastable.dialogs import MultipleValDialog, SimpleEditor
+    import pandastable.plugin as plugin
+    from pandastable import __version__
+    # Import git_version and BatchRenameApp conditionally as they may not exist
+    try:
+        from pandastable.core import git_version
+    except ImportError:
+        git_version = None
+    try:
+        from pandastable.plugins.rename import BatchRenameApp
+    except ImportError:
+        BatchRenameApp = None
+else:
+    # Module import - use relative imports
+    from .core import Table, logfile
+    from .data import TableModel
+    from . import images, util, dialogs, plotting, config
+    from .dialogs import MultipleValDialog, SimpleEditor
+    from . import plugin
+    from . import __version__
+    # Import git_version and BatchRenameApp conditionally
+    try:
+        from .core import git_version
+    except ImportError:
+        git_version = None
+    try:
+        from .plugins.rename import BatchRenameApp
+    except ImportError:
+        BatchRenameApp = None
 
 class DataExplore(Frame):
     """DataExplore application using pandastable widget.
@@ -112,7 +156,7 @@ class DataExplore(Frame):
 
     def start_logging(self):
         import logging
-        from .core import logfile
+        # logfile already imported at module level
         logging.basicConfig(filename=logfile,format='%(asctime)s %(message)s')
 
     def setStyles(self):
@@ -817,7 +861,7 @@ class DataExplore(Frame):
     def editSheetDescription(self):
         """Add some meta data about the sheet"""
 
-        from .dialogs import SimpleEditor
+        # SimpleEditor already imported at module level
         w = Toplevel(self.main)
         w.grab_set()
         w.transient(self)
@@ -912,8 +956,11 @@ class DataExplore(Frame):
     def fileRename(self):
         """Start file renaming util"""
 
-        from .rename import BatchRenameApp
-        br = BatchRenameApp(self.master)
+        # BatchRenameApp already imported at module level
+        if BatchRenameApp is not None:
+            br = BatchRenameApp(self.master)
+        else:
+            messagebox.showwarning("Not Available", "Batch rename feature not available")
         return
 
     def copyTable(self, subtable=False):
@@ -1013,7 +1060,7 @@ class DataExplore(Frame):
         """Store the current plot so it can be re-loaded"""
 
         import pickle
-        from . import plotting
+        # plotting already imported at module level
         name = self.getCurrentSheet()
         table = self.sheets[name]
         fig = table.pf.fig
@@ -1107,10 +1154,13 @@ class DataExplore(Frame):
         style = Style()
         style.configure("BW.TLabel", font='arial 11')
         try:
-            from .core import git_version
-            VERSION = git_version()
+            # git_version and __version__ already imported at module level
+            if git_version is not None:
+                VERSION = git_version()
+            else:
+                VERSION = __version__
         except:
-            from . import __version__ as VERSION
+            VERSION = __version__
 
         pandasver = pd.__version__
         pythonver = platform.python_version()
@@ -1136,10 +1186,9 @@ class DataExplore(Frame):
     def showErrorLog(self):
         """Open log file"""
 
-        from .core import logfile
+        # logfile and SimpleEditor already imported at module level
         f=open(logfile,'r')
         s=''.join(f.readlines())
-        from .dialogs import SimpleEditor
         w = Toplevel(self)
         w.grab_set()
         w.transient(self)

@@ -109,7 +109,49 @@ def dialogFromOptions(parent, opts, groups=None, callback=None,
 
     tkvars = {}
     widgets = {}
+    
+    # Create a canvas with scrollbar for scrollable options
     dialog = Frame(parent)
+    canvas = Canvas(dialog)
+    scrollbar = Scrollbar(dialog, orient="vertical", command=canvas.yview)
+    scrollable_frame = Frame(canvas)
+    
+    scrollable_frame.bind(
+        "<Configure>",
+        lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+    )
+    
+    canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+    canvas.configure(yscrollcommand=scrollbar.set)
+    
+    # Add mouse wheel scrolling - use a safer approach
+    def _on_mousewheel(event):
+        try:
+            if canvas.winfo_exists():
+                canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        except Exception:
+            pass  # Silently ignore if canvas is destroyed
+    
+    # Bind mouse wheel only when hovering over the canvas
+    def _bind_mousewheel(event):
+        canvas.bind("<MouseWheel>", _on_mousewheel)
+    
+    def _unbind_mousewheel(event):
+        canvas.unbind("<MouseWheel>")
+    
+    # Bind enter/leave events
+    canvas.bind("<Enter>", _bind_mousewheel)
+    canvas.bind("<Leave>", _unbind_mousewheel)
+    scrollable_frame.bind("<Enter>", _bind_mousewheel)
+    scrollable_frame.bind("<Leave>", _unbind_mousewheel)
+    
+    # Pack canvas and scrollbar
+    canvas.pack(side="left", fill="both", expand=True)
+    scrollbar.pack(side="right", fill="y")
+    
+    # Use scrollable_frame instead of dialog for adding widgets
+    container = scrollable_frame
+    
     if groups == None:
         groups = {'options': opts.keys()}
     c=0
@@ -126,7 +168,7 @@ def dialogFromOptions(parent, opts, groups=None, callback=None,
             c=0; row+=1
             side=TOP
             fill=X
-        frame = LabelFrame(dialog, text=g)
+        frame = LabelFrame(container, text=g)
         #frame.grid(row=row,column=c,sticky=sticky)
         frame.pack(side=side,fill=fill,expand=False)
 
