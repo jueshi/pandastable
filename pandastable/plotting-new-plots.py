@@ -1,0 +1,3576 @@
+#!/usr/bin/env python
+"""
+    Module for pandastable plotting classes .
+
+    Created Jan 2014
+    Copyright (C) Damien Farrell
+
+    This program is free software; you can redistribute it and/or
+    modify it under the terms of the GNU General Public License
+    as published by the Free Software Foundation; either version 2
+    of the License, or (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+"""
+
+from __future__ import absolute_import, division, print_function
+try:
+    from tkinter import *
+    from tkinter.ttk import *
+except:
+    from Tkinter import *
+    from ttk import *
+import types, time
+import numpy as np
+import pandas as pd
+try:
+    from pandas import plotting
+except ImportError:
+    from pandas.tools import plotting
+import matplotlib as mpl
+#mpl.use("TkAgg")
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+from matplotlib.lines import Line2D
+import matplotlib.transforms as mtrans
+from collections import OrderedDict
+import operator
+from .dialogs import *
+from . import util, images
+import logging
+
+colormaps = sorted(m for m in plt.cm.datad if not m.endswith("_r"))
+markers = ['','o','.','^','v','>','<','s','+','x','p','d','h','*']
+linestyles = ['-','--','-.',':','steps']
+#valid kwds for each plot method
+valid_kwds = {'line': ['alpha', 'colormap', 'grid', 'legend', 'linestyle','ms',
+                  'linewidth', 'marker', 'subplots', 'rot', 'logx', 'logy',
+                  'sharex','sharey', 'kind'],
+            'scatter': ['alpha', 'grid', 'linewidth', 'marker', 'subplots', 'ms',
+                    'legend', 'colormap','sharex','sharey', 'logx', 'logy', 'use_index',
+                    'clrcol', 'cscale','colorbar','bw','labelcol','pointsizes'],
+            'pie': ['colormap','legend'],
+            'hexbin': ['alpha', 'colormap', 'grid', 'linewidth','subplots'],
+            'bootstrap': ['grid'],
+            'bar': ['alpha', 'colormap', 'grid', 'legend', 'linewidth', 'subplots',
+                    'sharex','sharey', 'logy', 'stacked', 'rot', 'kind', 'edgecolor'],
+            'barh': ['alpha', 'colormap', 'grid', 'legend', 'linewidth', 'subplots',
+                    'sharex','sharey','stacked', 'rot', 'kind', 'logx', 'edgecolor'],
+            'histogram': ['alpha', 'linewidth','grid','stacked','subplots','colormap',
+                     'sharex','sharey','rot','bins', 'logx', 'logy', 'legend', 'edgecolor'],
+            'heatmap': ['colormap','colorbar','rot', 'linewidth','linestyle',
+                        'subplots','rot','cscale','bw','alpha','sharex','sharey'],
+            'area': ['alpha','colormap','grid','linewidth','legend','stacked',
+                     'kind','rot','logx','sharex','sharey','subplots'],
+            'density': ['alpha', 'colormap', 'grid', 'legend', 'linestyle',
+                         'linewidth', 'marker', 'subplots', 'rot', 'kind',
+                         'bw_method', 'fill', 'show_rug'],
+            'boxplot': ['rot','grid','logy','colormap','alpha','linewidth','legend',
+                        'subplots','edgecolor','sharex','sharey'],
+            'violinplot': ['rot','grid','logy','colormap','alpha','linewidth','legend',
+                        'subplots','edgecolor','sharex','sharey'],
+            'dotplot': ['marker','edgecolor','linewidth','colormap','alpha','legend',
+                        'subplots','ms','bw','logy','sharex','sharey'],
+            'scatter_matrix':['alpha', 'linewidth', 'grid', 's','alpha'],
+            'contour': ['linewidth','colormap','alpha','subplots'],
+            'imshow': ['colormap','alpha'],
+            'venn': ['colormap','alpha'],
+            'radviz': ['linewidth','marker','edgecolor','s','colormap','alpha'],
+            'shmoo': ['alpha', 'colormap', 'grid', 'colorbar',
+                     'x_param', 'y_param', 'z_param', 'threshold_min', 'threshold_max',
+                     'show_contours', 'contour_levels', 'interpolation', 'show_stats',
+                     'marker_size', 'show_markers'],
+            'bathtub': ['alpha', 'colormap', 'grid', 'legend', 'linewidth',
+                       'ber_target', 'show_margins', 'x_axis_type', 'show_target_line',
+                       'margin_style', 'dual_curve'],
+            'sparam': ['alpha', 'colormap', 'grid', 'legend', 'linewidth',
+                      'log_freq', 'show_phase', 'spec_limit', 'limit_type',
+                      'nyquist_marker', 'data_rate', 'freq_range', 'db_range'],
+            'gantt': ['alpha', 'colormap', 'grid', 'legend',
+                     'show_progress', 'show_today', 'date_format', 'bar_height',
+                     'show_milestones', 'group_by', 'sort_by'],
+            'eye': ['alpha', 'colormap', 'grid', 'persistence', 'ui_width',
+                   'sample_rate', 'bit_rate', 'show_mask', 'mask_margin',
+                   'color_mode', 'overlay_count'],
+            'jitter': ['alpha', 'colormap', 'grid', 'legend', 'bins',
+                      'show_stats', 'show_gaussian', 'show_dual_dirac',
+                      'tj_separation', 'show_components']
+            }
+
+def get_defaults(name):
+    if name == 'mplopts':
+        return MPLBaseOptions().opts
+    elif name == 'mplopts3d':
+        return MPL3DOptions().opts
+    elif name == 'labelopts':
+        return AnnotationOptions().opts
+
+class PlotViewer(Frame):
+    """Provides a frame for figure canvas and MPL settings.
+
+    Args:
+        table: parent table, required
+        parent: parent tkinter frame
+        layout: 'horizontal' or 'vertical'
+    """
+
+    def __init__(self, table, parent=None, showoptions=True):
+
+        self.parent = parent
+        self.table = table
+        if table is not None:
+            self.table.pf = self #opaque ref
+        #self.mode = '2d'
+        self.showoptions = showoptions
+        self.multiviews = False
+        if self.parent != None:
+            Frame.__init__(self, parent)
+            self.main = self.master
+        else:
+            self.main = Toplevel()
+            self.master = self.main
+            self.main.title('Plot Viewer')
+            self.main.protocol("WM_DELETE_WINDOW", self.close)
+            g = '800x700+900+200'
+            self.main.geometry(g)
+        #self.toolslayout = layout
+        #if layout == 'horizontal':
+        self.orient = VERTICAL
+        #else:
+        #    self.orient = HORIZONTAL
+        self.mplopts = MPLBaseOptions(parent=self)
+        self.mplopts3d = MPL3DOptions(parent=self)
+        self.labelopts = AnnotationOptions(parent=self)
+        self.layoutopts = PlotLayoutOptions(parent=self)
+
+        self.gridaxes = {}
+        #reset style if it been set globally
+        self.style = None
+        self.setupGUI()
+        self.updateStyle()
+        self.currentdir = os.path.expanduser('~')
+        return
+
+    def setupGUI(self):
+        """Add GUI elements"""
+
+        #import tkinter as tk
+        #self.m = PanedWindow(self.main, orient=self.orient)
+        self.m = Frame(self.main)
+        self.m.pack(fill=BOTH,expand=1)
+        #frame for figure
+        self.plotfr = Frame(self.m)
+        #add it to the panedwindow
+        self.fig, self.canvas = addFigure(self.plotfr)
+        self.ax = self.fig.add_subplot(111)
+
+        #self.m.add(self.plotfr, weight=12)
+        self.plotfr.pack(side=TOP,fill=BOTH, expand=1)
+
+        #frame for controls
+        self.ctrlfr = Frame(self.main)
+        #self.m.add(self.ctrlfr, weight=4)
+        self.ctrlfr.pack(side=BOTTOM,fill=BOTH)
+
+        #button frame
+        bf = Frame(self.ctrlfr, padding=2)
+        bf.pack(side=TOP,fill=BOTH)
+
+        side = LEFT
+        #add button toolbar
+        addButton(bf, 'Plot', self.replot, images.plot(),
+                  'plot current data', side=side, compound="left", width=16)
+        addButton(bf, 'Apply Options', self.updatePlot, images.refresh(),
+                  'refresh plot with current options', side=side,
+                   width=20)
+        addButton(bf, 'Zoom Out', lambda: self.zoom(False), images.zoom_out(),
+                  'zoom out', side=side)
+        addButton(bf, 'Zoom In', self.zoom, images.zoom_in(),
+                  'zoom in', side=side)
+        addButton(bf, 'Clear', self.clear, images.plot_clear(),
+                  'clear plot', side=side)
+        addButton(bf, 'Save', self.savePlot, images.save(),
+                  'save plot', side=side)
+
+        #dicts to store global options, can be saved with projects
+        self.globalvars = {}
+        self.globalopts = OrderedDict({ 'dpi': 80, 'grid layout': False,'3D plot':False })
+        from functools import partial
+        for n in self.globalopts:
+            val = self.globalopts[n]
+            if type(val) is bool:
+                v = self.globalvars[n] = BooleanVar()
+                v.set(val)
+                b = Checkbutton(bf,text=n, variable=v, command=partial(self.setGlobalOption, n))
+            else:
+                v = self.globalvars[n] = IntVar()
+                v.set(val)
+                Label(bf, text=n).pack(side=LEFT,fill=X,padx=2)
+                b = Entry(bf,textvariable=v, width=5)
+                v.trace("w", partial(self.setGlobalOption, n))
+            b.pack(side=LEFT,padx=2)
+        addButton(bf, 'Hide', self.toggle_options, images.prefs(),
+                  'show/hide plot options', side=RIGHT)
+        self.addWidgets()
+
+        #def onpick(event):
+        #    print(event)
+        #self.fig.canvas.mpl_connect('pick_event', onpick)
+        #self.fig.canvas.mpl_connect('button_release_event', onpick)
+        from . import handlers
+        dr = handlers.DragHandler(self)
+        dr.connect()
+        return
+
+    def addWidgets(self):
+        """Add option widgets to control panel"""
+
+        self.nb = Notebook(self.ctrlfr, height=210)
+        if self.showoptions == 1:
+            self.nb.pack(side=TOP,fill=BOTH,expand=0)
+
+        #add plotter tool dialogs
+        w1 = self.mplopts.showDialog(self.nb)
+        self.nb.add(w1, text='Base Options', sticky='news')
+        #reload tkvars again from stored kwds variable
+        self.mplopts.updateFromDict()
+        self.styleopts = ExtraOptions(parent=self)
+        self.animateopts = AnimateOptions(parent=self)
+
+        w3 = self.labelopts.showDialog(self.nb)
+        self.nb.add(w3, text='Annotation', sticky='news')
+        self.labelopts.updateFromDict()
+        w4 = self.layoutopts.showDialog(self.nb)
+        self.nb.add(w4, text='Grid Layout', sticky='news')
+        w2 = self.styleopts.showDialog(self.nb)
+        self.nb.add(w2, text='Other Options', sticky='news')
+        w5 = self.mplopts3d.showDialog(self.nb)
+        self.nb.add(w5, text='3D Options', sticky='news')
+        self.mplopts3d.updateFromDict()
+        w6 = self.animateopts.showDialog(self.nb)
+        self.nb.add(w6, text='Animate', sticky='news')
+        return
+
+    def setGlobalOption(self, name='', *args):
+        """Set global value from widgets"""
+
+        try:
+            self.globalopts[name] = self.globalvars[name].get()
+            #print (self.globalopts)
+        except:
+            logging.error("Exception occurred", exc_info=True)
+        return
+
+    def updateWidgets(self):
+        """Set global widgets from values"""
+        for n in self.globalopts:
+            self.globalvars[n].set(self.globalopts[n])
+
+    def setOption(self, option, value):
+        basewidgets = self.mplopts.tkvars
+        labelwidgets = self.labelopts.tkvars
+        try:
+            basewidgets[option].set(value)
+        except:
+            labelwidgets[option].set(value)
+        finally:
+            pass
+        return
+
+    def replot(self, data=None):
+        """Re-plot using current parent table selection.
+        Args:
+        data: set current dataframe, otherwise use
+        current table selection"""
+
+        #print (self.table.getSelectedRows())
+        if data is None:
+            self.data = self.table.getSelectedDataFrame()
+            # For shmoo plots, use full dataframe if selection is too small
+            kind = self.mplopts.kwds.get('kind', 'line')
+            if kind == 'shmoo' and len(self.data.columns) < 3:
+                print("DEBUG: Shmoo plot needs 3+ columns, using full dataframe")
+                self.data = self.table.model.df
+        else:
+            self.data = data
+        self.updateStyle()
+        self.applyPlotoptions()
+        self.plotCurrent()
+        return
+
+    def applyPlotoptions(self):
+        """Apply the current plotter/options"""
+
+        self.mplopts.applyOptions()
+        self.mplopts3d.applyOptions()
+        self.labelopts.applyOptions()
+        self.styleopts.applyOptions()
+        mpl.rcParams['savefig.dpi'] = self.globalopts['dpi'] #self.dpivar.get()
+        return
+
+    def updatePlot(self):
+        """Update the current plot with new options"""
+
+        self.applyPlotoptions()
+        self.plotCurrent()
+        return
+
+    def plotCurrent(self, redraw=True):
+        """Plot the current data"""
+
+        layout = self.globalopts['grid layout']
+        gridmode = self.layoutopts.modevar.get()
+        plot3d = self.globalopts['3D plot']
+        self._initFigure()
+        if layout == 1 and gridmode == 'multiviews':
+            self.plotMultiViews()
+        elif layout == 1 and gridmode == 'splitdata':
+            self.plotSplitData()
+        elif plot3d == 1:
+            self.plot3D(redraw=redraw)
+        else:
+            self.plot2D(redraw=redraw)
+        return
+
+    def zoom(self, zoomin=True):
+        """Zoom in/out to plot by changing size of elements"""
+
+        if zoomin == False:
+            val=-1.0
+        else:
+            val=1.0
+
+        if len(self.mplopts.kwds) == 0:
+            return
+
+        self.mplopts.increment('linewidth',val/10)
+        self.mplopts.increment('ms',val)
+        self.mplopts.increment('fontsize',val)
+        self.replot()
+        return
+
+    def clear(self):
+        """Clear plot"""
+
+        self.fig.clear()
+        self.ax = None
+        self.canvas.draw()
+        self.table.plotted=None
+        self.gridaxes = {}
+        return
+
+    def _checkNumeric(self, df):
+        """Get only numeric data that can be plotted"""
+
+        #x = df.convert_objects()._get_numeric_data()
+        x = df.apply( lambda x: pd.to_numeric(x,errors='coerce',downcast='float') )
+        if x.empty==True:
+            return False
+
+    def _initFigure(self):
+        """Clear figure or add a new axis to existing layout"""
+
+        from matplotlib.gridspec import GridSpec
+        layout = self.globalopts['grid layout']
+        plot3d = self.globalopts['3D plot']
+
+        #plot layout should be tracked by plotlayoutoptions
+        gl = self.layoutopts
+
+        if plot3d == 1:
+            proj = '3d'
+        else:
+            proj = None
+        if layout == 0:
+            #default layout is just a single axis
+            self.fig.clear()
+            self.gridaxes={}
+            self.ax = self.fig.add_subplot(111, projection=proj)
+        else:
+            #get grid layout from layout opt
+            rows = gl.rows
+            cols = gl.cols
+            x = gl.selectedrows
+            y = gl.selectedcols
+            r=min(x); c=min(y)
+            rowspan = gl.rowspan
+            colspan = gl.colspan
+            top = .92
+            bottom = .1
+            #print (rows,cols,r,c)
+            #print (rowspan,colspan)
+
+            ws = cols/10-.05
+            hs = rows/10-.05
+            gs = self.gridspec = GridSpec(rows,cols,top=top,bottom=bottom,
+                                          left=0.1,right=0.9,wspace=ws,hspace=hs)
+            name = str(r+1)+','+str(c+1)
+            if name in self.gridaxes:
+                ax = self.gridaxes[name]
+                if ax in self.fig.axes:
+                    self.fig.delaxes(ax)
+            self.ax = self.fig.add_subplot(gs[r:r+rowspan,c:c+colspan], projection=proj)
+            self.gridaxes[name] = self.ax
+            #update the axes widget
+            self.layoutopts.updateAxesList()
+        return
+
+    def removeSubplot(self):
+        """Remove a specific axis from the grid layout"""
+
+        axname = self.layoutopts.axeslistvar.get()
+        ax = self.gridaxes[axname]
+        if ax in self.fig.axes:
+            self.fig.delaxes(ax)
+        del self.gridaxes[axname]
+        self.canvas.show()
+        self.layoutopts.updateAxesList()
+        self.layoutopts.axeslistvar.set('')
+        return
+
+    def setSubplotTitle(self):
+        """Set a subplot title if using grid layout"""
+
+        axname = self.layoutopts.axeslistvar.get()
+        if not axname in self.gridaxes:
+            return
+        ax = self.gridaxes[axname]
+        label = simpledialog.askstring("Subplot title",
+                                      "Title:",initialvalue='',
+                                       parent=self.parent)
+        if label:
+            ax.set_title(label)
+            self.canvas.show()
+        return
+
+    def plotMultiViews(self, plot_types=['bar','scatter']):
+        """Plot multiple views of the same data in a grid"""
+
+        #plot_types=['bar','scatter','histogram','boxplot']
+        #self._initFigure()
+        self.fig.clear()
+        gs = self.gridspec
+        gl = self.layoutopts
+        plot_types = getListBoxSelection(gl.plottypeslistbox)
+        kwds = self.mplopts.kwds
+        rows = gl.rows
+        cols = gl.cols
+        c=0; i=0
+        for r in range(0,rows):
+            for c in range(0,cols):
+                if i>=len(plot_types):
+                    break
+                self.ax = self.fig.add_subplot(gs[r:r+1,c:c+1])
+                #print (self.ax)
+                kwds['kind'] = plot_types[i]
+                kwds['legend'] = False
+                self.plot2D(redraw=False)
+                i+=1
+
+        #legend - put this as a normal option..
+        handles, labels = self.ax.get_legend_handles_labels()
+        self.fig.legend(handles, labels)
+        self.canvas.draw()
+        return
+
+    def plotSplitData(self):
+        """Splits selected data up into multiple plots in a grid"""
+
+        self.fig.clear()
+        gs = self.gridspec
+        gl = self.layoutopts
+        kwds = self.mplopts.kwds
+        kwds['legend'] = False
+        rows = gl.rows
+        cols = gl.cols
+        c=0; i=0
+        data = self.data
+        n = rows * cols
+        chunks = np.array_split(data, n)
+        proj=None
+        plot3d = self.globalopts['3D plot']
+        if plot3d == True:
+            proj='3d'
+        for r in range(0,rows):
+            for c in range(0,cols):
+                self.data = chunks[i]
+                self.ax = self.fig.add_subplot(gs[r:r+1,c:c+1], projection=proj)
+                if plot3d == True:
+                    self.plot3D()
+                else:
+                    self.plot2D(redraw=False)
+                i+=1
+        handles, labels = self.ax.get_legend_handles_labels()
+        self.fig.legend(handles, labels)
+        self.canvas.draw()
+        return
+
+    def checkColumnNames(self, cols):
+        """Check length of column names"""
+
+        from textwrap import fill
+        try:
+            cols = [fill(l, 25) for l in cols]
+        except:
+            logging.error("Exception occurred", exc_info=True)
+        return cols
+
+    def plot2D(self, redraw=True):
+        """Plot method for current data. Relies on pandas plot functionality
+           if possible. There is some temporary code here to make sure only the valid
+           plot options are passed for each plot kind."""
+
+        if not hasattr(self, 'data'):
+            return
+
+        data = self.data
+        data.columns = self.checkColumnNames(data.columns)
+        #print (data)
+        #get all options from the mpl options object
+        kwds = self.mplopts.kwds
+        lkwds = self.labelopts.kwds.copy()
+        kind = kwds['kind']
+        by = kwds['by']
+        by2 = kwds['by2']
+        errorbars = kwds['errorbars']
+        useindex = kwds['use_index']
+        bw = kwds['bw']
+        #print (kwds)
+        if self._checkNumeric(data) == False and kind != 'venn':
+            self.showWarning('no numeric data to plot')
+            return
+
+        kwds['edgecolor'] = 'black'
+        #valid kwd args for this plot type
+        kwargs = dict((k, kwds[k]) for k in valid_kwds[kind] if k in kwds)
+        #initialise the figure
+        #self._initFigure()
+        ax = self.ax
+
+        if by != '':
+            #groupby needs to be handled per group so we can create the axes
+            #for our figure and add them outside the pandas logic
+            if by not in data.columns:
+                self.showWarning('the grouping column must be in selected data')
+                return
+            if by2 != '' and by2 in data.columns:
+                by = [by,by2]
+            g = data.groupby(by)
+
+            if kwargs['subplots'] == True:
+                i=1
+                if len(g) > 30:
+                    self.showWarning('%s is too many subplots' %len(g))
+                    return
+                size = len(g)
+                nrows = int(round(np.sqrt(size),0))
+                ncols = int(np.ceil(size/nrows))
+                self.ax.set_visible(False)
+                del kwargs['subplots']
+                for n,df in g:
+                    if ncols==1 and nrows==1:
+                        ax = self.fig.add_subplot(111)
+                        self.ax.set_visible(True)
+                    else:
+                        ax = self.fig.add_subplot(nrows,ncols,i)
+                    kwargs['legend'] = False #remove axis legends
+                    d = df.drop(by,axis=1) #remove grouping columns
+                    axs = self._doplot(d, ax, kind, False,  errorbars, useindex,
+                                  bw=bw, yerr=None, kwargs=kwargs)
+                    ax.set_title(n)
+                    handles, labels = ax.get_legend_handles_labels()
+                    i+=1
+
+                if 'sharey' in kwargs and kwargs['sharey'] == True:
+                    self.autoscale()
+                if  'sharex' in kwargs and kwargs['sharex'] == True:
+                    self.autoscale('x')
+                self.fig.legend(handles, labels, loc='center right', #bbox_to_anchor=(0.9, 0),
+                                 bbox_transform=self.fig.transFigure )
+                axs = self.fig.get_axes()
+
+            else:
+                #single plot grouped only apply to some plot kinds
+                #the remainder are not supported
+                axs = self.ax
+                labels = []; handles=[]
+                cmap = plt.cm.get_cmap(kwargs['colormap'])
+                #handle as pivoted data for some line, bar
+                if kind in ['line','bar','barh']:
+                    df = pd.pivot_table(data,index=by)
+                    errs = data.groupby(by).std()
+                    self._doplot(df, axs, kind, False, errorbars, useindex=None, yerr=errs,
+                                      bw=bw, kwargs=kwargs)
+                elif kind == 'scatter':
+                    #we plot multiple groups and series in different colors
+                    #this logic could be placed in the scatter method?
+                    d = data.drop(by,1)
+                    d = d._get_numeric_data()
+                    xcol = d.columns[0]
+                    ycols = d.columns[1:]
+                    c=0
+                    legnames = []
+                    handles = []
+                    slen = len(g)*len(ycols)
+                    clrs = [cmap(float(i)/slen) for i in range(slen)]
+                    for n, df in g:
+                        for y in ycols:
+                            kwargs['color'] = clrs[c]
+                            currax, sc = self.scatter(df[[xcol,y]], ax=axs, **kwargs)
+                            if type(n) is tuple:
+                                n = ','.join(n)
+                            legnames.append(','.join([n,y]))
+                            handles.append(sc[0])
+                            c+=1
+                    if kwargs['legend'] == True:
+                        if slen>6:
+                            lc = int(np.round(slen/10))
+                        else:
+                            lc = 1
+                        axs.legend([])
+                        axs.legend(handles, legnames, ncol=lc)
+                else:
+                    self.showWarning('single grouped plots not supported for %s\n'
+                                     'try using multiple subplots' %kind)
+        else:
+            #non-grouped plot
+            try:
+                axs = self._doplot(data, ax, kind, kwds['subplots'], errorbars,
+                                 useindex, bw=bw, yerr=None, kwargs=kwargs)
+            except Exception as e:
+                self.showWarning(e)
+                logging.error("Exception occurred", exc_info=True)
+                return
+
+        #set options general for all plot types
+        #annotation optons are separate
+        lkwds.update(kwds)
+
+        #table = lkwds['table']
+        '''if table == True:
+            #from pandas.tools.plotting import table
+            from pandas.plotting import table
+            if self.table.child != None:
+                tabledata = self.table.child.model.df
+                table(axs, np.round(tabledata, 2),
+                      loc='upper left', colWidths=[0.1 for i in tabledata.columns])'''
+
+        self.setFigureOptions(axs, lkwds)
+        scf = 12/kwds['fontsize']
+        try:
+            self.fig.tight_layout()
+            self.fig.subplots_adjust(top=0.9)
+            if by != '':
+                self.fig.subplots_adjust(right=0.9)
+        except:
+            self.fig.subplots_adjust(left=0.1, right=0.9, top=0.89,
+                                     bottom=0.1, hspace=.4/scf, wspace=.2/scf)
+            print ('tight_layout failed')
+        #redraw annotations
+        self.labelopts.redraw()
+        if self.style == 'dark_background':
+            self.fig.set_facecolor('black')
+        else:
+            self.fig.set_facecolor('white')
+        if redraw == True:
+            self.canvas.draw()
+        return
+
+    def setFigureOptions(self, axs, kwds):
+        """Set axis wide options such as ylabels, title"""
+
+        if type(axs) is np.ndarray:
+            self.ax = axs.flat[0]
+        elif type(axs) is list:
+            self.ax = axs[0]
+        self.fig.suptitle(kwds['title'], fontsize=kwds['fontsize']*1.2)
+        layout = self.globalopts['grid layout']
+        if layout == 0:
+            for ax in self.fig.axes:
+                self.setAxisLabels(ax, kwds)
+        else:
+            self.setAxisLabels(self.ax, kwds)
+        return
+
+    def setAxisLabels(self, ax, kwds):
+        """Set a plots axis labels"""
+
+        if kwds['xlabel'] != '':
+            ax.set_xlabel(kwds['xlabel'])
+        if kwds['ylabel'] != '':
+            ax.set_ylabel(kwds['ylabel'])
+        ax.xaxis.set_visible(kwds['showxlabels'])
+        ax.yaxis.set_visible(kwds['showylabels'])
+        try:
+            ax.tick_params(labelrotation=kwds['rot'])
+        except:
+            logging.error("Exception occurred", exc_info=True)
+        return
+
+    def autoscale(self, axis='y'):
+        """Set all subplots to limits of largest range"""
+
+        l=None
+        u=None
+        for ax in self.fig.axes:
+            if axis=='y':
+                a, b  = ax.get_ylim()
+            else:
+                a, b  = ax.get_xlim()
+            if l == None or a<l:
+                l=a
+            if u == None or b>u:
+                u=b
+        lims = (l, u)
+        print (lims)
+        for a in self.fig.axes:
+            if axis=='y':
+                a.set_ylim(lims)
+            else:
+                a.set_xlim(lims)
+        return
+
+    def _clearArgs(self, kwargs):
+        """Clear kwargs of formatting options so that a style can be used"""
+
+        keys = ['colormap','grid']
+        for k in keys:
+            if k in kwargs:
+                kwargs[k] = None
+        return kwargs
+
+    def _doplot(self, data, ax, kind, subplots, errorbars, useindex, bw, yerr, kwargs):
+        """Core plotting method where the individual plot functions are called"""
+
+        kwargs = kwargs.copy()
+        if self.style != None:
+            keargs = self._clearArgs(kwargs)
+
+        cols = data.columns
+        if kind == 'line':
+            data = data.sort_index()
+
+        rows = int(round(np.sqrt(len(data.columns)),0))
+        if len(data.columns) == 1 and kind not in ['pie']:
+            kwargs['subplots'] = False
+        if 'colormap' in kwargs:
+            cmap = plt.cm.get_cmap(kwargs['colormap'])
+        else:
+            cmap = None
+        #change some things if we are plotting in b&w
+        styles = []
+        if bw == True and kind not in ['pie','heatmap']:
+            cmap = None
+            kwargs['color'] = 'k'
+            kwargs['colormap'] = None
+            styles = ["-","--","-.",":"]
+            if 'linestyle' in kwargs:
+                del kwargs['linestyle']
+
+        if subplots == 0:
+            layout = None
+        else:
+            layout=(rows,-1)
+
+        if errorbars == True and yerr == None:
+            yerr = data[data.columns[1::2]]
+            data = data[data.columns[0::2]]
+            yerr.columns = data.columns
+            plt.rcParams['errorbar.capsize']=4
+            #kwargs['elinewidth'] = 1
+
+        if kind == 'bar' or kind == 'barh':
+            if len(data) > 50:
+                ax.get_xaxis().set_visible(False)
+            if len(data) > 300:
+                self.showWarning('too many bars to plot')
+                return
+        if kind == 'scatter':
+            axs, sc = self.scatter(data, ax, **kwargs)
+            if kwargs['sharey'] == 1:
+                lims = self.fig.axes[0].get_ylim()
+                for a in self.fig.axes:
+                    a.set_ylim(lims)
+        elif kind == 'boxplot':
+            axs = data.boxplot(ax=ax, grid=kwargs['grid'],
+                               patch_artist=True, return_type='dict')
+            lw = kwargs['linewidth']
+            plt.setp(axs['boxes'], color='black', lw=lw)
+            plt.setp(axs['whiskers'], color='black', lw=lw)
+            plt.setp(axs['fliers'], color='black', marker='+', lw=lw)
+            clr = cmap(0.5)
+            for patch in axs['boxes']:
+                patch.set_facecolor(clr)
+            if kwargs['logy'] == 1:
+                ax.set_yscale('log')
+        elif kind == 'violinplot':
+            axs = self.violinplot(data, ax, kwargs)
+        elif kind == 'dotplot':
+            axs = self.dotplot(data, ax, kwargs)
+
+        elif kind == 'histogram':
+            #bins = int(kwargs['bins'])
+            axs = data.plot(kind='hist',layout=layout, ax=ax, **kwargs)
+        elif kind == 'heatmap':
+            if len(data) > 1000:
+                self.showWarning('too many rows to plot')
+                return
+            axs = self.heatmap(data, ax, kwargs)
+        elif kind == 'bootstrap':
+            axs = plotting.bootstrap_plot(data)
+        elif kind == 'scatter_matrix':
+            axs = pd.plotting.scatter_matrix(data, ax=ax, **kwargs)
+        elif kind == 'hexbin':
+            x = cols[0]
+            y = cols[1]
+            axs = data.plot(x,y,ax=ax,kind='hexbin',gridsize=20,**kwargs)
+        elif kind == 'contour':
+            xi,yi,zi = self.contourData(data)
+            cs = ax.contour(xi,yi,zi,15,linewidths=.5,colors='k')
+            #plt.clabel(cs,fontsize=9)
+            cs = ax.contourf(xi,yi,zi,15,cmap=cmap)
+            #ax.scatter(x,y,marker='o',c='b',s=5)
+            self.fig.colorbar(cs,ax=ax)
+            axs = ax
+        elif kind == 'imshow':
+            xi,yi,zi = self.contourData(data)
+            im = ax.imshow(zi, interpolation="nearest",
+                           cmap=cmap, alpha=kwargs['alpha'])
+            self.fig.colorbar(im,ax=ax)
+            axs = ax
+        elif kind == 'pie':
+            if useindex == False:
+                x=data.columns[0]
+                data.set_index(x,inplace=True)
+            if kwargs['legend'] == True:
+                lbls=None
+            else:
+                lbls = list(data.index)
+
+            axs = data.plot(ax=ax,kind='pie', labels=lbls, layout=layout,
+                            autopct='%1.1f%%', subplots=True, **kwargs)
+            if lbls == None:
+                axs[0].legend(labels=data.index, loc='best')
+        elif kind == 'venn':
+            axs = self.venn(data, ax, **kwargs)
+        elif kind == 'radviz':
+            if kwargs['marker'] == '':
+                kwargs['marker'] = 'o'
+            col = data.columns[-1]
+            axs = pd.plotting.radviz(data, col, ax=ax, **kwargs)
+        elif kind == 'density':
+            print("DEBUG: Calling density plot")
+            axs = self.density(data, ax, kwargs)
+        elif kind == 'shmoo':
+            print("DEBUG: Calling shmoo plot")
+            axs = self.shmoo(data, ax, kwargs)
+        elif kind == 'bathtub':
+            print("DEBUG: Calling bathtub plot")
+            axs = self.bathtub(data, ax, kwargs)
+        elif kind == 'sparam':
+            print("DEBUG: Calling S-parameter plot")
+            axs = self.sparam(data, ax, kwargs)
+        elif kind == 'gantt':
+            print("DEBUG: Calling Gantt chart")
+            axs = self.gantt(data, ax, kwargs)
+        elif kind == 'eye':
+            print("DEBUG: Calling Eye diagram")
+            axs = self.eye(data, ax, kwargs)
+        elif kind == 'jitter':
+            print("DEBUG: Calling Jitter histogram")
+            axs = self.jitter(data, ax, kwargs)
+        else:
+            #line, bar and area plots
+            if useindex == False:
+                x=data.columns[0]
+                data.set_index(x,inplace=True)
+            if len(data.columns) == 0:
+                msg = "Not enough data.\nIf 'use index' is off select at least 2 columns"
+                self.showWarning(msg)
+                return
+            #adjust colormap to avoid white lines
+            if cmap != None:
+                cmap = util.adjustColorMap(cmap, 0.15,1.0)
+                del kwargs['colormap']
+            if kind == 'barh':
+                kwargs['xerr']=yerr
+                yerr=None
+
+            axs = data.plot(ax=ax, layout=layout, yerr=yerr, style=styles, cmap=cmap,
+                             **kwargs)
+        self._setAxisRanges()
+        self._setAxisTickFormat()
+        return axs
+
+    def _setAxisRanges(self):
+        kwds = self.styleopts.kwds
+        ax = self.ax
+        try:
+            xmin=float(kwds['xmin'])
+            xmax=float(kwds['xmax'])
+            ax.set_xlim((xmin,xmax))
+        except:
+            pass
+        try:
+            ymin=float(kwds['ymin'])
+            ymax=float(kwds['ymax'])
+            ax.set_ylim((ymin,ymax))
+        except:
+            pass
+        return
+
+    def _setAxisTickFormat(self):
+        """Set axis tick format"""
+
+        import matplotlib.ticker as mticker
+        kwds = self.styleopts.kwds
+        ax = self.ax
+        data = self.data
+        cols = list(data.columns)
+        x = data[cols[0]]
+        xt = kwds['major x-ticks']
+        yt = kwds['major y-ticks']
+        xmt = kwds['minor x-ticks']
+        ymt = kwds['minor y-ticks']
+        symbol = kwds['symbol']
+        places = kwds['precision']
+        dateformat = kwds['date format']
+        if xt != 0:
+            ax.xaxis.set_major_locator(mticker.MaxNLocator(nbins=xt))
+        if yt != 0:
+            ax.yaxis.set_major_locator(mticker.MaxNLocator(nbins=yt))
+        if xmt != 0:
+            ax.xaxis.set_minor_locator(mticker.AutoMinorLocator(n=xmt))
+            ax.grid(b=True, which='minor', linestyle='--', linewidth=.5)
+        if ymt != 0:
+            ax.yaxis.set_minor_locator(mticker.AutoMinorLocator(n=ymt))
+            ax.grid(b=True, which='minor', linestyle='--', linewidth=.5)
+        formatter = kwds['formatter']
+        if formatter == 'percent':
+            ax.xaxis.set_major_formatter(mticker.PercentFormatter())
+        elif formatter == 'eng':
+            ax.xaxis.set_major_formatter(mticker.EngFormatter(unit=symbol,places=places))
+        elif formatter == 'sci notation':
+            ax.xaxis.set_major_formatter(mticker.LogFormatterSciNotation())
+        if dateformat != '':
+            print (x.dtype)
+            import matplotlib.dates as mdates
+            ax.xaxis.set_major_formatter(mdates.DateFormatter(dateformat))
+        return
+
+    def scatter(self, df, ax, alpha=0.8, marker='o', color=None, **kwds):
+        """A custom scatter plot rather than the pandas one. By default this
+        plots the first column selected versus the others"""
+
+        if len(df.columns)<2:
+            return
+        data = df
+        df = df.copy()._get_numeric_data()
+        cols = list(df.columns)
+        x = df[cols[0]]
+        s=1
+        cmap = plt.cm.get_cmap(kwds['colormap'])
+        lw = kwds['linewidth']
+        clrcol = kwds['clrcol']  #color by values in a column
+        cscale = kwds['cscale']
+        grid = kwds['grid']
+        bw = kwds['bw']
+
+        if cscale == 'log':
+            norm = mpl.colors.LogNorm()
+        else:
+            norm = None
+        if color != None:
+            c = color
+        elif clrcol != '':
+            if clrcol in df.columns:
+                if len(cols)>2:
+                    cols.remove(clrcol)
+            c = data[clrcol]
+            if c.dtype.kind not in 'bifc':
+                c = pd.factorize(c)[0]
+        else:
+            c = None
+        plots = len(cols)
+        if marker == '':
+            marker = 'o'
+        if kwds['subplots'] == True:
+            size = plots-1
+            nrows = int(round(np.sqrt(size),0))
+            ncols = int(np.ceil(size/nrows))
+            self.fig.clear()
+        if c is not None:
+            colormap = kwds['colormap']
+        else:
+            colormap = None
+            c=None
+
+        #print (kwds)
+        labelcol = kwds['labelcol']
+        pointsizes = kwds['pointsizes']
+        handles = []
+        for i in range(s,plots):
+            y = df[cols[i]]
+            ec = 'black'
+            if bw == True:
+                clr = 'white'
+                colormap = None
+            else:
+                clr = cmap(float(i)/(plots))
+            if colormap != None:
+                clr=None
+            if marker in ['x','+'] and bw == False:
+                ec = clr
+
+            if kwds['subplots'] == True:
+                ax = self.fig.add_subplot(nrows,ncols,i)
+            if pointsizes != '' and pointsizes in df.columns:
+                ms = df[pointsizes]
+                s=kwds['ms']
+                getsizes = lambda x : (((x-x.min())/float(x.max()-x.min())+1)*s)**2.3
+                ms = getsizes(ms)
+                #print (ms)
+            else:
+                ms = kwds['ms'] * 12
+            sc = ax.scatter(x, y, marker=marker, alpha=alpha, linewidth=lw, c=c,
+                       s=ms, edgecolors=ec, facecolor=clr, cmap=colormap,
+                       norm=norm, label=cols[i], picker=True)
+
+            #create proxy artist for markers so we can return these handles if needed
+            mkr = Line2D([0], [0], marker=marker, alpha=alpha, ms=10, markerfacecolor=c,
+                        markeredgewidth=lw, markeredgecolor=ec, linewidth=0)
+            handles.append(mkr)
+            ax.set_xlabel(cols[0])
+            if kwds['logx'] == 1:
+                ax.set_xscale('log')
+            if kwds['logy'] == 1:
+                ax.set_yscale('log')
+                ax.set_ylim((x.min()+.1,x.max()))
+            if grid == 1:
+                ax.grid(True)
+            if kwds['subplots'] == True:
+                ax.set_title(cols[i])
+            if colormap is not None and kwds['colorbar'] == True:
+                self.fig.colorbar(sc, ax=ax)
+
+            if labelcol != '':
+                if not labelcol in data.columns:
+                    self.showWarning('label column %s not in selected data' %labelcol)
+                elif len(data)<1500:
+                    for i, r in data.iterrows():
+                        txt = r[labelcol]
+                        if pd.isnull(txt) is True:
+                            continue
+                        ax.annotate(txt, (x[i],y[i]), xycoords='data',
+                                    xytext=(5, 5), textcoords='offset points',)
+
+        if kwds['legend'] == 1 and kwds['subplots'] == False:
+            ax.legend(cols[1:])
+
+        return ax, handles
+
+    def violinplot(self, df, ax, kwds):
+        """violin plot"""
+
+        data=[]
+        clrs=[]
+        cols = len(df.columns)
+        cmap = plt.cm.get_cmap(kwds['colormap'])
+        for i,d in enumerate(df):
+            clrs.append(cmap(float(i)/cols))
+            data.append(df[d].values)
+        lw = kwds['linewidth']
+        alpha = kwds['alpha']
+        parts = ax.violinplot(data, showextrema=False, showmeans=True)
+        i=0
+        for pc in parts['bodies']:
+            pc.set_facecolor(clrs[i])
+            pc.set_edgecolor('black')
+            pc.set_alpha(alpha)
+            pc.set_linewidth(lw)
+            i+=1
+        labels = df.columns
+        ax.set_xticks(np.arange(1, len(labels) + 1))
+        ax.set_xticklabels(labels)
+        return
+
+    def dotplot(self, df, ax, kwds):
+        """Dot plot"""
+
+        marker = kwds['marker']
+        if marker == '':
+            marker = 'o'
+        cmap = plt.cm.get_cmap(kwds['colormap'])
+        ms = kwds['ms']
+        lw = kwds['linewidth']
+        alpha = kwds['alpha']
+        cols = len(df.columns)
+        axs = df.boxplot(ax=ax, grid=False, return_type='dict')
+        plt.setp(axs['boxes'], color='white')
+        plt.setp(axs['whiskers'], color='white')
+        plt.setp(axs['caps'], color='black', lw=lw)
+        plt.setp(axs['medians'], color='black', lw=lw)
+        np.random.seed(42)
+        for i,d in enumerate(df):
+            clr = cmap(float(i)/cols)
+            y = df[d]
+            x = np.random.normal(i+1, 0.04, len(y))
+            ax.plot(x, y, c=clr, mec='k', ms=ms, marker=marker, alpha=alpha, mew=lw, linestyle="None")
+        if kwds['logy'] == 1:
+            ax.set_yscale('log')
+        return ax
+
+    def heatmap(self, df, ax, kwds):
+        """Plot heatmap"""
+
+        X = df._get_numeric_data()
+        clr='black'
+        lw = kwds['linewidth']
+        if lw==0:
+            clr=None
+            lw=None
+        if kwds['cscale']=='log':
+            norm=mpl.colors.LogNorm()
+        else:
+            norm=None
+        hm = ax.pcolor(X, cmap=kwds['colormap'], edgecolor=clr,
+                       linewidth=lw,alpha=kwds['alpha'],norm=norm)
+        if kwds['colorbar'] == True:
+            self.fig.colorbar(hm, ax=ax)
+        ax.set_xticks(np.arange(0.5, len(X.columns)))
+        ax.set_yticks(np.arange(0.5, len(X.index)))
+        ax.set_xticklabels(X.columns, minor=False)
+        ax.set_yticklabels(X.index, minor=False)
+        ax.set_ylim(0, len(X.index))
+        ##if kwds['rot'] != 0:
+        #    for tick in ax.get_xticklabels():
+        #        tick.set_rotation(kwds['rot'])
+        #from mpl_toolkits.axes_grid1 import make_axes_locatable
+        #divider = make_axes_locatable(ax)
+        return
+
+    def venn(self, data, ax, colormap=None, alpha=0.8):
+        """Plot venn diagram, requires matplotlb-venn"""
+
+        try:
+            from matplotlib_venn import venn2,venn3
+        except:
+            self.showWarning('requires matplotlib_venn')
+            return
+        l = len(data.columns)
+        if l<2: return
+        x = data.values[:,0]
+        y = data.values[:,1]
+        if l==2:
+            labels = list(data.columns[:2])
+            v = venn2([set(x), set(y)], set_labels=labels, ax=ax)
+        else:
+            labels = list(data.columns[:3])
+            z = data.values[:,2]
+            v = venn3([set(x), set(y), set(z)], set_labels=labels, ax=ax)
+        ax.axis('off')
+        ax.set_axis_off()
+        return ax
+
+    def bathtub(self, df, ax, kwds):
+        """Create bathtub curve plot for SerDes BER analysis.
+        
+        A bathtub curve shows Bit Error Rate (BER) vs sampling point position,
+        used to measure timing margins in high-speed serial links.
+        
+        Parameters:
+        -----------
+        df : pandas.DataFrame
+            Data with sample points and BER values
+        ax : matplotlib.axes.Axes
+            Axes object to plot on
+        kwds : dict
+            Plotting keywords
+            
+        Returns:
+        --------
+        ax : matplotlib.axes.Axes
+        """
+        from scipy import interpolate
+        
+        print(f"DEBUG: bathtub() called with {len(df)} rows, {len(df.columns)} columns")
+        print(f"DEBUG: Columns: {list(df.columns)}")
+        
+        # Get options
+        ber_target_str = kwds.get('ber_target', '1e-12')
+        show_margins = kwds.get('show_margins', True)
+        x_axis_type = kwds.get('x_axis_type', 'UI')
+        show_target_line = kwds.get('show_target_line', True)
+        margin_style = kwds.get('margin_style', 'arrows')
+        dual_curve = kwds.get('dual_curve', False)
+        grid = kwds.get('grid', True)
+        legend = kwds.get('legend', True)
+        
+        # Parse BER target
+        try:
+            ber_target = float(ber_target_str)
+        except (ValueError, TypeError):
+            ber_target = 1e-12
+        
+        # Get numeric data
+        data = df._get_numeric_data()
+        
+        if len(data.columns) < 2:
+            self.showWarning('Bathtub plot requires at least 2 columns (Sample Point, BER)')
+            return ax
+        
+        # Auto-detect columns
+        x_col = data.columns[0]  # Sample point (UI, ps, or mV)
+        
+        # Check if dual curve (3 columns: x, ber_left, ber_right)
+        if len(data.columns) >= 3 and dual_curve:
+            y_cols = [data.columns[1], data.columns[2]]
+            labels = [data.columns[1], data.columns[2]]
+        else:
+            y_cols = [data.columns[1]]
+            labels = [data.columns[1]]
+        
+        x_data = data[x_col].values
+        
+        # Plot each BER curve
+        for i, y_col in enumerate(y_cols):
+            y_data = data[y_col].values
+            
+            # Remove NaN values
+            mask = ~(np.isnan(x_data) | np.isnan(y_data))
+            x_clean = x_data[mask]
+            y_clean = y_data[mask]
+            
+            if len(x_clean) < 2:
+                continue
+            
+            # Sort by x for proper plotting
+            sort_idx = np.argsort(x_clean)
+            x_clean = x_clean[sort_idx]
+            y_clean = y_clean[sort_idx]
+            
+            # Plot BER curve
+            ax.semilogy(x_clean, y_clean, marker='o', linewidth=2, label=labels[i])
+            
+            # Calculate margin at target BER
+            if show_margins and len(x_clean) > 2:
+                try:
+                    # Interpolate in log space
+                    log_y = np.log10(y_clean)
+                    log_target = np.log10(ber_target)
+                    
+                    # Find crossings
+                    f = interpolate.interp1d(x_clean, log_y, kind='linear', fill_value='extrapolate')
+                    
+                    # Find left and right crossings
+                    x_fine = np.linspace(x_clean.min(), x_clean.max(), 1000)
+                    y_fine = f(x_fine)
+                    
+                    # Find where curve crosses target
+                    crossings = []
+                    for j in range(len(y_fine)-1):
+                        if (y_fine[j] >= log_target and y_fine[j+1] < log_target) or \
+                           (y_fine[j] <= log_target and y_fine[j+1] > log_target):
+                            # Linear interpolation to find exact crossing
+                            x_cross = x_fine[j] + (log_target - y_fine[j]) * (x_fine[j+1] - x_fine[j]) / (y_fine[j+1] - y_fine[j])
+                            crossings.append(x_cross)
+                    
+                    if len(crossings) >= 2:
+                        left_margin = crossings[0]
+                        right_margin = crossings[-1]
+                        margin = right_margin - left_margin
+                        
+                        # Draw margin annotation
+                        if margin_style == 'arrows':
+                            ax.annotate('', xy=(right_margin, ber_target), xytext=(left_margin, ber_target),
+                                      arrowprops=dict(arrowstyle='<->', color='red', lw=2))
+                            ax.text((left_margin + right_margin)/2, ber_target*2, 
+                                  f'Margin: {margin:.3f} {x_axis_type}',
+                                  ha='center', va='bottom', color='red', fontweight='bold')
+                        elif margin_style == 'lines':
+                            ax.axvline(left_margin, color='red', linestyle='--', alpha=0.7)
+                            ax.axvline(right_margin, color='red', linestyle='--', alpha=0.7)
+                        elif margin_style == 'shaded':
+                            ax.axvspan(left_margin, right_margin, alpha=0.2, color='green')
+                
+                except Exception as e:
+                    print(f"Warning: Could not calculate margin: {e}")
+        
+        # Show target BER line
+        if show_target_line:
+            ax.axhline(ber_target, color='gray', linestyle='--', linewidth=1, 
+                      label=f'Target BER: {ber_target:.0e}')
+        
+        # Labels and formatting
+        ax.set_xlabel(f'Sample Point ({x_axis_type})', fontsize=12)
+        ax.set_ylabel('Bit Error Rate (BER)', fontsize=12)
+        ax.set_title('Bathtub Curve', fontsize=14, fontweight='bold')
+        
+        if grid:
+            ax.grid(True, alpha=0.3, which='both')
+        
+        if legend:
+            ax.legend(loc='best')
+        
+        # Set y-axis limits for better visibility
+        if len(y_cols) > 0:
+            all_y = np.concatenate([data[col].dropna().values for col in y_cols])
+            if len(all_y) > 0:
+                y_min = max(all_y.min(), 1e-18)
+                y_max = min(all_y.max(), 1e-1)
+                ax.set_ylim(y_min/10, y_max*10)
+        
+        return ax
+
+    def sparam(self, df, ax, kwds):
+        """Create S-parameter plot for channel characterization.
+        
+        S-parameters show frequency response of channels, typically
+        insertion loss (S21) and return loss (S11/S22).
+        
+        Parameters:
+        -----------
+        df : pandas.DataFrame
+            Data with frequency and S-parameter values
+        ax : matplotlib.axes.Axes
+            Axes object to plot on
+        kwds : dict
+            Plotting keywords
+            
+        Returns:
+        --------
+        ax : matplotlib.axes.Axes
+        """
+        from scipy import interpolate
+        
+        print(f"DEBUG: sparam() called with {len(df)} rows, {len(df.columns)} columns")
+        print(f"DEBUG: Columns: {list(df.columns)}")
+        
+        # Get options
+        log_freq = kwds.get('log_freq', True)
+        show_phase = kwds.get('show_phase', False)
+        spec_limit_str = kwds.get('spec_limit', '')
+        limit_type = kwds.get('limit_type', 'None')
+        nyquist_marker = kwds.get('nyquist_marker', False)
+        data_rate_str = kwds.get('data_rate', '')
+        freq_range_str = kwds.get('freq_range', '')
+        db_range_str = kwds.get('db_range', '')
+        grid = kwds.get('grid', True)
+        legend = kwds.get('legend', True)
+        
+        # Parse spec limit
+        spec_limit = None
+        if spec_limit_str:
+            try:
+                spec_limit = float(spec_limit_str)
+            except (ValueError, TypeError):
+                pass
+        
+        # Parse data rate for Nyquist
+        data_rate = None
+        if data_rate_str:
+            try:
+                data_rate = float(data_rate_str)
+            except (ValueError, TypeError):
+                pass
+        
+        # Get numeric data
+        data = df._get_numeric_data()
+        
+        if len(data.columns) < 2:
+            self.showWarning('S-parameter plot requires at least 2 columns (Frequency, S-parameter)')
+            return ax
+        
+        # Auto-detect frequency column (first column)
+        freq_col = data.columns[0]
+        freq_data = data[freq_col].values
+        
+        # Auto-detect and convert frequency units
+        if freq_data.max() > 1000:  # Likely MHz or Hz
+            if freq_data.max() > 1e6:
+                freq_ghz = freq_data / 1e9  # Hz to GHz
+                print(f"DEBUG: Converted frequency from Hz to GHz")
+            else:
+                freq_ghz = freq_data / 1000  # MHz to GHz
+                print(f"DEBUG: Converted frequency from MHz to GHz")
+        else:
+            freq_ghz = freq_data  # Already in GHz
+        
+        # Get S-parameter columns (all except first)
+        sparam_cols = data.columns[1:]
+        
+        # Plot each S-parameter
+        for col in sparam_cols:
+            sparam_data = data[col].values
+            
+            # Remove NaN values
+            mask = ~(np.isnan(freq_ghz) | np.isnan(sparam_data))
+            freq_clean = freq_ghz[mask]
+            sparam_clean = sparam_data[mask]
+            
+            if len(freq_clean) < 2:
+                continue
+            
+            # Sort by frequency
+            sort_idx = np.argsort(freq_clean)
+            freq_clean = freq_clean[sort_idx]
+            sparam_clean = sparam_clean[sort_idx]
+            
+            # Plot S-parameter
+            if log_freq:
+                ax.semilogx(freq_clean, sparam_clean, linewidth=2, label=col, marker='o', markersize=3)
+            else:
+                ax.plot(freq_clean, sparam_clean, linewidth=2, label=col, marker='o', markersize=3)
+        
+        # Add spec limit line
+        if spec_limit is not None and limit_type != 'None':
+            if limit_type == 'Horizontal':
+                ax.axhline(spec_limit, color='red', linestyle='--', linewidth=2, 
+                          label=f'Spec Limit: {spec_limit} dB')
+            elif limit_type == 'Vertical' and data_rate is not None:
+                nyquist_ghz = data_rate / 2
+                ax.axvline(nyquist_ghz, color='red', linestyle='--', linewidth=2,
+                          label=f'Nyquist: {nyquist_ghz} GHz')
+        
+        # Add Nyquist marker
+        if nyquist_marker and data_rate is not None:
+            nyquist_ghz = data_rate / 2
+            ax.axvline(nyquist_ghz, color='orange', linestyle=':', linewidth=2,
+                      label=f'Nyquist: {nyquist_ghz} GHz')
+        
+        # Labels and formatting
+        ax.set_xlabel('Frequency (GHz)', fontsize=12)
+        ax.set_ylabel('Magnitude (dB)', fontsize=12)
+        ax.set_title('S-Parameter Plot', fontsize=14, fontweight='bold')
+        
+        if grid:
+            ax.grid(True, alpha=0.3, which='both')
+        
+        if legend:
+            ax.legend(loc='best')
+        
+        # Set axis ranges if specified
+        if freq_range_str:
+            try:
+                freq_min, freq_max = map(float, freq_range_str.split('-'))
+                ax.set_xlim(freq_min, freq_max)
+            except:
+                pass
+        
+        if db_range_str:
+            try:
+                db_min, db_max = map(float, db_range_str.split('-'))
+                ax.set_ylim(db_min, db_max)
+            except:
+                pass
+        
+        return ax
+
+    def gantt(self, df, ax, kwds):
+        """Create Gantt chart for project timeline visualization.
+        
+        A Gantt chart displays project tasks as horizontal bars along a timeline,
+        showing task durations, dependencies, and progress.
+        
+        Parameters:
+        -----------
+        df : pandas.DataFrame
+            Data with task information
+        ax : matplotlib.axes.Axes
+            Axes object to plot on
+        kwds : dict
+            Plotting keywords
+            
+        Returns:
+        --------
+        ax : matplotlib.axes.Axes
+        """
+        import matplotlib.dates as mdates
+        from datetime import datetime, timedelta
+        
+        print(f"DEBUG: gantt() called with {len(df)} rows, {len(df.columns)} columns")
+        print(f"DEBUG: Columns: {list(df.columns)}")
+        
+        # Get options
+        show_progress = kwds.get('show_progress', True)
+        show_today = kwds.get('show_today', True)
+        date_format = kwds.get('date_format', '%Y-%m-%d')
+        bar_height = kwds.get('bar_height', 0.8)
+        show_milestones = kwds.get('show_milestones', True)
+        group_by = kwds.get('group_by', '')
+        sort_by = kwds.get('sort_by', 'start_date')
+        colormap = kwds.get('colormap', 'tab10')
+        grid = kwds.get('grid', True)
+        legend = kwds.get('legend', True)
+        
+        # Identify required columns
+        # Expected columns: Task, Start, End (or Duration), Progress (optional), Status (optional)
+        data = df.copy()
+        
+        # Try to identify task name column
+        task_col = None
+        for col in ['Task', 'task', 'Task_Name', 'task_name', 'Name', 'name']:
+            if col in data.columns:
+                task_col = col
+                break
+        
+        if task_col is None and len(data.columns) > 0:
+            task_col = data.columns[0]
+        
+        # Try to identify start date column
+        start_col = None
+        for col in ['Start', 'start', 'Start_Date', 'start_date', 'Begin', 'begin']:
+            if col in data.columns:
+                start_col = col
+                break
+        
+        # Try to identify end date column
+        end_col = None
+        for col in ['End', 'end', 'End_Date', 'end_date', 'Finish', 'finish']:
+            if col in data.columns:
+                end_col = col
+                break
+        
+        # Try to identify duration column
+        duration_col = None
+        for col in ['Duration', 'duration', 'Days', 'days']:
+            if col in data.columns:
+                duration_col = col
+                break
+        
+        # Try to identify progress column
+        progress_col = None
+        for col in ['Progress', 'progress', 'Complete', 'complete', 'Completion', 'completion']:
+            if col in data.columns:
+                progress_col = col
+                break
+        
+        # Try to identify status column
+        status_col = None
+        for col in ['Status', 'status', 'State', 'state']:
+            if col in data.columns:
+                status_col = col
+                break
+        
+        # Validate required columns
+        if task_col is None or start_col is None:
+            self.showWarning('Gantt chart requires at least Task and Start columns')
+            return ax
+        
+        # Convert dates
+        try:
+            data[start_col] = pd.to_datetime(data[start_col])
+        except Exception as e:
+            self.showWarning(f'Could not parse start dates: {str(e)}')
+            return ax
+        
+        # Calculate end dates if not provided
+        if end_col is None and duration_col is not None:
+            # Calculate end from start + duration
+            try:
+                data['_end_date'] = data[start_col] + pd.to_timedelta(data[duration_col], unit='D')
+                end_col = '_end_date'
+            except Exception as e:
+                self.showWarning(f'Could not calculate end dates from duration: {str(e)}')
+                return ax
+        elif end_col is not None:
+            try:
+                data[end_col] = pd.to_datetime(data[end_col])
+            except Exception as e:
+                self.showWarning(f'Could not parse end dates: {str(e)}')
+                return ax
+        else:
+            # Default to 1 day duration
+            data['_end_date'] = data[start_col] + timedelta(days=1)
+            end_col = '_end_date'
+        
+        # Calculate duration in days
+        data['_duration'] = (data[end_col] - data[start_col]).dt.days
+        
+        # Handle progress
+        if progress_col and show_progress:
+            try:
+                data['_progress'] = pd.to_numeric(data[progress_col], errors='coerce').fillna(0)
+                # Ensure progress is between 0 and 100
+                data['_progress'] = data['_progress'].clip(0, 100) / 100.0
+            except:
+                data['_progress'] = 0
+        else:
+            data['_progress'] = 0
+        
+        # Sort data
+        if sort_by and sort_by != 'none':
+            if sort_by == 'start_date':
+                data = data.sort_values(start_col)
+            elif sort_by == 'end_date':
+                data = data.sort_values(end_col)
+            elif sort_by == 'task_name':
+                data = data.sort_values(task_col)
+            elif sort_by == 'duration':
+                data = data.sort_values('_duration')
+        
+        # Group by if specified
+        if group_by and group_by in data.columns:
+            data = data.sort_values([group_by, start_col])
+        
+        # Create color map
+        if status_col:
+            unique_statuses = data[status_col].unique()
+            cmap = plt.get_cmap(colormap)
+            colors = {status: cmap(i / len(unique_statuses)) for i, status in enumerate(unique_statuses)}
+        else:
+            colors = None
+        
+        # Plot bars
+        y_pos = np.arange(len(data))
+        
+        for idx, (i, row) in enumerate(data.iterrows()):
+            start = row[start_col]
+            end = row[end_col]
+            duration = row['_duration']
+            progress = row['_progress']
+            
+            # Determine color
+            if colors and status_col:
+                color = colors[row[status_col]]
+            else:
+                color = '#4A90E2'  # Default blue
+            
+            # Plot full bar (background)
+            ax.barh(y_pos[idx], duration, left=mdates.date2num(start), 
+                   height=bar_height, color=color, alpha=0.3, edgecolor='black', linewidth=0.5)
+            
+            # Plot progress bar if enabled
+            if show_progress and progress > 0:
+                progress_duration = duration * progress
+                ax.barh(y_pos[idx], progress_duration, left=mdates.date2num(start),
+                       height=bar_height, color=color, alpha=0.8, edgecolor='black', linewidth=0.5)
+        
+        # Add today line
+        if show_today:
+            today = datetime.now()
+            ax.axvline(mdates.date2num(today), color='red', linestyle='--', linewidth=2, 
+                      label='Today', alpha=0.7)
+        
+        # Format x-axis as dates
+        ax.xaxis.set_major_formatter(mdates.DateFormatter(date_format))
+        ax.xaxis.set_major_locator(mdates.AutoDateLocator())
+        
+        # Rotate date labels
+        plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
+        
+        # Set y-axis labels
+        ax.set_yticks(y_pos)
+        ax.set_yticklabels(data[task_col].values)
+        
+        # Invert y-axis so first task is at top
+        ax.invert_yaxis()
+        
+        # Labels and title
+        ax.set_xlabel('Date', fontsize=12)
+        ax.set_ylabel('Tasks', fontsize=12)
+        ax.set_title('Gantt Chart', fontsize=14, fontweight='bold')
+        
+        # Grid
+        if grid:
+            ax.grid(True, alpha=0.3, axis='x')
+        
+        # Legend
+        if legend and colors and status_col:
+            from matplotlib.patches import Patch
+            legend_elements = [Patch(facecolor=colors[status], label=status) 
+                             for status in unique_statuses]
+            if show_today:
+                from matplotlib.lines import Line2D
+                legend_elements.append(Line2D([0], [0], color='red', linestyle='--', label='Today'))
+            ax.legend(handles=legend_elements, loc='best')
+        elif legend and show_today:
+            ax.legend()
+        
+        # Tight layout
+        plt.tight_layout()
+        
+        return ax
+
+    def eye(self, df, ax, kwds):
+        """Create eye diagram for SerDes signal quality visualization.
+        
+        An eye diagram shows signal transitions overlaid at the bit period,
+        revealing signal integrity issues like jitter, noise, and ISI.
+        
+        Parameters:
+        -----------
+        df : pandas.DataFrame
+            Data with time and voltage samples
+        ax : matplotlib.axes.Axes
+            Axes object to plot on
+        kwds : dict
+            Plotting keywords
+            
+        Returns:
+        --------
+        ax : matplotlib.axes.Axes
+        """
+        print(f"DEBUG: eye() called with {len(df)} rows, {len(df.columns)} columns")
+        print(f"DEBUG: Columns: {list(df.columns)}")
+        
+        # Get options
+        persistence = int(kwds.get('persistence', 100))  # Convert to int for histogram
+        ui_width = kwds.get('ui_width', 1.0)
+        sample_rate = kwds.get('sample_rate', '')
+        bit_rate = kwds.get('bit_rate', '')
+        show_mask = kwds.get('show_mask', False)
+        mask_margin = kwds.get('mask_margin', 0.3)
+        color_mode = kwds.get('color_mode', 'density')
+        overlay_count = int(kwds.get('overlay_count', 100))  # Convert to int
+        colormap = kwds.get('colormap', 'hot')
+        grid = kwds.get('grid', True)
+        
+        # Identify time and voltage columns
+        data = df.copy()
+        
+        # Try to identify time column
+        time_col = None
+        for col in ['Time', 'time', 'Time_s', 'time_s', 't']:
+            if col in data.columns:
+                time_col = col
+                break
+        
+        if time_col is None and len(data.columns) > 0:
+            time_col = data.columns[0]
+        
+        # Try to identify voltage column
+        voltage_col = None
+        for col in ['Voltage', 'voltage', 'V', 'v', 'Signal', 'signal', 'Amplitude', 'amplitude']:
+            if col in data.columns:
+                voltage_col = col
+                break
+        
+        if voltage_col is None and len(data.columns) > 1:
+            voltage_col = data.columns[1]
+        
+        # Validate columns
+        if time_col is None or voltage_col is None:
+            self.showWarning('Eye diagram requires Time and Voltage columns')
+            return ax
+        
+        # Get time and voltage data
+        try:
+            time = pd.to_numeric(data[time_col], errors='coerce').dropna().values
+            voltage = pd.to_numeric(data[voltage_col], errors='coerce').dropna().values
+            
+            # Ensure same length
+            min_len = min(len(time), len(voltage))
+            time = time[:min_len]
+            voltage = voltage[:min_len]
+            
+        except Exception as e:
+            self.showWarning(f'Could not parse time/voltage data: {str(e)}')
+            return ax
+        
+        # Calculate UI (Unit Interval) period
+        if bit_rate:
+            try:
+                bit_rate_val = float(bit_rate)
+                ui_period = 1.0 / bit_rate_val  # in nanoseconds if bit_rate in Gbps
+            except:
+                self.showWarning('Invalid bit rate value')
+                return ax
+        elif sample_rate:
+            try:
+                sample_rate_val = float(sample_rate)
+                # Estimate UI from data
+                time_span = time[-1] - time[0]
+                num_samples = len(time)
+                sample_period = time_span / num_samples
+                # Assume at least 10 samples per UI
+                ui_period = sample_period * 10
+            except:
+                self.showWarning('Invalid sample rate value')
+                return ax
+        else:
+            # Auto-detect UI from data
+            time_span = time[-1] - time[0]
+            # Assume data spans multiple UIs, estimate from total span
+            estimated_uis = max(10, int(time_span / (time[1] - time[0]) / 10))
+            ui_period = time_span / estimated_uis
+        
+        # Apply UI width scaling
+        ui_period *= ui_width
+        
+        # Normalize time to UI periods
+        time_normalized = (time - time[0]) % ui_period
+        
+        # Create eye diagram based on color mode
+        if color_mode == 'density':
+            # 2D histogram for density plot
+            try:
+                h, xedges, yedges = np.histogram2d(time_normalized, voltage, bins=persistence)
+                h = h.T  # Transpose for correct orientation
+                
+                # Plot as image
+                extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]]
+                im = ax.imshow(h, extent=extent, origin='lower', aspect='auto',
+                              cmap=colormap, interpolation='bilinear')
+                
+                # Add colorbar
+                plt.colorbar(im, ax=ax, label='Sample Density')
+                
+            except Exception as e:
+                self.showWarning(f'Error creating density plot: {str(e)}')
+                return ax
+                
+        elif color_mode == 'overlay':
+            # Overlay multiple traces
+            # Split data into segments of one UI each
+            num_uis = int((time[-1] - time[0]) / ui_period)
+            samples_per_ui = len(time) // num_uis
+            
+            # Limit number of overlays
+            step = max(1, num_uis // overlay_count)
+            
+            for i in range(0, num_uis, step):
+                start_idx = i * samples_per_ui
+                end_idx = min((i + 1) * samples_per_ui, len(time))
+                
+                if end_idx > start_idx:
+                    t_segment = time_normalized[start_idx:end_idx]
+                    v_segment = voltage[start_idx:end_idx]
+                    ax.plot(t_segment, v_segment, color='blue', alpha=0.1, linewidth=0.5)
+        
+        else:  # single
+            # Plot all points as scatter
+            ax.scatter(time_normalized, voltage, s=1, alpha=0.5, c='blue')
+        
+        # Add eye mask if requested
+        if show_mask:
+            v_min, v_max = voltage.min(), voltage.max()
+            v_range = v_max - v_min
+            v_mid = (v_max + v_min) / 2
+            
+            # Standard eye mask (hexagonal shape)
+            mask_x = [0, ui_period * 0.2, ui_period * 0.5, ui_period * 0.8, ui_period, ui_period]
+            mask_y_top = [v_mid + v_range * mask_margin] * 6
+            mask_y_bot = [v_mid - v_range * mask_margin] * 6
+            
+            ax.fill_between(mask_x, mask_y_bot, mask_y_top, color='red', alpha=0.3, label='Mask')
+        
+        # Labels and formatting
+        ax.set_xlabel('Time (UI)', fontsize=12)
+        ax.set_ylabel('Voltage', fontsize=12)
+        ax.set_title('Eye Diagram', fontsize=14, fontweight='bold')
+        
+        # Set x-axis limits to one UI
+        ax.set_xlim(0, ui_period)
+        
+        # Grid
+        if grid:
+            ax.grid(True, alpha=0.3)
+        
+        # Add UI markers
+        ax.axvline(ui_period / 2, color='gray', linestyle='--', linewidth=1, alpha=0.5, label='UI Center')
+        
+        # Legend
+        if show_mask:
+            ax.legend(loc='upper right')
+        
+        plt.tight_layout()
+        
+        return ax
+
+    def jitter(self, df, ax, kwds):
+        """Create jitter histogram for timing analysis.
+        
+        A jitter histogram shows the distribution of timing errors,
+        separating random jitter (RJ) and deterministic jitter (DJ).
+        
+        Parameters:
+        -----------
+        df : pandas.DataFrame
+            Data with jitter measurements
+        ax : matplotlib.axes.Axes
+            Axes object to plot on
+        kwds : dict
+            Plotting keywords
+            
+        Returns:
+        --------
+        ax : matplotlib.axes.Axes
+        """
+        from scipy import stats
+        from scipy.optimize import curve_fit
+        
+        print(f"DEBUG: jitter() called with {len(df)} rows, {len(df.columns)} columns")
+        print(f"DEBUG: Columns: {list(df.columns)}")
+        
+        # Get options
+        bins = int(kwds.get('bins', 100))  # Convert to int for histogram
+        show_stats = kwds.get('show_stats', True)
+        show_gaussian = kwds.get('show_gaussian', True)
+        show_dual_dirac = kwds.get('show_dual_dirac', False)
+        tj_separation = kwds.get('tj_separation', '')
+        show_components = kwds.get('show_components', False)
+        colormap = kwds.get('colormap', 'viridis')
+        grid = kwds.get('grid', True)
+        legend = kwds.get('legend', True)
+        
+        # Identify jitter column
+        data = df.copy()
+        
+        # Try to identify jitter column
+        jitter_col = None
+        for col in ['Jitter', 'jitter', 'TJ', 'tj', 'Timing_Error', 'timing_error', 'Error', 'error']:
+            if col in data.columns:
+                jitter_col = col
+                break
+        
+        if jitter_col is None and len(data.columns) > 0:
+            jitter_col = data.columns[0]
+        
+        # Get jitter data
+        try:
+            jitter_data = pd.to_numeric(data[jitter_col], errors='coerce').dropna().values
+        except Exception as e:
+            self.showWarning(f'Could not parse jitter data: {str(e)}')
+            return ax
+        
+        if len(jitter_data) == 0:
+            self.showWarning('No valid jitter data found')
+            return ax
+        
+        # Create histogram
+        counts, bin_edges, patches = ax.hist(jitter_data, bins=bins, density=True, 
+                                             alpha=0.7, color='steelblue', edgecolor='black', 
+                                             linewidth=0.5, label='Jitter Data')
+        
+        # Calculate statistics
+        mean_jitter = np.mean(jitter_data)
+        std_jitter = np.std(jitter_data)
+        rms_jitter = np.sqrt(np.mean(jitter_data**2))
+        
+        # Fit Gaussian if requested
+        if show_gaussian:
+            # Gaussian function
+            def gaussian(x, amp, mean, std):
+                return amp * np.exp(-((x - mean)**2) / (2 * std**2))
+            
+            # Fit
+            bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+            try:
+                popt, _ = curve_fit(gaussian, bin_centers, counts, 
+                                   p0=[counts.max(), mean_jitter, std_jitter])
+                
+                # Plot fitted Gaussian
+                x_fit = np.linspace(jitter_data.min(), jitter_data.max(), 200)
+                y_fit = gaussian(x_fit, *popt)
+                ax.plot(x_fit, y_fit, 'r-', linewidth=2, label=f'Gaussian Fit (σ={popt[2]:.3f})')
+                
+            except Exception as e:
+                print(f"Gaussian fit failed: {e}")
+        
+        # Dual-Dirac model for DJ separation
+        if show_dual_dirac and tj_separation:
+            try:
+                tj_sep = float(tj_separation)
+                
+                # Dual-Dirac function: two Gaussians separated by DJ
+                def dual_dirac(x, amp1, amp2, mean, rj_std, dj):
+                    g1 = amp1 * np.exp(-((x - (mean - dj/2))**2) / (2 * rj_std**2))
+                    g2 = amp2 * np.exp(-((x - (mean + dj/2))**2) / (2 * rj_std**2))
+                    return g1 + g2
+                
+                # Fit
+                bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+                popt, _ = curve_fit(dual_dirac, bin_centers, counts,
+                                   p0=[counts.max()/2, counts.max()/2, mean_jitter, std_jitter/2, tj_sep])
+                
+                # Plot fitted dual-Dirac
+                x_fit = np.linspace(jitter_data.min(), jitter_data.max(), 200)
+                y_fit = dual_dirac(x_fit, *popt)
+                ax.plot(x_fit, y_fit, 'g--', linewidth=2, 
+                       label=f'Dual-Dirac (RJ={popt[3]:.3f}, DJ={popt[4]:.3f})')
+                
+                # Show components if requested
+                if show_components:
+                    rj_component = popt[0] * np.exp(-((x_fit - popt[2])**2) / (2 * popt[3]**2))
+                    ax.plot(x_fit, rj_component, 'b:', linewidth=1.5, label='RJ Component', alpha=0.7)
+                    
+            except Exception as e:
+                print(f"Dual-Dirac fit failed: {e}")
+        
+        # Add statistics text box
+        if show_stats:
+            stats_text = f'Mean: {mean_jitter:.3f}\n'
+            stats_text += f'Std Dev: {std_jitter:.3f}\n'
+            stats_text += f'RMS: {rms_jitter:.3f}\n'
+            stats_text += f'Peak-Peak: {jitter_data.max() - jitter_data.min():.3f}'
+            
+            # Add text box
+            props = dict(boxstyle='round', facecolor='wheat', alpha=0.8)
+            ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, fontsize=10,
+                   verticalalignment='top', bbox=props)
+        
+        # Labels and formatting
+        ax.set_xlabel('Jitter (ps)', fontsize=12)
+        ax.set_ylabel('Probability Density', fontsize=12)
+        ax.set_title('Jitter Histogram', fontsize=14, fontweight='bold')
+        
+        # Grid
+        if grid:
+            ax.grid(True, alpha=0.3, axis='y')
+        
+        # Legend
+        if legend:
+            ax.legend(loc='upper right')
+        
+        plt.tight_layout()
+        
+        return ax
+
+    def density(self, df, ax, kwds):
+        """Create kernel density estimation plot.
+        
+        This method creates smooth density curves for numeric data using
+        kernel density estimation (KDE). Supports multiple columns with
+        overlaid densities.
+        
+        Parameters:
+        -----------
+        df : pandas.DataFrame
+            Data to plot. All numeric columns will be used.
+        ax : matplotlib.axes.Axes
+            Axes object to plot on
+        kwds : dict
+            Plotting keywords including:
+            - bw_method: str or float, bandwidth method ('scott', 'silverman', or numeric)
+            - fill: bool, whether to fill under the curve
+            - show_rug: bool, whether to show rug plot
+            - alpha: float, transparency (0-1)
+            - colormap: str, colormap name
+            - linewidth: float, line width
+            - grid: bool, show grid
+            - legend: bool, show legend
+            - subplots: bool, create separate subplots
+            
+        Returns:
+        --------
+        ax or list of axes
+        """
+        
+        # Get parameters
+        bw_method = kwds.get('bw_method', 'scott')
+        fill = kwds.get('fill', False)
+        show_rug = kwds.get('show_rug', False)
+        alpha = kwds.get('alpha', 0.7)
+        cmap = plt.cm.get_cmap(kwds.get('colormap', 'tab10'))
+        lw = kwds.get('linewidth', 1.5)
+        grid = kwds.get('grid', False)
+        legend = kwds.get('legend', True)
+        subplots = kwds.get('subplots', False)
+        
+        # Get numeric data only
+        data = df._get_numeric_data()
+        
+        if len(data.columns) == 0:
+            self.showWarning('No numeric data to plot')
+            return ax
+        
+        # Check if scipy is available for KDE
+        try:
+            from scipy import stats
+            use_scipy = True
+        except ImportError:
+            use_scipy = False
+            # Fall back to pandas built-in density plot
+            if not subplots:
+                for i, col in enumerate(data.columns):
+                    color = cmap(float(i) / len(data.columns))
+                    data[col].plot.density(ax=ax, color=color, linewidth=lw, 
+                                          alpha=alpha, label=col)
+                if legend:
+                    ax.legend()
+                if grid:
+                    ax.grid(True, alpha=0.3)
+                ax.set_ylabel('Density')
+                return ax
+        
+        # Create subplots if requested
+        if subplots:
+            n_cols = len(data.columns)
+            n_rows = int(np.ceil(np.sqrt(n_cols)))
+            n_cols_grid = int(np.ceil(n_cols / n_rows))
+            
+            fig = ax.get_figure()
+            fig.clear()
+            axes = []
+            
+            for i, col in enumerate(data.columns):
+                ax_sub = fig.add_subplot(n_rows, n_cols_grid, i + 1)
+                axes.append(ax_sub)
+                
+                # Get data for this column, remove NaN
+                col_data = data[col].dropna()
+                
+                if len(col_data) < 2:
+                    ax_sub.text(0.5, 0.5, 'Insufficient data', 
+                               ha='center', va='center', transform=ax_sub.transAxes)
+                    ax_sub.set_title(col)
+                    continue
+                
+                # Compute KDE
+                if use_scipy:
+                    try:
+                        kde = stats.gaussian_kde(col_data, bw_method=bw_method)
+                        x_range = np.linspace(col_data.min(), col_data.max(), 200)
+                        density_vals = kde(x_range)
+                        
+                        # Plot
+                        color = cmap(float(i) / n_cols)
+                        ax_sub.plot(x_range, density_vals, color=color, linewidth=lw, alpha=alpha)
+                        
+                        if fill:
+                            ax_sub.fill_between(x_range, density_vals, alpha=alpha*0.5, color=color)
+                        
+                        if show_rug:
+                            # Add rug plot at bottom
+                            y_min = ax_sub.get_ylim()[0]
+                            ax_sub.plot(col_data, [y_min] * len(col_data), '|', 
+                                       color=color, alpha=0.5, markersize=10)
+                        
+                    except Exception as e:
+                        ax_sub.text(0.5, 0.5, f'Error: {str(e)}', 
+                                   ha='center', va='center', transform=ax_sub.transAxes)
+                
+                ax_sub.set_title(col)
+                ax_sub.set_ylabel('Density')
+                if grid:
+                    ax_sub.grid(True, alpha=0.3)
+            
+            # Remove empty subplots
+            for i in range(len(data.columns), len(axes)):
+                fig.delaxes(axes[i])
+            
+            plt.tight_layout()
+            return axes
+        
+        else:
+            # Single plot with multiple densities
+            for i, col in enumerate(data.columns):
+                # Get data for this column, remove NaN
+                col_data = data[col].dropna()
+                
+                if len(col_data) < 2:
+                    continue
+                
+                color = cmap(float(i) / len(data.columns))
+                
+                if use_scipy:
+                    try:
+                        # Compute KDE
+                        kde = stats.gaussian_kde(col_data, bw_method=bw_method)
+                        x_range = np.linspace(col_data.min(), col_data.max(), 200)
+                        density_vals = kde(x_range)
+                        
+                        # Plot
+                        ax.plot(x_range, density_vals, color=color, linewidth=lw, 
+                               alpha=alpha, label=col)
+                        
+                        if fill:
+                            ax.fill_between(x_range, density_vals, alpha=alpha*0.3, color=color)
+                        
+                        if show_rug:
+                            # Add rug plot at bottom
+                            y_min = ax.get_ylim()[0]
+                            ax.plot(col_data, [y_min] * len(col_data), '|', 
+                                   color=color, alpha=0.3, markersize=8)
+                    
+                    except Exception as e:
+                        print(f"Error plotting density for {col}: {e}")
+                        continue
+            
+            if legend and len(data.columns) > 1:
+                ax.legend()
+            
+            ax.set_ylabel('Density')
+            ax.set_xlabel('Value')
+            
+            if grid:
+                ax.grid(True, alpha=0.3)
+            
+            return ax
+
+    def shmoo(self, df, ax, kwds):
+        """Create 2D shmoo plot for parameter sweep visualization.
+        
+        A shmoo plot visualizes the results of a 2D parameter sweep, typically
+        showing pass/fail regions or measurement values across a grid of test conditions.
+        Common in semiconductor testing, hardware validation, and system characterization.
+        
+        Parameters:
+        -----------
+        df : pandas.DataFrame
+            Data to plot. Must contain at least 3 columns for X, Y, and Z values.
+        ax : matplotlib.axes.Axes
+            Axes object to plot on
+        kwds : dict
+            Plotting keywords
+            
+        Returns:
+        --------
+        ax : matplotlib.axes.Axes
+        """
+        
+        print(f"DEBUG: shmoo() called with {len(df)} rows, {len(df.columns)} columns")
+        print(f"DEBUG: Columns: {list(df.columns)}")
+        print(f"DEBUG: kwds keys: {list(kwds.keys())}")
+        
+        # Get parameters
+        x_param = kwds.get('x_param', None)
+        y_param = kwds.get('y_param', None)
+        z_param = kwds.get('z_param', None)
+        
+        print(f"DEBUG: x_param={x_param}, y_param={y_param}, z_param={z_param}")
+        threshold_min = kwds.get('threshold_min', None)
+        threshold_max = kwds.get('threshold_max', None)
+        cmap_name = kwds.get('colormap', 'RdYlGn')
+        show_contours = kwds.get('show_contours', False)
+        contour_levels = kwds.get('contour_levels', 10)
+        interpolation = kwds.get('interpolation', 'nearest')
+        show_stats = kwds.get('show_stats', False)
+        grid = kwds.get('grid', True)
+        show_colorbar = kwds.get('colorbar', True)
+        marker_size = kwds.get('marker_size', 50)
+        show_markers = kwds.get('show_markers', False)
+        
+        # Convert threshold strings to floats if needed
+        if threshold_min is not None and threshold_min != '':
+            try:
+                threshold_min = float(threshold_min)
+            except (ValueError, TypeError):
+                threshold_min = None
+        else:
+            threshold_min = None
+            
+        if threshold_max is not None and threshold_max != '':
+            try:
+                threshold_max = float(threshold_max)
+            except (ValueError, TypeError):
+                threshold_max = None
+        else:
+            threshold_max = None
+        
+        # Get numeric data only
+        data = df._get_numeric_data()
+        
+        if len(data.columns) < 3:
+            self.showWarning('Shmoo plot requires at least 3 numeric columns (X, Y, Z)')
+            return ax
+        
+        # Auto-select columns if not specified
+        if x_param is None or x_param == '' or x_param not in data.columns:
+            x_param = data.columns[0]
+        if y_param is None or y_param == '' or y_param not in data.columns:
+            y_param = data.columns[1]
+        if z_param is None or z_param == '' or z_param not in data.columns:
+            z_param = data.columns[2]
+        
+        # Extract data
+        x_data = data[x_param].values
+        y_data = data[y_param].values
+        z_data = data[z_param].values
+        
+        # Remove NaN values
+        mask = ~(np.isnan(x_data) | np.isnan(y_data) | np.isnan(z_data))
+        x_data = x_data[mask]
+        y_data = y_data[mask]
+        z_data = z_data[mask]
+        
+        if len(x_data) == 0:
+            self.showWarning('No valid data points after removing NaN values')
+            return ax
+        
+        # Check if data is on a regular grid
+        x_unique = np.unique(x_data)
+        y_unique = np.unique(y_data)
+        
+        is_regular_grid = (len(x_data) == len(x_unique) * len(y_unique))
+        
+        if is_regular_grid:
+            # Data is on a regular grid - reshape for pcolormesh
+            try:
+                # Create meshgrid
+                X, Y = np.meshgrid(x_unique, y_unique)
+                
+                # Reshape Z data to match grid
+                Z = np.full((len(y_unique), len(x_unique)), np.nan)
+                for i, (x, y, z) in enumerate(zip(x_data, y_data, z_data)):
+                    xi = np.where(x_unique == x)[0][0]
+                    yi = np.where(y_unique == y)[0][0]
+                    Z[yi, xi] = z
+                
+                # Create the plot using pcolormesh for regular grids
+                if threshold_min is not None and threshold_max is not None:
+                    # Create pass/fail colormap
+                    from matplotlib import colors as mcolors
+                    norm = mcolors.BoundaryNorm([z_data.min(), threshold_min, threshold_max, z_data.max()], 
+                                               ncolors=256)
+                    cmap = plt.cm.get_cmap(cmap_name)
+                else:
+                    norm = None
+                    cmap = plt.cm.get_cmap(cmap_name)
+                
+                mesh = ax.pcolormesh(X, Y, Z, cmap=cmap, norm=norm, shading='auto')
+                
+                if show_colorbar:
+                    self.fig.colorbar(mesh, ax=ax, label=z_param)
+                
+                # Add contour lines if requested
+                if show_contours:
+                    try:
+                        contour_levels_int = int(contour_levels)
+                        contours = ax.contour(X, Y, Z, levels=contour_levels_int, colors='black', 
+                                             linewidths=0.5, alpha=0.5)
+                        ax.clabel(contours, inline=True, fontsize=8)
+                    except:
+                        pass
+                
+            except Exception as e:
+                self.showWarning(f'Error creating regular grid plot: {str(e)}')
+                return ax
+        
+        else:
+            # Irregular grid - use scatter plot or interpolation
+            try:
+                if interpolation != 'none':
+                    from scipy.interpolate import griddata
+                    
+                    # Create regular grid for interpolation
+                    xi = np.linspace(x_data.min(), x_data.max(), 100)
+                    yi = np.linspace(y_data.min(), y_data.max(), 100)
+                    Xi, Yi = np.meshgrid(xi, yi)
+                    
+                    # Interpolate Z values
+                    method = 'cubic' if interpolation == 'cubic' else 'linear'
+                    Zi = griddata((x_data, y_data), z_data, (Xi, Yi), method=method)
+                    
+                    if threshold_min is not None and threshold_max is not None:
+                        from matplotlib import colors as mcolors
+                        norm = mcolors.BoundaryNorm([z_data.min(), threshold_min, threshold_max, z_data.max()], 
+                                                   ncolors=256)
+                        cmap = plt.cm.get_cmap(cmap_name)
+                    else:
+                        norm = None
+                        cmap = plt.cm.get_cmap(cmap_name)
+                    
+                    mesh = ax.pcolormesh(Xi, Yi, Zi, cmap=cmap, norm=norm, shading='auto')
+                    
+                    if show_colorbar:
+                        self.fig.colorbar(mesh, ax=ax, label=z_param)
+                    
+                    if show_contours:
+                        try:
+                            contour_levels_int = int(contour_levels)
+                            contours = ax.contour(Xi, Yi, Zi, levels=contour_levels_int, colors='black', 
+                                                 linewidths=0.5, alpha=0.5)
+                            ax.clabel(contours, inline=True, fontsize=8)
+                        except:
+                            pass
+                    
+                    # Optionally show original data points
+                    if show_markers:
+                        ax.scatter(x_data, y_data, c='black', s=10, marker='o', alpha=0.5)
+                else:
+                    # Just use scatter plot
+                    if threshold_min is not None and threshold_max is not None:
+                        colors_array = np.where((z_data >= threshold_min) & (z_data <= threshold_max), 
+                                              'green', 'red')
+                        scatter = ax.scatter(x_data, y_data, c=colors_array, s=marker_size, 
+                                           edgecolors='black', linewidth=0.5)
+                    else:
+                        scatter = ax.scatter(x_data, y_data, c=z_data, cmap=cmap_name, 
+                                           s=marker_size, edgecolors='black', linewidth=0.5)
+                        if show_colorbar:
+                            self.fig.colorbar(scatter, ax=ax, label=z_param)
+                        
+            except ImportError:
+                # Scipy not available, fall back to scatter plot
+                if threshold_min is not None and threshold_max is not None:
+                    colors_array = np.where((z_data >= threshold_min) & (z_data <= threshold_max), 
+                                          'green', 'red')
+                    scatter = ax.scatter(x_data, y_data, c=colors_array, s=marker_size, 
+                                       edgecolors='black', linewidth=0.5)
+                else:
+                    scatter = ax.scatter(x_data, y_data, c=z_data, cmap=cmap_name, 
+                                       s=marker_size, edgecolors='black', linewidth=0.5)
+                    if show_colorbar:
+                        self.fig.colorbar(scatter, ax=ax, label=z_param)
+            
+            except Exception as e:
+                self.showWarning(f'Error creating irregular grid plot: {str(e)}')
+                return ax
+        
+        # Set labels
+        ax.set_xlabel(x_param, fontsize=12, fontweight='bold')
+        ax.set_ylabel(y_param, fontsize=12, fontweight='bold')
+        ax.set_title(f'Shmoo Plot: {z_param}', fontsize=14, pad=15)
+        
+        # Add grid
+        if grid:
+            ax.grid(True, alpha=0.3, linestyle='--')
+        
+        # Add statistics if requested
+        if show_stats:
+            if threshold_min is not None and threshold_max is not None:
+                pass_mask = (z_data >= threshold_min) & (z_data <= threshold_max)
+                pass_count = np.sum(pass_mask)
+                total_count = len(z_data)
+                pass_rate = 100.0 * pass_count / total_count if total_count > 0 else 0
+                
+                # Calculate margins
+                if pass_count > 0:
+                    margin_min = np.min(z_data[pass_mask] - threshold_min)
+                    margin_max = np.min(threshold_max - z_data[pass_mask])
+                else:
+                    margin_min = margin_max = 0
+                
+                stats_text = f'Pass: {pass_count}/{total_count} ({pass_rate:.1f}%)\n'
+                stats_text += f'Min Margin: {margin_min:.3f}\n'
+                stats_text += f'Max Margin: {margin_max:.3f}'
+                
+                # Add text box with statistics
+                props = dict(boxstyle='round', facecolor='wheat', alpha=0.8)
+                ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, fontsize=10,
+                       verticalalignment='top', bbox=props)
+            else:
+                stats_text = f'Points: {len(z_data)}\n'
+                stats_text += f'Min: {z_data.min():.3f}\n'
+                stats_text += f'Max: {z_data.max():.3f}\n'
+                stats_text += f'Mean: {z_data.mean():.3f}'
+                
+                props = dict(boxstyle='round', facecolor='wheat', alpha=0.8)
+                ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, fontsize=10,
+                       verticalalignment='top', bbox=props)
+        
+        return ax
+
+    def contourData(self, data):
+        """Get data for contour plot"""
+
+        #from matplotlib.mlab import griddata
+        from scipy.interpolate import griddata
+        x = data.values[:,0]
+        y = data.values[:,1]
+        z = data.values[:,2]
+        xi = np.linspace(x.min(), x.max())
+        yi = np.linspace(y.min(), y.max())
+        zi = griddata((x, y), z, (xi[None,:], yi[:,None]), method='cubic')
+        return xi,yi,zi
+
+    def meshData(self, x,y,z):
+        """Prepare 1D data for plotting in the form (x,y)->Z"""
+
+        from scipy.interpolate import griddata
+        xi = np.linspace(x.min(), x.max())
+        yi = np.linspace(y.min(), y.max())
+        #zi = griddata(x, y, z, xi, yi, interp='linear')
+        zi = griddata((x, y), z, (xi[None,:], yi[:,None]), method='cubic')
+        X, Y = np.meshgrid(xi, yi)
+        return X,Y,zi
+
+    def getView(self):
+        ax = self.ax
+        if hasattr(ax,'azim'):
+            azm=ax.azim
+            ele=ax.elev
+            dst=ax.dist
+        else:
+            return None,None,None
+        return azm,ele,dst
+
+    def getcmap(self, name):
+        try:
+            return plt.cm.get_cmap(name)
+        except:
+            return plt.cm.get_cmap('Spectral')
+
+    def plot3D(self, redraw=True):
+        """3D plot"""
+
+        if not hasattr(self, 'data') or len(self.data.columns)<3:
+            return
+        kwds = self.mplopts.kwds.copy()
+        #use base options by joining the dicts
+        kwds.update(self.mplopts3d.kwds)
+        kwds.update(self.labelopts.kwds)
+        #print (kwds)
+        data = self.data
+        x = data.values[:,0]
+        y = data.values[:,1]
+        z = data.values[:,2]
+        azm,ele,dst = self.getView()
+
+        #self.fig.clear()
+        ax = self.ax# = Axes3D(self.fig)
+        kind = kwds['kind']
+        mode = kwds['mode']
+        rstride = kwds['rstride']
+        cstride = kwds['cstride']
+        lw = kwds['linewidth']
+        alpha = kwds['alpha']
+        cmap = kwds['colormap']
+
+        if kind == 'scatter':
+            self.scatter3D(data, ax, kwds)
+        elif kind == 'bar':
+            self.bar3D(data, ax, kwds)
+        elif kind == 'contour':
+            from scipy.interpolate import griddata
+            xi = np.linspace(x.min(), x.max())
+            yi = np.linspace(y.min(), y.max())
+            zi = griddata((x, y), z, (xi[None,:], yi[:,None]), method='cubic')
+            #zi = np.meshgrid(x, y, z, xi, yi)
+            surf = ax.contour(xi, yi, zi, rstride=rstride, cstride=cstride,
+                              cmap=kwds['colormap'], alpha=alpha,
+                              linewidth=lw, antialiased=True)
+        elif kind == 'wireframe':
+            if mode == '(x,y)->z':
+                X,Y,zi = self.meshData(x,y,z)
+            else:
+                X,Y,zi = x,y,z
+            w = ax.plot_wireframe(X, Y, zi, rstride=rstride, cstride=cstride,
+                                  linewidth=lw)
+        elif kind == 'surface':
+            X,Y,zi = self.meshData(x,y,z)
+            surf = ax.plot_surface(X, Y, zi, rstride=rstride, cstride=cstride,
+                                   cmap=cmap, alpha=alpha,
+                                   linewidth=lw)
+            cb = self.fig.colorbar(surf, shrink=0.5, aspect=5)
+            surf.set_clim(vmin=zi.min(), vmax=zi.max())
+        if kwds['points'] == True:
+            self.scatter3D(data, ax, kwds)
+
+        self.setFigureOptions(ax, kwds)
+        if azm!=None:
+            self.ax.azim = azm
+            self.ax.elev = ele
+            self.ax.dist = dst
+        #handles, labels = self.ax.get_legend_handles_labels()
+        #self.fig.legend(handles, labels)
+        self.canvas.draw()
+        return
+
+    def bar3D(self, data, ax, kwds):
+        """3D bar plot"""
+
+        i=0
+        plots=len(data.columns)
+        cmap = plt.cm.get_cmap(kwds['colormap'])
+        for c in data.columns:
+            h = data[c]
+            c = cmap(float(i)/(plots))
+            ax.bar(data.index, h, zs=i, zdir='y', color=c)
+            i+=1
+
+    def scatter3D(self, data, ax, kwds):
+        """3D scatter plot"""
+
+        def doscatter(data, ax, color=None, pointlabels=None):
+            data = data._get_numeric_data()
+            l = len(data.columns)
+            if l<3: return
+
+            X = data.values
+            x = X[:,0]
+            y = X[:,1]
+            handles=[]
+            labels=data.columns[2:]
+            for i in range(2,l):
+                z = X[:,i]
+                if color==None:
+                    c = cmap(float(i)/(l))
+                else:
+                    c = color
+                h=ax.scatter(x, y, z, edgecolor='black', c=c, linewidth=lw,
+                           alpha=alpha, marker=marker, s=ms)
+                handles.append(h)
+            if pointlabels is not None:
+                trans_offset = mtrans.offset_copy(ax.transData, fig=self.fig,
+                                  x=0.05, y=0.10, units='inches')
+                for i in zip(x,y,z,pointlabels):
+                    txt=i[3]
+                    ax.text(i[0],i[1],i[2], txt, None,
+                    transform=trans_offset)
+
+            return handles,labels
+
+        lw = kwds['linewidth']
+        alpha = kwds['alpha']
+        ms = kwds['ms']*6
+        marker = kwds['marker']
+        if marker=='':
+            marker='o'
+        by = kwds['by']
+        legend = kwds['legend']
+        cmap = self.getcmap(kwds['colormap'])
+        labelcol = kwds['labelcol']
+        handles=[]
+        pl=None
+        if by != '':
+            if by not in data.columns:
+                self.showWarning('grouping column not in selection')
+                return
+            g = data.groupby(by)
+            i=0
+            pl=None
+            for n,df in g:
+                c = cmap(float(i)/(len(g)))
+                if labelcol != '':
+                    pl = df[labelcol]
+                h,l = doscatter(df, ax, color=c, pointlabels=pl)
+                handles.append(h[0])
+                i+=1
+            self.fig.legend(handles, g.groups)
+
+        else:
+            if labelcol != '':
+                pl = data[labelcol]
+            handles,lbls=doscatter(data, ax, pointlabels=pl)
+            self.fig.legend(handles, lbls)
+        return
+
+    def updateData(self):
+        """Update data widgets"""
+
+        if self.table is None:
+            return
+        df = self.table.model.df
+        self.mplopts.update(df)
+        return
+
+    def updateStyle(self):
+        if self.style == None:
+            mpl.rcParams.update(mpl.rcParamsDefault)
+        else:
+            plt.style.use(self.style)
+        return
+
+    def savePlot(self, filename=None):
+        """Save the current plot"""
+
+        ftypes = [('png','*.png'),('jpg','*.jpg'),('tif','*.tif'),('pdf','*.pdf'),
+                    ('eps','*.eps'),('svg','*.svg')]
+        if filename == None:
+            filename = filedialog.asksaveasfilename(parent=self.master,
+                                                     initialdir = self.currentdir,
+                                                     filetypes=ftypes)
+        if filename:
+            self.currentdir = os.path.dirname(os.path.abspath(filename))
+            dpi = self.globalopts['dpi']
+            self.fig.savefig(filename, dpi=dpi)
+        return
+
+    def showWarning(self, text='plot error', ax=None):
+        """Show warning message in the plot window"""
+
+        if ax==None:
+            ax = self.fig.add_subplot(111)
+        ax.clear()
+        ax.text(.5, .5, text, transform=self.ax.transAxes,
+                       horizontalalignment='center', color='blue', fontsize=16)
+        self.canvas.draw()
+        return
+
+    def toggle_options(self):
+        """Show/hide plot options"""
+
+        if self.nb.winfo_ismapped() == 1:
+            self.nb.pack_forget()
+        else:
+            self.nb.pack(fill=BOTH,expand=1)
+        return
+
+    def close(self):
+        """Close the window"""
+
+        self.table.pf = None
+        self.animateopts.stop()
+        self.main.destroy()
+        return
+
+class TkOptions(object):
+    """Class to generate tkinter widget dialog for dict of options"""
+    def __init__(self, parent=None):
+        """Setup variables"""
+
+        self.parent = parent
+        df = self.parent.table.model.df
+        return
+
+    def applyOptions(self):
+        """Set the plot kwd arguments from the tk variables"""
+
+        kwds = {}
+        for i in self.opts:
+            if not i in self.tkvars:
+                continue
+            #print (i, self.opts[i]['type'], self.widgets[i])
+            if self.opts[i]['type'] == 'listbox':
+                items = self.widgets[i].curselection()
+                kwds[i] = [self.widgets[i].get(j) for j in items]
+            elif self.opts[i]['type'] == 'scrolledtext':
+                kwds[i] = self.widgets[i].get('1.0',END)
+            elif self.opts[i]['type'] == 'checkbutton':
+                kwds[i] = bool(self.tkvars[i].get())
+            else:
+                kwds[i] = self.tkvars[i].get()
+        self.kwds = kwds
+        return
+
+    def setWidgetStyles(self):
+
+        style = Style()
+        bg = style.lookup('TLabel.label', 'background')
+        for i in self.widgets:
+            try:
+                self.widgets[i].configure(fg='black', bg=bg)
+            except:
+                pass
+        return
+
+    def apply(self):
+        self.applyOptions()
+        if self.callback != None:
+            self.callback()
+        return
+
+    def showDialog(self, parent, layout='horizontal'):
+        """Auto create tk vars, widgets for corresponding options and
+           and return the frame"""
+
+        dialog, self.tkvars, self.widgets = dialogFromOptions(parent,
+                                                              self.opts, self.groups,
+                                                              layout=layout)
+        self.setWidgetStyles()
+        return dialog
+
+    def updateFromDict(self, kwds=None):
+        """Update all widget tk vars using plot kwds dict"""
+
+        if kwds != None:
+            self.kwds = kwds
+        elif hasattr(self, 'kwds'):
+            kwds = self.kwds
+        else:
+            return
+        if self.tkvars == None:
+            return
+        for i in kwds:
+            if i in self.tkvars and self.tkvars[i]:
+                self.tkvars[i].set(kwds[i])
+        return
+
+    def increment(self, key, inc):
+        """Increase the value of a widget"""
+
+        new = self.kwds[key]+inc
+        self.tkvars[key].set(new)
+        return
+
+class MPLBaseOptions(TkOptions):
+    """Class to provide a dialog for matplotlib options and returning
+        the selected prefs"""
+
+    kinds = ['line', 'scatter', 'bar', 'barh', 'pie', 'histogram', 'boxplot', 'violinplot', 'dotplot',
+             'heatmap', 'area', 'hexbin', 'contour', 'imshow', 'scatter_matrix', 'density', 'radviz', 'venn', 'shmoo', 'bathtub', 'sparam', 'gantt', 'eye', 'jitter']
+    legendlocs = ['best','upper right','upper left','lower left','lower right','right','center left',
+                'center right','lower center','upper center','center']
+    defaultfont = 'monospace'
+
+    def __init__(self, parent=None):
+        """Setup variables"""
+
+        self.parent = parent
+        if self.parent is not None:
+            df = self.parent.table.model.df
+            datacols = list(df.columns)
+            datacols.insert(0,'')
+        else:
+            datacols=[]
+        fonts = util.getFonts()
+        scales = ['linear','log']
+        grps = {'data':['by','by2','labelcol','pointsizes'],
+                'formats':['font','marker','linestyle','alpha'],
+                'sizes':['fontsize','ms','linewidth'],
+                'general':['kind','bins','stacked','subplots','use_index','errorbars'],
+                'axes':['grid','legend','showxlabels','showylabels','sharex','sharey','logx','logy'],
+                'colors':['colormap','bw','clrcol','cscale','colorbar'],
+                'density':['bw_method','fill','show_rug'],
+                'shmoo':['x_param','y_param','z_param','threshold_min','threshold_max',
+                        'show_contours','contour_levels','interpolation','show_stats',
+                        'marker_size','show_markers'],
+                'bathtub':['ber_target','show_margins','x_axis_type','show_target_line',
+                          'margin_style','dual_curve'],
+                'sparam':['log_freq','show_phase','spec_limit','limit_type',
+                         'nyquist_marker','data_rate','freq_range','db_range'],
+                'gantt':['show_progress','show_today','date_format','bar_height',
+                        'show_milestones','group_by','sort_by'],
+                'eye':['persistence','ui_width','sample_rate','bit_rate','show_mask',
+                      'mask_margin','color_mode','overlay_count'],
+                'jitter':['bins','show_stats','show_gaussian','show_dual_dirac',
+                         'tj_separation','show_components']}
+        order = ['general','data','axes','sizes','formats','colors','density','shmoo','bathtub','sparam','gantt','eye','jitter']
+        self.groups = OrderedDict((key, grps[key]) for key in order)
+        opts = self.opts = {'font':{'type':'combobox','default':self.defaultfont,'items':fonts},
+                'fontsize':{'type':'scale','default':12,'range':(5,40),'interval':1,'label':'font size'},
+                'marker':{'type':'combobox','default':'','items': markers},
+                'linestyle':{'type':'combobox','default':'-','items': linestyles},
+                'ms':{'type':'scale','default':5,'range':(1,80),'interval':1,'label':'marker size'},
+                'grid':{'type':'checkbutton','default':0,'label':'show grid'},
+                'logx':{'type':'checkbutton','default':0,'label':'log x'},
+                'logy':{'type':'checkbutton','default':0,'label':'log y'},
+                #'rot':{'type':'entry','default':0, 'label':'xlabel angle'},
+                'use_index':{'type':'checkbutton','default':1,'label':'use index'},
+                'errorbars':{'type':'checkbutton','default':0,'label':'errorbar column'},
+                'clrcol':{'type':'combobox','items':datacols,'label':'color by value','default':''},
+                'cscale':{'type':'combobox','items':scales,'label':'color scale','default':'linear'},
+                'colorbar':{'type':'checkbutton','default':0,'label':'show colorbar'},
+                'bw':{'type':'checkbutton','default':0,'label':'black & white'},
+                'showxlabels':{'type':'checkbutton','default':1,'label':'x tick labels'},
+                'showylabels':{'type':'checkbutton','default':1,'label':'y tick labels'},
+                'sharex':{'type':'checkbutton','default':0,'label':'share x'},
+                'sharey':{'type':'checkbutton','default':0,'label':'share y'},
+                'legend':{'type':'checkbutton','default':1,'label':'legend'},
+                #'loc':{'type':'combobox','default':'best','items':self.legendlocs,'label':'legend loc'},
+                'kind':{'type':'combobox','default':'line','items':self.kinds,'label':'plot type'},
+                'stacked':{'type':'checkbutton','default':0,'label':'stacked'},
+                'linewidth':{'type':'scale','default':1.5,'range':(0,10),'interval':0.1,'label':'line width'},
+                'alpha':{'type':'scale','default':0.9,'range':(0,1),'interval':0.1,'label':'alpha'},
+                'subplots':{'type':'checkbutton','default':0,'label':'multiple subplots'},
+                'colormap':{'type':'combobox','default':'Spectral','items':colormaps},
+                'bins':{'type':'entry','default':20,'width':10},
+                'by':{'type':'combobox','items':datacols,'label':'group by','default':''},
+                'by2':{'type':'combobox','items':datacols,'label':'group by 2','default':''},
+                'labelcol':{'type':'combobox','items':datacols,'label':'point labels','default':''},
+                'pointsizes':{'type':'combobox','items':datacols,'label':'point sizes','default':''},
+                'bw_method':{'type':'combobox','default':'scott',
+                            'items':['scott','silverman','0.1','0.2','0.5','1.0'],
+                            'label':'bandwidth method'},
+                'fill':{'type':'checkbutton','default':0,'label':'fill under curve'},
+                'show_rug':{'type':'checkbutton','default':0,'label':'show rug plot'},
+                'x_param':{'type':'combobox','items':datacols,'label':'X parameter','default':''},
+                'y_param':{'type':'combobox','items':datacols,'label':'Y parameter','default':''},
+                'z_param':{'type':'combobox','items':datacols,'label':'Z value','default':''},
+                'threshold_min':{'type':'entry','default':'','width':10,'label':'min threshold'},
+                'threshold_max':{'type':'entry','default':'','width':10,'label':'max threshold'},
+                'show_contours':{'type':'checkbutton','default':0,'label':'show contours'},
+                'contour_levels':{'type':'entry','default':10,'width':10,'label':'contour levels'},
+                'interpolation':{'type':'combobox','default':'nearest',
+                               'items':['none','nearest','bilinear','cubic'],
+                               'label':'interpolation'},
+                'show_stats':{'type':'checkbutton','default':0,'label':'show statistics'},
+                'marker_size':{'type':'scale','default':50,'range':(10,200),'interval':10,'label':'marker size'},
+                'show_markers':{'type':'checkbutton','default':0,'label':'show markers'},
+                'ber_target':{'type':'entry','default':'1e-12','width':10,'label':'BER target'},
+                'show_margins':{'type':'checkbutton','default':1,'label':'show margins'},
+                'x_axis_type':{'type':'combobox','default':'UI',
+                              'items':['UI','Time (ps)','Voltage (mV)'],
+                              'label':'X-axis type'},
+                'show_target_line':{'type':'checkbutton','default':1,'label':'show target line'},
+                'margin_style':{'type':'combobox','default':'arrows',
+                               'items':['arrows','lines','shaded'],
+                               'label':'margin style'},
+                'dual_curve':{'type':'checkbutton','default':0,'label':'dual curve (L/R)'},
+                'log_freq':{'type':'checkbutton','default':1,'label':'log frequency'},
+                'show_phase':{'type':'checkbutton','default':0,'label':'show phase'},
+                'spec_limit':{'type':'entry','default':'','width':10,'label':'spec limit (dB)'},
+                'limit_type':{'type':'combobox','default':'None',
+                             'items':['None','Horizontal','Vertical'],
+                             'label':'limit type'},
+                'nyquist_marker':{'type':'checkbutton','default':0,'label':'Nyquist marker'},
+                'data_rate':{'type':'entry','default':'','width':10,'label':'data rate (Gbps)'},
+                'freq_range':{'type':'entry','default':'','width':15,'label':'freq range (GHz)'},
+                'db_range':{'type':'entry','default':'','width':15,'label':'dB range'},
+                'show_progress':{'type':'checkbutton','default':1,'label':'show progress'},
+                'show_today':{'type':'checkbutton','default':1,'label':'show today line'},
+                'date_format':{'type':'combobox','default':'%Y-%m-%d',
+                              'items':['%Y-%m-%d','%m/%d/%Y','%d/%m/%Y','%b %d','%Y-%m'],
+                              'label':'date format'},
+                'bar_height':{'type':'scale','default':0.8,'range':(0.3,1.0),'interval':0.1,'label':'bar height'},
+                'show_milestones':{'type':'checkbutton','default':1,'label':'show milestones'},
+                'group_by':{'type':'entry','default':'','width':15,'label':'group by column'},
+                'sort_by':{'type':'combobox','default':'start_date',
+                          'items':['start_date','end_date','task_name','duration','none'],
+                          'label':'sort by'},
+                'persistence':{'type':'scale','default':100,'range':(10,1000),'interval':10,'label':'persistence'},
+                'ui_width':{'type':'scale','default':1.0,'range':(0.5,2.0),'interval':0.1,'label':'UI width'},
+                'sample_rate':{'type':'entry','default':'','width':15,'label':'sample rate (GS/s)'},
+                'bit_rate':{'type':'entry','default':'','width':15,'label':'bit rate (Gbps)'},
+                'show_mask':{'type':'checkbutton','default':0,'label':'show mask'},
+                'mask_margin':{'type':'scale','default':0.3,'range':(0.1,0.5),'interval':0.05,'label':'mask margin'},
+                'color_mode':{'type':'combobox','default':'density',
+                             'items':['density','overlay','single'],
+                             'label':'color mode'},
+                'overlay_count':{'type':'scale','default':100,'range':(10,1000),'interval':10,'label':'overlay count'},
+                'bins':{'type':'scale','default':100,'range':(20,500),'interval':10,'label':'bins'},
+                'show_stats':{'type':'checkbutton','default':1,'label':'show statistics'},
+                'show_gaussian':{'type':'checkbutton','default':1,'label':'show Gaussian fit'},
+                'show_dual_dirac':{'type':'checkbutton','default':0,'label':'show dual-Dirac'},
+                'tj_separation':{'type':'entry','default':'','width':15,'label':'TJ separation (ps)'},
+                'show_components':{'type':'checkbutton','default':0,'label':'show RJ/DJ components'},
+                }
+        self.kwds = {}
+        return
+
+    def applyOptions(self):
+        """Set the plot kwd arguments from the tk variables"""
+
+        TkOptions.applyOptions(self)
+        size = self.kwds['fontsize']
+        plt.rc("font", family=self.kwds['font'], size=size)
+        plt.rc('legend', fontsize=size-1)
+        return
+
+    def update(self, df):
+        """Update data widget(s) when dataframe changes"""
+
+        if util.check_multiindex(df.columns) == 1:
+            cols = list(df.columns.get_level_values(0))
+        else:
+            cols = list(df.columns)
+        #add empty value
+        cols = ['']+cols
+        self.widgets['by']['values'] = cols
+        self.widgets['by2']['values'] = cols
+        self.widgets['labelcol']['values'] = cols
+        self.widgets['clrcol']['values'] = cols
+        # Update shmoo plot parameter dropdowns
+        if 'x_param' in self.widgets:
+            self.widgets['x_param']['values'] = cols
+        if 'y_param' in self.widgets:
+            self.widgets['y_param']['values'] = cols
+        if 'z_param' in self.widgets:
+            self.widgets['z_param']['values'] = cols
+        return
+
+class MPL3DOptions(MPLBaseOptions):
+    """Class to provide 3D matplotlib options"""
+
+    kinds = ['scatter', 'bar', 'contour', 'wireframe', 'surface']
+    defaultfont = 'monospace'
+
+    def __init__(self, parent=None):
+        """Setup variables"""
+
+        self.parent = parent
+        if self.parent is not None:
+            df = self.parent.table.model.df
+            datacols = list(df.columns)
+            datacols.insert(0,'')
+        else:
+            datacols=[]
+        fonts = util.getFonts()
+        modes = ['parametric','(x,y)->z']
+        self.groups = grps = {'formats':['kind','mode','rstride','cstride','points'],
+                             }
+        self.groups = OrderedDict(sorted(grps.items()))
+        opts = self.opts = {
+                'kind':{'type':'combobox','default':'scatter','items':self.kinds,'label':'kind'},
+                'rstride':{'type':'entry','default':2,'width':20},
+                'cstride':{'type':'entry','default':2,'width':20},
+                'points':{'type':'checkbutton','default':0,'label':'show points'},
+                'mode':{'type':'combobox','default':'(x,y)->z','items': modes},
+                 }
+        self.kwds = {}
+        return
+
+    def applyOptions(self):
+        """Set the plot kwd arguments from the tk variables"""
+
+        TkOptions.applyOptions(self)
+        return
+
+class PlotLayoutOptions(TkOptions):
+    def __init__(self, parent=None):
+        """Setup variables"""
+
+        self.parent = parent
+        self.rows = 2
+        self.cols = 2
+        self.top = .1
+        self.bottom =.9
+        return
+
+    def showDialog(self, parent, layout='horizontal'):
+        """Override because we need to add custom bits"""
+
+        self.tkvars = {}
+        self.main = Frame(parent)
+        self.plotgrid = c = PlotLayoutGrid(self.main)
+        self.plotgrid.update_callback = self.updateFromGrid
+        c.pack(side=LEFT,fill=Y,pady=2,padx=2)
+
+        frame = Frame(self.main)
+        frame.pack(side=LEFT,fill=Y)
+        v = self.rowsvar = IntVar()
+        v.set(self.rows)
+        w = Scale(frame,label='rows',
+                 from_=1,to=6,
+                 orient='vertical',
+                 resolution=1,
+                 variable=v,
+                 command=self.resetGrid)
+        w.pack(fill=X,pady=2)
+        v = self.colsvar = IntVar()
+        v.set(self.cols)
+        w = Scale(frame,label='cols',
+                 from_=1,to=6,
+                 orient='horizontal',
+                 resolution=1,
+                 variable=v,
+                 command=self.resetGrid)
+        w.pack(side=TOP,fill=X,pady=2)
+
+        self.modevar = StringVar()
+        self.modevar.set('normal')
+        frame = LabelFrame(self.main, text='modes')
+        Radiobutton(frame, text='normal', variable=self.modevar, value='normal').pack(fill=X)
+        Radiobutton(frame, text='split data', variable=self.modevar, value='splitdata').pack(fill=X)
+        Radiobutton(frame, text='multi views', variable=self.modevar, value='multiviews').pack(fill=X)
+        frame.pack(side=LEFT,fill=Y)
+
+        frame = LabelFrame(self.main, text='multi views')
+        #v = self.multiviewsvar = BooleanVar()
+        plot_types = ['histogram','line','scatter','boxplot','dotplot','area','density','bar','barh',
+                      'heatmap','contour','hexbin','imshow']
+        Label(frame,text='plot types:').pack(fill=X)
+        w,v = addListBox(frame, values=plot_types,width=12,height=8)
+        w.pack(fill=X)
+        self.plottypeslistbox = v
+        frame.pack(side=LEFT,fill=Y)
+
+        frame = LabelFrame(self.main, text='split data')
+        frame.pack(side=LEFT,fill=Y)
+
+        frame = LabelFrame(self.main, text='subplots')
+        v = self.axeslistvar = StringVar()
+        v.set('')
+        axes = []
+        self.axeslist = Combobox(frame, values=axes,
+                        textvariable=v,width=14)
+        Label(frame,text='plot list:').pack()
+        self.axeslist.pack(fill=BOTH,pady=2)
+        b = Button(frame, text='remove axis', command=self.parent.removeSubplot)
+        b.pack(fill=X,pady=2)
+        b = Button(frame, text='set title', command=self.parent.setSubplotTitle)
+        b.pack(fill=X,pady=2)
+        frame.pack(side=LEFT,fill=Y)
+        self.updateFromGrid()
+        return self.main
+
+    def setmultiviews(self, event=None):
+        val=self.multiviewsvar.get()
+        if val == 1:
+            self.parent.multiviews = True
+            self.parent.gridlayoutvar.set(1)
+        if val == 0:
+            self.parent.multiviews = False
+        return
+
+    def resetGrid(self, event=None):
+        """update grid and redraw"""
+
+        pg = self.plotgrid
+        self.rows = pg.rows = self.rowsvar.get()
+        self.cols = pg.cols = self.colsvar.get()
+        pg.selectedrows = [0]
+        pg.selectedcols = [0]
+        pg.redraw()
+        self.updateFromGrid()
+        return
+
+    def updateFromGrid(self):
+        pg = self.plotgrid
+        r = self.selectedrows = pg.selectedrows
+        c = self.selectedcols = pg.selectedcols
+        self.rowspan = len(r)
+        self.colspan = len(c)
+        return
+
+    def updateAxesList(self):
+        """Update axes list"""
+
+        axes = list(self.parent.gridaxes.keys())
+        self.axeslist['values'] = axes
+        return
+
+class PlotLayoutGrid(BaseTable):
+    def __init__(self, parent=None, width=280, height=205, rows=2, cols=2, **kwargs):
+        BaseTable.__init__(self, parent, bg='white',
+                         width=width, height=height )
+        return
+
+    def handle_left_click(self, event):
+        BaseTable.handle_left_click(self, event)
+
+class AnnotationOptions(TkOptions):
+    """This class also provides custom tools for adding items to the plot"""
+    def __init__(self, parent=None):
+        """Setup variables"""
+
+        from matplotlib import colors
+        import six
+        colors = list(six.iteritems(colors.cnames))
+        colors = sorted([c[0] for c in colors])
+        fillpatterns = ['-', '+', 'x', '\\', '*', 'o', 'O', '.']
+        bstyles = ['square','round','round4','circle','rarrow','larrow','sawtooth']
+        fonts = util.getFonts()
+        defaultfont = 'monospace'
+        fontweights = ['normal','bold','heavy','light','ultrabold','ultralight']
+        alignments = ['left','center','right']
+
+        self.parent = parent
+        self.groups = grps = {'global labels':['title','xlabel','ylabel','rot'],
+                              'textbox': ['boxstyle','facecolor','linecolor','rotate'],
+                              'textbox format': ['fontsize','font','fontweight','align'],
+                              'text to add': ['text']
+                             }
+        self.groups = OrderedDict(sorted(grps.items()))
+        opts = self.opts = {
+                'title':{'type':'entry','default':'','width':20},
+                'xlabel':{'type':'entry','default':'','width':20},
+                'ylabel':{'type':'entry','default':'','width':20},
+                'facecolor':{'type':'combobox','default':'white','items': colors},
+                'linecolor':{'type':'combobox','default':'black','items': colors},
+                'fill':{'type':'combobox','default':'-','items': fillpatterns},
+                'rotate':{'type':'scale','default':0,'range':(-180,180),'interval':1,'label':'rotate'},
+                'boxstyle':{'type':'combobox','default':'square','items': bstyles},
+                'text':{'type':'scrolledtext','default':'','width':20},
+                'align':{'type':'combobox','default':'center','items': alignments},
+                'font':{'type':'combobox','default':defaultfont,'items':fonts},
+                'fontsize':{'type':'scale','default':12,'range':(4,50),'interval':1,'label':'font size'},
+                'fontweight':{'type':'combobox','default':'normal','items': fontweights},
+                'rot':{'type':'entry','default':0, 'label':'ticklabel angle'}
+                }
+        self.kwds = {}
+        #used to store annotations
+        self.textboxes = {}
+        return
+
+    def showDialog(self, parent, layout='horizontal'):
+        """Override because we need to add custom widgets"""
+
+        dialog, self.tkvars, self.widgets = dialogFromOptions(parent,
+                                                              self.opts, self.groups,
+                                                              layout=layout)
+        self.main = dialog
+        self.addWidgets()
+        self.setWidgetStyles()
+        return dialog
+
+    def addWidgets(self):
+        """Custom dialogs for manually adding annotation items like text"""
+
+        frame = LabelFrame(self.main, text='add objects')
+        v = self.objectvar = StringVar()
+        v.set('textbox')
+        w = Combobox(frame, values=['textbox'],#'arrow'],
+                         textvariable=v,width=14)
+        Label(frame,text='add object').pack()
+        w.pack(fill=BOTH,pady=2)
+        self.coordsvar = StringVar()
+        self.coordsvar.set('data')
+        w = Combobox(frame, values=['data','axes fraction','figure fraction'],
+                         textvariable=self.coordsvar,width=14)
+        Label(frame,text='coord system').pack()
+        w.pack(fill=BOTH,pady=2)
+
+        b = Button(frame, text='Create', command=self.addObject)
+        b.pack(fill=X,pady=2)
+        b = Button(frame, text='Clear', command=self.clear)
+        b.pack(fill=X,pady=2)
+        frame.pack(side=LEFT,fill=Y)
+        return
+
+    def clear(self):
+        """Clear annotations"""
+        self.textboxes = {}
+        self.parent.replot()
+        return
+
+    def addObject(self):
+        """Add an annotation object"""
+
+        o = self.objectvar.get()
+        if o == 'textbox':
+            self.addTextBox()
+        elif o == 'arrow':
+            self.addArrow()
+        return
+
+    def addTextBox(self, kwds=None, key=None):
+        """Add a text annotation and store it using key"""
+
+        import matplotlib.patches as patches
+        from matplotlib.text import OffsetFrom
+
+        self.applyOptions()
+        if kwds == None:
+            kwds = self.kwds
+            kwds['xycoords'] = self.coordsvar.get()
+        fig = self.parent.fig
+        #ax = self.parent.ax
+        ax = fig.get_axes()[0]
+        canvas = self.parent.canvas
+        text = kwds['text'].strip('\n')
+        fc = kwds['facecolor']
+        ec = kwds['linecolor']
+        bstyle = kwds['boxstyle']
+        style = "%s,pad=.2" %bstyle
+        fontsize = kwds['fontsize']
+        font = mpl.font_manager.FontProperties(family=kwds['font'],
+                            weight=kwds['fontweight'])
+        bbox_args = dict(boxstyle=bstyle, fc=fc, ec=ec, lw=1, alpha=0.9)
+        arrowprops = dict(arrowstyle="-|>", connectionstyle="arc3")
+
+        xycoords = kwds['xycoords']
+        #if previously drawn will have xy values
+        if 'xy' in kwds:
+            xy = kwds['xy']
+            #print (text, xycoords, xy)
+        else:
+            xy=(.1, .8)
+            xycoords='axes fraction'
+
+        an = ax.annotate(text, xy=xy, xycoords=xycoords,
+                   ha=kwds['align'], va="center",
+                   size=fontsize,
+                   fontproperties=font, rotation=kwds['rotate'],
+                   #arrowprops=arrowprops,
+                   #xytext=(xy[0]+.2,xy[1]),
+                   #textcoords='offset points',
+                   zorder=10,
+                   bbox=bbox_args)
+        an.draggable()
+        if key == None:
+            import uuid
+            key = str(uuid.uuid4().fields[0])
+        #need to add the unique id to the annotation
+        #so it can be tracked in event handler
+        an._id = key
+        if key not in self.textboxes:
+            self.textboxes[key] = kwds
+            print(kwds)
+        #canvas.show()
+        canvas.draw()
+        return
+
+    def addArrow(self, kwds=None, key=None):
+        """Add line/arrow"""
+
+        fig = self.parent.fig
+        canvas = self.parent.canvas
+        ax = fig.get_axes()[0]
+        ax.arrow(0.2, 0.2, 0.5, 0.5, fc='k', ec='k',
+                 transform=ax.transAxes)
+        canvas.draw()
+        #self.lines.append(line)
+        return
+
+    def redraw(self):
+        """Redraw all stored annotations in the right places
+           after a plot update"""
+
+        #print (self.textboxes)
+        for key in self.textboxes:
+            self.addTextBox(self.textboxes[key], key)
+        return
+
+class ExtraOptions(TkOptions):
+    """Class for additional formatting options like styles"""
+    def __init__(self, parent=None):
+        """Setup variables"""
+
+        self.parent = parent
+        self.styles = sorted(plt.style.available)
+        formats = ['auto','percent','eng','sci notation']
+        datefmts = ['','%d','%b %d,''%Y-%m-%d','%d-%m-%Y',"%d-%m-%Y %H:%M"]
+        self.groups = grps = {'axis ranges':['xmin','xmax','ymin','ymax'],
+                              'axis tick positions':['major x-ticks','major y-ticks',
+                                                   'minor x-ticks','minor y-ticks'],
+                              'tick label format':['formatter','symbol','precision','date format'],
+                              #'tables':['table']
+                             }
+        self.groups = OrderedDict(sorted(grps.items()))
+        opts = self.opts = {'xmin':{'type':'entry','default':'','label':'x min'},
+                            'xmax':{'type':'entry','default':'','label':'x max'},
+                            'ymin':{'type':'entry','default':'','label':'y min'},
+                            'ymax':{'type':'entry','default':'','label':'y max'},
+                            'major x-ticks':{'type':'entry','default':0},
+                            'major y-ticks':{'type':'entry','default':0},
+                            'minor x-ticks':{'type':'entry','default':0},
+                            'minor y-ticks':{'type':'entry','default':0},
+                            'formatter':{'type':'combobox','items':formats,'default':'auto'},
+                            'symbol':{'type':'entry','default':''},
+                            'precision':{'type':'entry','default':0},
+                            'date format':{'type':'combobox','items':datefmts,'default':''},
+                            #'table':{'type':'checkbutton','default':0,'label':'show table'},
+                            }
+        self.kwds = {}
+        return
+
+    def showDialog(self, parent, layout='horizontal'):
+        """Create dialog widgets"""
+
+        dialog, self.tkvars, self.widgets = dialogFromOptions(parent,
+                                                              self.opts, self.groups,
+                                                              layout=layout)
+        self.main = dialog
+        self.addWidgets()
+        self.setWidgetStyles()
+        return dialog
+
+    def addWidgets(self):
+        """Custom dialogs for manually adding annotation items like text"""
+
+        main = self.main
+        frame = LabelFrame(main, text='styles')
+        v = self.stylevar = StringVar()
+        v.set('ggplot')
+        w = Combobox(frame, values=self.styles,
+                         textvariable=v,width=14)
+        w.pack(side=TOP,pady=2)
+        addButton(frame, 'Apply', self.apply, None,
+                  'apply', side=TOP, compound="left", width=20, padding=2)
+        addButton(frame, 'Reset', self.reset, None,
+                  'reset', side=TOP, compound="left", width=20, padding=2)
+        frame.pack(side=LEFT,fill='y')
+        return main
+
+    def apply(self):
+        mpl.rcParams.update(mpl.rcParamsDefault)
+        self.parent.style = self.stylevar.get()
+        self.parent.replot()
+        return
+
+    def reset(self):
+        mpl.rcParams.update(mpl.rcParamsDefault)
+        self.parent.style = None
+        self.parent.replot()
+        return
+
+class AnimateOptions(TkOptions):
+    """Class for live update/animation of plots."""
+    def __init__(self, parent=None):
+        """Setup variables"""
+
+        self.parent = parent
+        df = self.parent.table.model.df
+        datacols = list(df.columns)
+        self.groups = grps = {'data window':['increment','window','startrow','delay'],
+                              'display':['expand','usexrange','useyrange','tableupdate','smoothing','columntitle'],
+                              #'3d mode':['rotate axis','degrees'],
+                              'record video':['savevideo','codec','fps','filename']
+                             }
+        self.groups = OrderedDict(sorted(grps.items()))
+        codecs = ['default','h264']
+        opts = self.opts = {'increment':{'type':'entry','default':2},
+                            'window':{'type':'entry','default':10},
+                            'startrow':{'type':'entry','default':0,'label':'start row'},
+                            'delay':{'type':'entry','default':.05},
+                            'tableupdate':{'type':'checkbutton','default':0,'label':'update table'},
+                            'expand':{'type':'checkbutton','default':0,'label':'expanding view'},
+                            'usexrange':{'type':'checkbutton','default':0,'label':'use full x range'},
+                            'useyrange':{'type':'checkbutton','default':0,'label':'use full y range'},
+                            'smoothing':{'type':'checkbutton','default':0,'label':'smoothing'},
+                            'columntitle':{'type':'combobox','default':'','items':datacols,'label':'column data as title'},
+                            #'source':{'type':'entry','default':'','width':30},
+                            #'rotate axis':{'type':'combobox','default':'x','items':['x','y','z'],'label':'rotate axis'},
+                            #'degrees':{'type':'entry','default':5},
+                            'savevideo':{'type':'checkbutton','default':0,'label':'save as video'},
+                            'codec':{'type':'combobox','default':'default','items': codecs},
+                            'fps':{'type':'entry','default':15},
+                            'filename':{'type':'entry','default':'myplot.mp4','width':20},
+                            }
+        self.kwds = {}
+        self.running = False
+        return
+
+    def showDialog(self, parent, layout='horizontal'):
+        """Create dialog widgets"""
+
+        dialog, self.tkvars, self.widgets = dialogFromOptions(parent,
+                                                              self.opts, self.groups,
+                                                              layout=layout)
+        self.main = dialog
+        self.addWidgets()
+        return dialog
+
+    def addWidgets(self):
+        """Custom dialogs for manually adding annotation items like text"""
+
+        main = self.main
+        frame = LabelFrame(main, text='Run')
+        addButton(frame, 'START', self.start, None,
+                  'apply', side=TOP, compound="left", width=20, padding=2)
+        addButton(frame, 'STOP', self.stop, None,
+                  'reset', side=TOP, compound="left", width=20, padding=2)
+        frame.pack(side=LEFT,fill='y')
+        return main
+
+    def getWriter(self):
+        fps = self.kwds['fps']
+        import matplotlib.animation as manimation
+        FFMpegWriter = manimation.writers['ffmpeg']
+        metadata = dict(title='My Plot', artist='Matplotlib',
+                        comment='Made using DataExplore')
+        writer = FFMpegWriter(fps=fps, metadata=metadata)
+        return writer
+
+    def update(self):
+        """do live updating"""
+
+        self.applyOptions()
+        savevid = self.kwds['savevideo']
+        videofile  = self.kwds['filename']
+        #if self.kwds['source'] != '':
+        #    self.stream()
+        #else:
+        if savevid == 1:
+            writer = self.getWriter()
+            with writer.saving(self.parent.fig, videofile, 100):
+                self.updateCurrent(writer)
+        else:
+            self.updateCurrent()
+        return
+
+    def updateCurrent(self, writer=None):
+        """Iterate over current table and update plot"""
+
+        kwds = self.kwds
+        table = self.parent.table
+        df = table.model.df
+        titledata = None
+        inc = kwds['increment']
+        w = kwds['window']
+        st = kwds['startrow']
+        delay = float(kwds['delay'])
+        refresh = kwds['tableupdate']
+        expand = kwds['expand']
+        fullxrange = kwds['usexrange']
+        fullyrange = kwds['useyrange']
+        smooth = kwds['smoothing']
+        coltitle = kwds['columntitle']
+        if coltitle != '':
+            titledata = df[coltitle]
+        self.parent.clear()
+        for i in range(st,len(df)-w,inc):
+            cols = table.multiplecollist
+            if expand == 1:
+                rows = range(st,i+w)
+            else:
+                rows = range(i,i+w)
+            data = df.iloc[list(rows),cols]
+
+            if smooth == 1:
+                w=int(len(data)/10.0)
+                data = data.rolling(w).mean()
+
+            self.parent.data = data
+            #plot but don't redraw figure until the end
+            self.parent.applyPlotoptions()
+            self.parent.plotCurrent(redraw=False)
+
+            if titledata is not None:
+                l = titledata.iloc[i]
+                self.parent.setOption('title',l)
+            if fullxrange == 1:
+                self.parent.ax.set_xlim(df.index.min(),df.index.max())
+            if fullyrange == 1:
+                ymin = df.min(numeric_only=True).min()
+                ymax = df.max(numeric_only=True).max()
+                self.parent.ax.set_ylim(ymin,ymax)
+            #finally draw the plot
+            self.parent.canvas.draw()
+
+            table.multiplerowlist = rows
+            if refresh == 1:
+                table.drawMultipleRows(rows)
+            time.sleep(delay)
+            if self.stopthread == True:
+                return
+            if writer is not None:
+                writer.grab_frame()
+        self.running = False
+        return
+
+    def stream(self):
+        """Stream data into table and plot - not implemented yet"""
+
+        import requests, io
+        kwds = self.kwds
+        table = self.parent.table
+        #endpoint = kwds['source']
+        base = ""
+        endpoint = ""
+        raw = requests.get(base + endpoint)#, params=payload)
+        raw = io.BytesIO(raw.content)
+        print ('got data source')
+        print(raw)
+        df = pd.read_csv(raw, sep=",")
+        print (df)
+
+        table.model.df = df
+        for i in range(0,100):
+            table.selectAll()
+            self.parent.replot()
+        return
+
+    def start(self):
+        """start animation using a thread"""
+
+        if self.running == True:
+            return
+        from threading import Thread
+        self.stopthread = False
+        self.running = True
+        t = Thread(target=self.update)
+        t.start()
+        self.thread = t
+        return
+
+    def stop(self):
+        """Stop animation loop"""
+
+        self.stopthread = True
+        self.running = False
+        time.sleep(.2)
+        try:
+            self.parent.update_idletasks()
+        except:
+            pass
+        return
+
+def addFigure(parent, figure=None, resize_callback=None):
+    """Create a tk figure and canvas in the parent frame"""
+
+    from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg#, NavigationToolbar2TkAgg
+    from matplotlib.figure import Figure
+
+    if figure == None:
+        figure = Figure(figsize=(6,4), dpi=100, facecolor='white')
+
+    canvas = FigureCanvasTkAgg(figure, master=parent)
+    canvas.draw()
+    canvas.get_tk_widget().pack(side=TOP, fill=BOTH, expand=1)
+    canvas.get_tk_widget().configure(highlightcolor='gray75',
+                                   highlightbackground='gray75')
+    #canvas._tkcanvas.pack(side=TOP, fill=BOTH, expand=1)
+    figure.subplots_adjust(bottom=0.15)
+    return figure, canvas

@@ -1,0 +1,1 @@
+### @register_browser_v29_md_toolbar.py add a toolbar to edit the markdown note with common features

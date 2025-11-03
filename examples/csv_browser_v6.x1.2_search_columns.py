@@ -41,13 +41,19 @@ import os
 import sys
 
 # Add custom pandastable path to sys.path BEFORE importing pandastable
-custom_pandastable_path = r"C:\Users\juesh\OneDrive\Documents\windsurf\pandastable\pandastable"
+# custom_pandastable_path = r"C:\Users\juesh\OneDrive\Documents\windsurf\pandastable\pandastable"
+# custom_pandastable_path = r"C:\Users\juesh\OneDrive\Documents\pandastable\pandastable"
+custom_pandastable_path = r"C:\Users\juesh\OneDrive\Documents\pandastable"
+
 # custom_pandastable_path = r"C:\Users\JueShi\OneDrive - Astera Labs, Inc\Documents\windsurf\pandastable\pandastable"
 if os.path.exists(custom_pandastable_path):
     # Insert at the beginning of sys.path to prioritize this version
     sys.path.insert(0, custom_pandastable_path)
     print(f"Using custom pandastable from: {custom_pandastable_path}")
     
+import pandastable.plotting as p
+print("Using plotting.py from:", p.__file__)
+
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, simpledialog
 import pandas as pd
@@ -730,12 +736,149 @@ class CSVBrowser(tk.Tk):
             print(f"Error in setup_csv_viewer: {e}")
             traceback.print_exc()
 
+    def _apply_filter(self, df, search_text):
+        """
+        Apply a filter to the DataFrame based on search text.
+        
+        Args:
+            df: The input DataFrame to filter
+            search_text: The text to search for in the DataFrame
+            
+        Returns:
+            DataFrame containing rows that match the search text, with wildcard matches appended
+        """
+        if not search_text or not isinstance(df, pd.DataFrame) or df.empty:
+            return df
+            
+        try:
+            # Check for wildcard pattern 'term *' or 'term*'
+            if ' *' in search_text or search_text.endswith('*'):
+                # Get everything before the wildcard as the base search
+                base_search = search_text.split('*')[0].strip()
+                
+                # Make a copy of the original DataFrame to avoid modifying it
+                df = df.copy()
+                
+                # Apply the base search
+                base_matches = self._apply_single_filter(df, base_search)
+                
+                # Get all row indices from the original DataFrame
+                all_indices = set(df.index)
+                matched_indices = set(base_matches.index)
+                
+                # Find all non-matching indices
+                non_matched_indices = list(all_indices - matched_indices)
+                
+                # Get non-matching rows
+                non_matches = df.loc[non_matched_indices]
+                
+                # Combine results (base matches first, then non-matches)
+                if len(non_matches) > 0:
+                    return pd.concat([base_matches, non_matches])
+                return base_matches
+            
+            # No wildcard, apply normal filter
+            return self._apply_single_filter(df, search_text)
+            
+        except Exception as e:
+            print(f"Error in _apply_filter: {e}")
+            traceback.print_exc()
+            return df
+            
+    def _apply_single_filter(self, df, search_text):
+        """Helper method to apply a single filter without wildcard handling"""
+        if not search_text or not isinstance(df, pd.DataFrame) or df.empty:
+            return df
+            
+        try:
+            # Handle list pattern matching [term1,term2]
+            if search_text.startswith('[') and search_text.endswith(']'):
+                list_terms = [t.strip() for t in search_text[1:-1].split(',') if t.strip()]
+                if list_terms:
+                    str_df = df.astype(str)
+                    mask = str_df.apply(lambda x: any(
+                        x.str.contains(re.escape(term), case=False, na=False, regex=False).any()
+                        for term in list_terms
+                    ), axis=1)
+                    return df[mask].copy()
+                return df
+                
+            # Handle exclusion patterns
+            if search_text.startswith('!'):
+                exclude_text = search_text[1:]
+                if (exclude_text.startswith('"') and exclude_text.endswith('"')) or \
+                   (exclude_text.startswith("'") and exclude_text.endswith("'") and len(exclude_text) > 1):
+                    # Exact match exclusion
+                    exclude_text = exclude_text[1:-1]
+                    str_df = df.astype(str)
+                    mask = ~str_df.apply(lambda x: x == exclude_text).any(axis=1)
+                else:
+                    # Multiple terms exclusion (all must be present)
+                    terms = [t.strip() for t in exclude_text.split() if t.strip()]
+                    if len(terms) > 1:
+                        str_df = df.astype(str)
+                        mask = ~str_df.apply(lambda x: all(
+                            x.str.contains(re.escape(term), case=False, na=False, regex=False).any() 
+                            for term in terms
+                        ), axis=1)
+                    else:
+                        # Single term exclusion
+                        str_df = df.astype(str)
+                        mask = ~str_df.apply(lambda x: x.str.contains(re.escape(exclude_text), case=False, na=False, regex=False)).any(axis=1)
+            # Handle exact match in quotes
+            elif (search_text.startswith('"') and search_text.endswith('"')) or \
+                 (search_text.startswith("'") and search_text.endswith("'")):
+                exact_text = search_text[1:-1]
+                str_df = df.astype(str)
+                mask = str_df.apply(lambda x: x == exact_text).any(axis=1)
+            # Handle prefix/suffix patterns
+            elif search_text.startswith('^') or search_text.endswith('$'):
+                str_df = df.astype(str)
+                if search_text.startswith('^'):
+                    # Prefix match
+                    pattern = f'^{re.escape(search_text[1:])}'
+                    mask = str_df.apply(lambda x: x.str.contains(pattern, case=False, na=False, regex=True)).any(axis=1)
+                elif search_text.endswith('$'):
+                    # Suffix match
+                    pattern = f'{re.escape(search_text[:-1])}$'
+                    mask = str_df.apply(lambda x: x.str.contains(pattern, case=False, na=False, regex=True)).any(axis=1)
+            # Handle multiple terms (all must be present)
+            else:
+                terms = [t.strip() for t in search_text.split() if t.strip()]
+                if len(terms) > 1:
+                    str_df = df.astype(str)
+                    mask = str_df.apply(lambda x: all(
+                        x.str.contains(re.escape(term), case=False, na=False, regex=False).any() 
+                        for term in terms
+                    ), axis=1)
+                else:
+                    # Single term search - use regex=False to handle special characters literally
+                    str_df = df.astype(str)
+                    mask = str_df.apply(lambda x: x.str.contains(re.escape(search_text), case=False, na=False, regex=False)).any(axis=1)
+            
+            # Return only matching rows, ensuring it's a DataFrame
+            result = df[mask]
+            if isinstance(result, pd.Series):
+                return result.to_frame()
+            return result.copy()
+            
+        except Exception as e:
+            print(f"Error in _apply_single_filter: {e}")
+            traceback.print_exc()
+            return df
+            
+        except Exception as e:
+            print(f"Error in _apply_filter: {e}")
+            traceback.print_exc()
+            return df
+            
     def row_filter(self, *args):
         """
         Advanced row filtering with support for:
         1. Pandas query filtering
         2. Text-based contains search
         3. Mixing query and contains search using '@' separator
+        4. Wildcard '*' to show non-matching rows
         
         This works in conjunction with the column filter to maintain both row and column filtering states.
         """
@@ -759,157 +902,27 @@ class CSVBrowser(tk.Tk):
             # Start with a fresh copy of the original data
             filtered_df = self.original_csv_df.copy()
             
-            # Apply row filtering if filter text exists
-            if filter_text:
-                # Split filter into query and contains parts
-                query_part = ''
-                contains_part = ''
+            # Check for wildcard pattern first
+            if ' *' in filter_text or filter_text.endswith('*'):
+                # Get everything before the wildcard as the base search
+                base_search = filter_text.split('*')[0].strip()
                 
-                # Check for '@' separator
-                if '@' in filter_text:
-                    query_part, contains_part = [part.strip() for part in filter_text.split('@', 1)]
+                # Apply the base search (which can include query and contains parts)
+                base_matches = self.row_filter_impl(filtered_df, base_search)
+                
+                # Get all rows that didn't match the base search
+                non_matches = filtered_df[~filtered_df.index.isin(base_matches.index)]
+                
+                # Combine results (base matches first, then non-matches)
+                if len(non_matches) > 0:
+                    filtered_df = pd.concat([base_matches, non_matches])
                 else:
-                    # If no '@', try to use as query first
-                    query_part = filter_text
-                
-                # Apply query filtering if query part exists
-                query_successful = False
-                if query_part:
-                    try:
-                        # Try pandas query
-                        print(f"Attempting pandas query: '{query_part}'")
-                        filtered_df = filtered_df.query(query_part)
-                        print(f"Query successful, rows after query: {len(filtered_df)}")
-                        query_successful = True
-                    except Exception as query_error:
-                        print(f"Query failed: {query_error}")
-                        query_successful = False
-                
-                # If query was not successful or no query part, perform contains search
-                if not query_successful and query_part:
-                    print(f"Performing contains search for: '{query_part}'")
-                    str_df = filtered_df.astype(str)
+                    filtered_df = base_matches
                     
-                    # Check if the query is a quoted string (exact match)
-                    if (query_part.startswith('"') and query_part.endswith('"')) or \
-                       (query_part.startswith("'") and query_part.endswith("'") and len(query_part) > 1):
-                        # Exact match for quoted strings
-                        exact_term = query_part[1:-1]  # Remove quotes
-                        mask = str_df.apply(
-                            lambda x: x == exact_term
-                        ).any(axis=1)
-                        print(f"Exact matching: '{exact_term}'")
-                    else:
-                        # Split the search into individual terms and search for each one
-                        search_terms = []
-                        current_term = ""
-                        in_quotes = False
-                        quote_char = None
-                        
-                        # Parse the query to handle quoted terms with spaces
-                        for char in query_part:
-                            if char in ['"', "'"] and (not in_quotes or char == quote_char):
-                                in_quotes = not in_quotes
-                                if in_quotes:
-                                    quote_char = char
-                                else:
-                                    quote_char = None
-                                current_term += char
-                            elif char.isspace() and not in_quotes:
-                                if current_term:
-                                    search_terms.append(current_term)
-                                    current_term = ""
-                            else:
-                                current_term += char
-                        
-                        if current_term:
-                            search_terms.append(current_term)
-                        
-                        # Clean up terms - remove quotes and filter out empty ones
-                        search_terms = [t.strip('\"\'') for t in search_terms if t.strip('\"\' ')]
-                        
-                        # Start with all rows
-                        mask = pd.Series([True] * len(str_df), index=str_df.index)
-                        
-                        # Apply each search term with AND logic
-                        for term in search_terms:
-                            if not term:
-                                continue
-                            # Escape regex special characters
-                            escaped_term = re.escape(term)
-                            term_mask = str_df.apply(
-                                lambda x: x.str.contains(escaped_term, case=False, na=False, regex=True)
-                            ).any(axis=1)
-                            mask = mask & term_mask
-                        
-                        print(f"Searching for terms: {search_terms}")
-                    
-                    filtered_df = filtered_df[mask].copy()
-                    
-                    # Convert to string DataFrame for searching
-                    str_df = filtered_df.astype(str)
-                    
-                    # Start with all rows
-                    mask = pd.Series([True] * len(str_df), index=str_df.index) 
-                    
-                    # Apply each search term with AND logic
-                    for term in search_terms:
-                        term = term.strip()
-                        if not term:  # Skip empty terms
-                            continue
-                            
-                        is_exact = (term.startswith('"') and term.endswith('"')) or \
-                                 (term.startswith("'") and term.endswith("'") and len(term) > 1)
-                        
-                        if term.startswith('!'):  # Exclusion term
-                            exclude_term = term[1:].strip('"\'')
-                            if not exclude_term:
-                                continue
-                                
-                            if is_exact:
-                                # Exact exclude
-                                term_mask = ~str_df.apply(
-                                    lambda x: x == exclude_term
-                                ).any(axis=1)
-                                print(f"Excluding rows exactly matching: '{exclude_term}'")
-                            else:
-                                # Partial exclude - escape special regex characters
-                                import re
-                                escaped_term = re.escape(exclude_term)
-                                term_mask = ~str_df.apply(
-                                    lambda x: x.str.contains(escaped_term, case=False, na=False, regex=True)
-                                ).any(axis=1)
-                                print(f"Excluding rows containing: '{escaped_term}' (escaped)")
-                        else:  # Inclusion term
-                            if is_exact:
-                                # Exact match for quoted terms
-                                exact_term = term.strip('"\'')
-                                term_mask = str_df.apply(
-                                    lambda x: x == exact_term
-                                ).any(axis=1)
-                                print(f"Including rows exactly matching: '{exact_term}'")
-                            else:
-                                # For each term, search across all columns
-                                import re
-                                # Escape special regex characters but preserve spaces
-                                search_terms = term.split()
-                                term_mask = pd.Series([True] * len(str_df), index=str_df.index)
-                                
-                                for search_term in search_terms:
-                                    # Escape special regex characters
-                                    escaped_term = re.escape(search_term)
-                                    # Update mask with AND logic for each search term
-                                    term_mask = term_mask & str_df.apply(
-                                        lambda x: x.str.contains(escaped_term, case=False, na=False, regex=True)
-                                    ).any(axis=1)
-                                
-                                print(f"Searching for terms: {search_terms}")
-                        
-                        # Update the mask with AND logic for the current term
-                        mask = mask & term_mask
-                    
-                    # Apply the combined mask to filter rows
-                    filtered_df = filtered_df[mask].copy()
+                print(f"Rows after wildcard append: {len(filtered_df)}")
+            else:
+                # No wildcard, apply normal filtering
+                filtered_df = self.row_filter_impl(filtered_df, filter_text)
             
             # Store the filtered DataFrame for column filtering
             self.filtered_csv_df = filtered_df
@@ -933,22 +946,73 @@ class CSVBrowser(tk.Tk):
                     print(f"Error updating status bar: {e}")
                     if hasattr(self, 'status_var'):
                         self.status_var.set("Ready")
-            
+                        
         except Exception as e:
             import traceback
             error_msg = f"Error in row filter: {str(e)}\n{traceback.format_exc()}"
             print(error_msg)
-            self.status_var.set(f"Error: {str(e)}")
+            if hasattr(self, 'status_var'):
+                self.status_var.set(f"Error: {str(e)}")
             # Restore original data on error
             if hasattr(self, 'original_csv_df'):
                 self.csv_table.model.df = self.original_csv_df
                 self.csv_table.redraw()
-
-        # Update status bar if no error occurred
-        if 'filtered_df' in locals():
-            row_count = len(filtered_df)
-            col_count = len(filtered_df.columns)
-            self.status_var.set(f"Showing {row_count} rows × {col_count} columns")
+                        
+    def row_filter_impl(self, df, filter_text):
+        """Helper method that implements the actual filtering logic without wildcard handling"""
+        if not filter_text or not isinstance(df, pd.DataFrame) or df.empty:
+            return df
+            
+        # Split filter into query and contains parts
+        query_part = ''
+        contains_part = ''
+        
+        # Check for '@' separator
+        if '@' in filter_text:
+            query_part, contains_part = [part.strip() for part in filter_text.split('@', 1)]
+        else:
+            # If no '@', try to use as query first
+            query_part = filter_text
+        
+        filtered_df = df.copy()
+        
+        # Apply query filtering if query part exists
+        query_successful = False
+        if query_part:
+            try:
+                # Try pandas query
+                print(f"Attempting pandas query: '{query_part}'")
+                filtered_df = filtered_df.query(query_part)
+                print(f"Query successful, rows after query: {len(filtered_df)}")
+                query_successful = True
+            except Exception as query_error:
+                print(f"Query failed: {query_error}")
+                query_successful = False
+        
+        # If there's a contains part after @, apply it to the filtered results
+        if contains_part and query_successful:
+            print(f"Applying contains filter: '{contains_part}' to query results")
+            filtered_df = self._apply_single_filter(filtered_df, contains_part)
+            print(f"Rows after contains filter: {len(filtered_df) if filtered_df is not None else 0}")
+        # If query was not successful and we have a contains part, try that instead
+        elif not query_successful and contains_part:
+            print(f"Query failed, falling back to contains search for: '{contains_part}'")
+            filtered_df = self._apply_single_filter(df, contains_part)  # Use original df since query failed
+            print(f"Rows after contains filter: {len(filtered_df) if filtered_df is not None else 0}")
+        # If query was not successful and no contains part, try contains on the original query
+        elif not query_successful and not contains_part:
+            print(f"Query failed, falling back to contains search for: '{query_part}'")
+            filtered_df = self._apply_single_filter(df, query_part)  # Use original df since query failed
+            print(f"Rows after contains filter: {len(filtered_df) if filtered_df is not None else 0}")
+        
+        # Ensure filtered_df is a DataFrame and not empty
+        if filtered_df is not None:
+            if isinstance(filtered_df, pd.Series):
+                filtered_df = filtered_df.to_frame()
+            if not isinstance(filtered_df, pd.DataFrame) or filtered_df.empty:
+                filtered_df = pd.DataFrame(columns=df.columns)
+        
+        return filtered_df
 
     def search_columns(self, *args):
         """Search for column names matching the search text"""
@@ -1101,7 +1165,11 @@ class CSVBrowser(tk.Tk):
             # Restore table settings if available
             self.restore_table_settings()
             
+            # Clear any existing filtered data
+            self.filtered_csv_df = None
+            
             # Always set the initial dataframe
+            self.original_csv_df = df.copy()  # Make sure we have a fresh copy
             self.csv_table.model.df = df
             self.csv_table.redraw()
             
@@ -1112,24 +1180,41 @@ class CSVBrowser(tk.Tk):
             has_row_filter = self.csv_filter_text.get().strip() != ""
             has_column_filter = (hasattr(self, 'visible_columns') and self.visible_columns is not None) or filter_text != ""
             
+            # If we have a column filter, make sure visible_columns only contains columns that exist in the new DataFrame
+            if has_column_filter and hasattr(self, 'visible_columns') and self.visible_columns is not None:
+                # Filter visible_columns to only include columns that exist in the new DataFrame
+                self.visible_columns = [col for col in self.visible_columns if col in df.columns]
+                print(f"Adjusted visible_columns to match new DataFrame columns: {self.visible_columns}")
+            
+            # Reapply filters in the correct order
             if has_row_filter and has_column_filter:
                 # Apply both row and column filtering
-                print("Applying both row and column filters")
+                print("Applying both row and column filters to new file")
                 # First apply row filter (this will store filtered_csv_df)
                 self.row_filter()
-                # Column filter will be applied by filter_csv_content
+                # Then apply column filter to the row-filtered data
+                if hasattr(self, 'filtered_csv_df') and self.filtered_csv_df is not None:
+                    self._apply_column_filter_to_filtered_data()
             elif has_row_filter:
                 # Apply only row filter
-                print("Applying only row filter")
+                print("Applying only row filter to new file")
                 self.row_filter()
             elif has_column_filter:
                 # Apply only column filter
-                print("Applying only column filter")
+                print("Applying only column filter to new file")
                 if filter_text:
                     # If there's filter text, apply it to get the visible columns
                     self.filter_columns()
+                elif hasattr(self, 'visible_columns') and self.visible_columns:
+                    # Otherwise use the stored visible_columns if they exist
+                    self._apply_column_filter()
                 else:
-                    # Otherwise use the stored visible_columns
+                    # No valid visible_columns, show all columns
+                    print("No valid visible_columns, showing all columns")
+                    self.filtered_csv_df = None
+                    self.csv_table.model.df = self.original_csv_df
+                    self.csv_table.redraw()
+                    self.visible_columns = list(df.columns)
                     self._apply_column_filter()
                 
                 # Ensure the index is properly preserved after column filtering
@@ -1292,24 +1377,19 @@ class CSVBrowser(tk.Tk):
     def _clean_column_name(self, column_name):
         """Remove any decorative elements from column names"""
         # Remove arrow indicators and any other decorative elements
-        cleaned = str(column_name)
-        cleaned = cleaned.replace('→', '').replace('←', '').strip()
-        # Remove any other decorative characters that might be added
-        return cleaned
 
     def setup_csv_filter_context_menu(self):
         """Create a context menu for row filter with instructions and examples"""
-        print("setup_csv_filter_context_menu called")  # Debug print
+        print("setup_csv_filter_context_menu called")
+        
         # Create context menu if it doesn't exist
         if not hasattr(self, 'csv_filter_context_menu'):
-            print("Creating new context menu")  # Debug print
             try:
                 self.csv_filter_context_menu = tk.Menu(self, tearoff=0)
-                print("Context menu created")
                 
                 # Add title
                 self.csv_filter_context_menu.add_command(
-                    label="Row Filter Instructions: click each item to show more", 
+                    label="Row Filter Help", 
                     state='disabled', 
                     font=('Arial', 10, 'bold')
                 )
@@ -1317,36 +1397,114 @@ class CSVBrowser(tk.Tk):
                 # Add separator
                 self.csv_filter_context_menu.add_separator()
                 
-                # Detailed examples
-                examples = [
-                    ("Basic Filter", "Searches all cells for matching text"),
-                    ("Pandas Query", "Use: column > 30 and other_column < 100"),
-                    ("Multiple Terms", "term1 & term2 (finds rows with both terms)"),
-                    ("Exclude Term", "!exclude (excludes rows with 'exclude')"),
-                    ("Combined Query", "column > 10 @ term1 & !term2"),
+                # Categorized examples
+                categories = [
+                    ("Search Operators", [
+                        ("AND (space)", "Find rows containing ALL terms (implicit AND)", "term1 term2"),
+                        ("OR (list)", "Find rows containing ANY term in list", "[term1,term2]"),
+                        ("Exclude Text", "Exclude rows with text", "!error"),
+                        ("Exact Phrase", "Find exact phrase match", "\"exact phrase\""),
+                    ]),
+                    ("Basic Search", [
+                        ("Text Search", "Search for text in any column", "example"),
+                        ("Multiple Terms", "Find rows with all terms (space = AND)", "term1 term2"),
+                        ("List Pattern", "Find rows with any term in list (OR)", "[term1,term2,term3]"),
+                    ]),
+                    ("Pandas Query", [
+                        ("Numeric Comparison", "Find values greater than", "column > 100"),
+                        ("Text Matching", "Find exact text match", "column == 'value'"),
+                        ("Date Range", "Find dates in range", "'2023-01-01' <= date <= '2023-12-31'"),
+                        ("Multiple Conditions", "Combine conditions", "(age > 30) & (salary < 50000)"),
+                    ]),
+                    ("Advanced Patterns", [
+                        ("Starts With", "Text starts with", "^prefix"),
+                        ("Ends With", "Text ends with", "suffix$"),
+                        ("Regex Pattern", "Match pattern", "col.str.match('^[A-Z]\\w*')"),
+                        ("In List", "Value in list (OR)", "col in [value1,value2,value3]"),
+                        ("List Pattern", "Shortcut for OR conditions", "[value1,value2,value3]"),
+                    ]),
+                    ("Combined Queries", [
+                        ("Query + Text", "Pandas query with text search", "column > 100 @ important"),
+                        ("Multiple Queries", "Chain multiple conditions", "col1 > 10 @ col2 < 5 @ !exclude"),
+                    ]),
                 ]
                 
-                # Create menu items with direct command binding
-                for i, (example, description) in enumerate(examples):
-                    # Create a closure to capture the current values
-                    def make_command(ex=example, desc=description):
-                        def command():
-                            print(f"Menu item clicked: {ex}")
-                            self.show_row_filter_example(ex, desc)
-                        return command
-                    
-                    # Add menu item with the command
+                # Add categories and examples
+                for category, examples in categories:
+                    # Add category header
                     self.csv_filter_context_menu.add_command(
-                        label=f"{example}: {description}",
-                        command=make_command()
+                        label=f"--- {category} ---",
+                        state='disabled',
+                        font=('Arial', 9, 'bold')
                     )
+                    
+                    # Add examples for this category
+                    for name, desc, example in examples:
+                        # Create a submenu for each example
+                        submenu = tk.Menu(self.csv_filter_context_menu, tearoff=0)
+                        
+                        # Add example with description
+                        submenu.add_command(
+                            label=f"{name}: {desc}",
+                            command=lambda e=example, n=name, d=desc: self.show_row_filter_example(n, d, e)
+                        )
+                        
+                        # Add a "Use This" button for quick application
+                        submenu.add_command(
+                            label=f"Use: {example}",
+                            command=lambda e=example: self.apply_filter_example(e)
+                        )
+                        
+                        # Add the submenu to the main menu
+                        self.csv_filter_context_menu.add_cascade(
+                            label=f"{name}: {example}",
+                            menu=submenu
+                        )
                 
-                # Make sure the menu is accessible
+                # Add separator before actions
+                self.csv_filter_context_menu.add_separator()
+                
+                # Add action buttons
+                self.csv_filter_context_menu.add_command(
+                    label="Clear Current Filter",
+                    command=lambda: self.csv_filter_entry.delete(0, tk.END)
+                )
+                
+                self.csv_filter_context_menu.add_command(
+                    label="View All Examples...",
+                    command=lambda: self.show_row_filter_example(
+                        "Complete Filtering Guide", 
+                        "Detailed explanation of all filtering options",
+                        """
+                        === FILTERING GUIDE ===
+                        
+                        1. BASIC SEARCH:
+                           - text: Find text in any column
+                           - !text: Exclude text
+                           - text1 & text2: Both must match (AND)
+                           - text1 | text2: Either can match (OR)
+                        
+                        2. PANDAS QUERY:
+                           - column > 10: Numeric comparison
+                           - col == 'value': Exact match
+                           - col.str.contains('text'): Text contains
+                           - col.isin([1,2,3]): Value in list
+                        
+                        3. COMBINED:
+                           - query @ text: Apply query then text search
+                           - col > 10 @ !exclude: Multiple conditions
+                        
+                        Use @ to chain multiple conditions together!
+                        """
+                    )
+                )
+                
                 self.update_idletasks()
-                print("Context menu items added")
+                print("Enhanced context menu created")
                 
             except Exception as e:
                 print(f"Error creating context menu: {e}")
+                traceback.print_exc()
                 raise
     
     def show_csv_filter_context_menu(self, event):
@@ -1390,11 +1548,23 @@ class CSVBrowser(tk.Tk):
             print(f"Error in show_csv_filter_context_menu: {e}")
             traceback.print_exc()
     
-    def show_row_filter_example(self, example, description):
-        """Show a detailed tooltip with filter example"""
+    def apply_filter_example(self, example_text):
+        """Apply the filter example to the filter entry"""
+        if hasattr(self, 'csv_filter_entry') and self.csv_filter_entry.winfo_exists():
+            self.csv_filter_entry.delete(0, tk.END)
+            self.csv_filter_entry.insert(0, example_text)
+            # Trigger the filter update
+            self.row_filter()
+            # Move focus to the entry for immediate typing
+            self.csv_filter_entry.focus_set()
+            self.csv_filter_entry.icursor(tk.END)
+    
+    def show_row_filter_example(self, example, description, example_text=None):
+        """Show a detailed tooltip with filter example and usage instructions"""
         print(f"\n=== show_row_filter_example called ===")
         print(f"Example: {example}")
         print(f"Description: {description}")
+        print(f"Example text: {example_text}")
         
         # Create a custom tooltip window
         tooltip = tk.Toplevel(self)
@@ -1403,49 +1573,173 @@ class CSVBrowser(tk.Tk):
         tooltip.attributes('-topmost', 1)  # Make sure tooltip stays on top
         
         # Create frame for better styling
-        frame = tk.Frame(tooltip, borderwidth=1, relief=tk.SOLID, bg='white')
+        frame = tk.Frame(tooltip, borderwidth=1, relief=tk.SOLID, bg='#f0f0f0')
         frame.pack(expand=True, fill=tk.BOTH, padx=1, pady=1)
         
-        # Title
-        title_label = tk.Label(frame, text=example, font=('Arial', 10, 'bold'), 
-                             bg='white', justify=tk.LEFT, anchor='w')
-        title_label.pack(pady=(5, 2), padx=5, anchor='w', fill=tk.X)
+        # Make window draggable
+        def start_move(event):
+            tooltip._drag_data = {
+                'x': event.x_root,
+                'y': event.y_root
+            }
+            title_bar.config(cursor='fleur')
+
+        def stop_move(event):
+            if hasattr(tooltip, '_drag_data'):
+                delattr(tooltip, '_drag_data')
+            title_bar.config(cursor='')
+
+        def do_move(event):
+            if not hasattr(tooltip, '_drag_data'):
+                return
+                
+            # Calculate new window position
+            x = tooltip.winfo_x() + (event.x_root - tooltip._drag_data['x'])
+            y = tooltip.winfo_y() + (event.y_root - tooltip._drag_data['y'])
+            
+            # Update drag data
+            tooltip._drag_data['x'] = event.x_root
+            tooltip._drag_data['y'] = event.y_root
+            
+            # Update window position
+            tooltip.geometry(f"+{x}+{y}")
+        
+        # Title bar with proper event binding
+        title_bar = tk.Frame(frame, bg='#e0e0e0', bd=1, relief=tk.RAISED)
+        title_bar.pack(fill=tk.X)
+        
+        # Title with drag handle
+        title_container = tk.Frame(title_bar, bg='#e0e0e0')
+        title_container.pack(fill=tk.X, expand=True)
+        
+        # Title label with drag handle
+        title_label = tk.Label(
+            title_container, 
+            text=example, 
+            font=('Arial', 10, 'bold'), 
+            bg='#e0e0e0', 
+            fg='#333',
+            padx=5,
+            pady=3
+        )
+        title_label.pack(side=tk.LEFT)
+        
+        # Add a transparent label to fill the space for dragging
+        drag_handle = tk.Label(
+            title_container,
+            text='',
+            bg='#e0e0e0',
+            cursor='fleur'
+        )
+        drag_handle.pack(fill=tk.X, expand=True, side=tk.LEFT)
+        
+        # Close button in title bar
+        close_btn = tk.Label(
+            title_bar, 
+            text='×', 
+            font=('Arial', 12, 'bold'),
+            bg='#e0e0e0',
+            fg='#666',
+            padx=8,
+            pady=0,
+            cursor='hand2'
+        )
+        close_btn.pack(side=tk.RIGHT)
+        close_btn.bind('<Button-1>', lambda e: tooltip.destroy())
+        
+        # Bind events to the title bar and drag handle
+        for widget in [title_bar, title_container, drag_handle, title_label]:
+            widget.bind('<ButtonPress-1>', start_move)
+            widget.bind('<B1-Motion>', do_move)
+            widget.bind('<ButtonRelease-1>', stop_move)
+        
+        # Content frame
+        content_frame = tk.Frame(frame, bg='white', padx=10, pady=10)
+        content_frame.pack(fill=tk.BOTH, expand=True)
         
         # Description
-        desc_label = tk.Label(frame, text=description, font=('Arial', 9), 
-                            bg='white', justify=tk.LEFT, anchor='w')
-        desc_label.pack(pady=(0, 5), padx=5, anchor='w', fill=tk.X)
+        desc_frame = tk.Frame(content_frame, bg='white')
+        desc_frame.pack(fill=tk.X, pady=(0, 10))
         
-        # Detailed explanation based on example type
-        explanations = {
-            "Basic Filter": "Searches all cells for matching text.\nCase-insensitive by default.",
-            "Pandas Query": (
-                "Powerful query language for filtering rows.\n"
-                "Examples:\n"
-                "- Numeric: 'age > 30 and salary < 50000'\n"
-                "- Text: 'name.str.contains(\"John\")'\n"
-                "- Date: 'date > \"2023-01-01\"'\n"
-                "- Multiple: '(age > 30) & (department == \"Sales\")'\n"
-                "- In list: 'id in [1, 2, 3]'\n"
-                "- String ops: 'email.str.endswith(\"@company.com\")'"
-            ),
-            "Multiple Terms": "Use '&' to find rows containing ALL terms.\nExample: 'apple & banana' finds rows with both words.",
-            "Exclusion": "Use '!' to exclude rows containing a term.\nCombine with other search terms.",
-            "Mixed Query": "Combine pandas query and contains search using '@'.\nQuery before '@', contains after."
-        }
+        desc_label = tk.Label(
+            desc_frame, 
+            text=description, 
+            font=('Arial', 9), 
+            bg='white', 
+            justify=tk.LEFT, 
+            anchor='w',
+            wraplength=380
+        )
+        desc_label.pack(fill=tk.X)
         
-        # Add detailed explanation if available
-        if example in explanations:
-            expl_text = explanations[example]
-            expl_label = tk.Label(frame, text=expl_text, font=('Arial', 8), 
-                                bg='white', justify=tk.LEFT, anchor='w',
-                                relief=tk.GROOVE, bd=1, padx=5, pady=5)
-            expl_label.pack(pady=(0, 5), padx=5, fill=tk.X)
+        # Example code block if provided
+        if example_text and example_text.strip():
+            example_frame = tk.Frame(content_frame, bg='#f8f8f8', bd=1, relief=tk.SOLID)
+            example_frame.pack(fill=tk.X, pady=(0, 10))
+            
+            # Format the example text with line numbers and syntax highlighting
+            lines = example_text.strip().split('\n')
+            for i, line in enumerate(lines, 1):
+                line_frame = tk.Frame(example_frame, bg='#f8f8f8')
+                line_frame.pack(fill=tk.X)
+                
+                # Line number
+                line_no = tk.Label(
+                    line_frame, 
+                    text=str(i).rjust(2), 
+                    bg='#e8e8e8', 
+                    fg='#666',
+                    font=('Courier New', 9),
+                    width=3,
+                    anchor='e',
+                    padx=2
+                )
+                line_no.pack(side=tk.LEFT, fill=tk.Y)
+                
+                # Code content
+                code_label = tk.Label(
+                    line_frame, 
+                    text=line, 
+                    bg='#f8f8f8',
+                    fg='#0066cc',
+                    font=('Courier New', 9),
+                    justify=tk.LEFT,
+                    anchor='w',
+                    padx=5
+                )
+                code_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
         
-        # Add close button
-        close_btn = tk.Button(frame, text="Close", command=tooltip.destroy,
-                            font=('Arial', 8), bd=1, padx=10)
-        close_btn.pack(pady=(0, 5), padx=5, anchor='e')
+        # Action buttons
+        btn_frame = tk.Frame(content_frame, bg='white')
+        btn_frame.pack(fill=tk.X, pady=(5, 0))
+        
+        if example_text and example_text.strip():
+            use_btn = tk.Button(
+                btn_frame,
+                text="Use This Filter",
+                command=lambda: [self.apply_filter_example(example_text), tooltip.destroy()],
+                bg='#4CAF50',
+                fg='white',
+                bd=0,
+                padx=15,
+                pady=3,
+                font=('Arial', 9)
+            )
+            use_btn.pack(side=tk.LEFT, padx=(0, 10))
+        
+        close_btn = tk.Button(
+            btn_frame,
+            text="Close",
+            command=tooltip.destroy,
+            bg='#f0f0f0',
+            bd=1,
+            padx=15,
+            pady=3,
+            font=('Arial', 9)
+        )
+        close_btn.pack(side=tk.LEFT)
+        
+        # Dragging functions are now defined above
         
         # Bind escape key to close the tooltip
         tooltip.bind('<Escape>', lambda e: tooltip.destroy())
@@ -1454,10 +1748,15 @@ class CSVBrowser(tk.Tk):
         tooltip.focus_set()
         
         # Make tooltip close when clicking outside
-        tooltip.bind('<FocusOut>', lambda e: tooltip.destroy() if tooltip and tooltip.winfo_exists() else None)
+        def on_click_outside(event):
+            if event.widget == tooltip:
+                tooltip.destroy()
         
-        # Don't auto-close the tooltip
-        # User will close it with the close button or by clicking outside
+        tooltip.bind('<Button-1>', on_click_outside, add='+')
+        
+        # Prevent closing when clicking on content
+        for child in [frame, title_bar, content_frame, btn_frame]:
+            child.bind('<Button-1>', lambda e: 'break')
         
         # Return the tooltip window in case we need to modify it later
         return tooltip
@@ -2724,7 +3023,51 @@ class CSVBrowser(tk.Tk):
             search_text = self.column_search_var.get().lower().strip()
             
             if not search_text:
-                return
+                # When empty, show all available columns
+                self.column_search_menu.delete(0, tk.END)
+                all_columns = self.original_csv_df.columns.tolist()
+                all_columns_sorted = sorted(all_columns, key=lambda x: str(x).lower())
+
+                # Local callback creator
+                def make_callback_all(column):
+                    def callback():
+                        self.column_search_var.set(column)
+                        self.last_searched_column = column
+                    return callback
+
+                # Group into submenus if many columns
+                if len(all_columns_sorted) > 20:
+                    group_size = 15
+                    for i in range(0, len(all_columns_sorted), group_size):
+                        group = all_columns_sorted[i:i+group_size]
+                        start_letter = str(group[0])[0].upper()
+                        end_letter = str(group[-1])[0].upper()
+
+                        submenu = tk.Menu(self.column_search_menu, tearoff=0)
+                        for col in group:
+                            submenu.add_command(label=col, command=make_callback_all(col))
+                        self.column_search_menu.add_cascade(
+                            label=f"{start_letter}-{end_letter} ({len(group)} columns)",
+                            menu=submenu
+                        )
+                else:
+                    for col in all_columns_sorted:
+                        self.column_search_menu.add_command(label=col, command=make_callback_all(col))
+
+                self.column_search_menu.add_separator()
+                self.column_search_menu.add_command(
+                    label="Clear Search",
+                    command=lambda: self.column_search_var.set("")
+                )
+
+                # Show the menu at the event position
+                if event:
+                    self.column_search_menu.post(event.x_root, event.y_root)
+                else:
+                    x = self.column_search_entry.winfo_rootx()
+                    y = self.column_search_entry.winfo_rooty() + self.column_search_entry.winfo_height()
+                    self.column_search_menu.post(x, y)
+                return "break"
                 
             print(f"\n=== Searching columns with: '{search_text}' ===")
             
@@ -3113,28 +3456,42 @@ Features:
     
     def _apply_column_filter_to_filtered_data(self):
         """Apply the stored column filter to the row-filtered data"""
-        if self.filtered_csv_df is not None and self.visible_columns:
-            try:
-                print(f"DEBUG: _apply_column_filter_to_filtered_data - Filtered DataFrame index type: {type(self.filtered_csv_df.index)}")
-                print(f"DEBUG: _apply_column_filter_to_filtered_data - Filtered DataFrame index name: {self.filtered_csv_df.index.name}")
-                print(f"DEBUG: _apply_column_filter_to_filtered_data - Filtered DataFrame index sample: {self.filtered_csv_df.index[:5] if len(self.filtered_csv_df) > 0 else 'Empty DataFrame'}")
+        # Check if we have valid data to work with
+        if not hasattr(self, 'filtered_csv_df') or self.filtered_csv_df is None or not hasattr(self, 'visible_columns') or not self.visible_columns:
+            print("No filtered data or visible columns to apply filter to")
+            return
+            
+        try:
+            print(f"DEBUG: _apply_column_filter_to_filtered_data - Current file: {getattr(self, 'current_csv_file', 'None')}")
+            print(f"DEBUG: _apply_column_filter_to_filtered_data - Filtered DataFrame index type: {type(self.filtered_csv_df.index)}")
+            print(f"DEBUG: _apply_column_filter_to_filtered_data - Filtered DataFrame index name: {self.filtered_csv_df.index.name}")
+            
+            # Verify the filtered data matches the current file's data structure
+            if not hasattr(self, 'original_csv_df') or self.original_csv_df is None:
+                print("Warning: No original CSV data available to verify filtered data against")
+                return
                 
-                # Get valid columns (in case we switched to a file with different columns)
-                valid_columns = [col for col in self.visible_columns if col in self.filtered_csv_df.columns]
-                
-                if not valid_columns:
-                    print("No valid columns for this file, showing all columns")
-                    self.csv_table.model.df = self.filtered_csv_df.copy()
-                else:
-                    # Apply column filter using .loc to ensure index preservation
+            # Get valid columns that exist in both visible_columns and the filtered dataframe
+            valid_columns = [col for col in self.visible_columns if col in self.filtered_csv_df.columns]
+            
+            if not valid_columns:
+                print("No valid columns for this file, showing all columns")
+                filtered_df = self.filtered_csv_df.copy()
+            else:
+                # Apply column filter using .loc to ensure index preservation
+                try:
                     filtered_df = self.filtered_csv_df.loc[:, valid_columns].copy()
                     print(f"DEBUG: _apply_column_filter_to_filtered_data - After column filter - DataFrame shape: {filtered_df.shape}")
                     print(f"DEBUG: _apply_column_filter_to_filtered_data - After column filter - Index type: {type(filtered_df.index)}")
                     print(f"DEBUG: _apply_column_filter_to_filtered_data - After column filter - Index name: {filtered_df.index.name}")
-                    
-                    self.csv_table.model.df = filtered_df
-                
-                # Redraw the table
+                except Exception as e:
+                    print(f"Error applying column filter: {e}")
+                    traceback.print_exc()
+                    return
+            
+            # Update the table model with the filtered dataframe
+            try:
+                self.csv_table.model.df = filtered_df
                 self.csv_table.redraw()
                 
                 print(f"DEBUG: _apply_column_filter_to_filtered_data - After redraw - DataFrame index type: {type(self.csv_table.model.df.index)}")
@@ -3160,13 +3517,21 @@ Features:
                 self.adjust_column_widths()
                 
             except Exception as e:
-                import traceback
-                error_msg = f"Error in _apply_column_filter_to_filtered_data: {str(e)}\n{traceback.format_exc()}"
-                print(error_msg)
-                self.status_var.set(f"Error: {str(e)}")
-                # Restore original data on error
-                if hasattr(self, 'filtered_csv_df'):
+                print(f"Error updating table with filtered data: {e}")
+                traceback.print_exc()
+                
+        except Exception as e:
+            import traceback
+            error_msg = f"Error in _apply_column_filter_to_filtered_data: {str(e)}\n{traceback.format_exc()}"
+            print(error_msg)
+            self.status_var.set(f"Error: {str(e)}")
+            # Restore original data on error
+            if hasattr(self, 'filtered_csv_df') and self.filtered_csv_df is not None:
+                try:
                     self.csv_table.model.df = self.filtered_csv_df
+                    self.csv_table.redraw()
+                except Exception as restore_error:
+                    print(f"Error restoring filtered data: {restore_error}")
                     self.csv_table.redraw()
                 traceback.print_exc()
     
@@ -3297,10 +3662,18 @@ Features:
                     print("No matching columns found, keeping current view")
                     return
                 
-                # Restore the index after filtering
+                # Restore the index after filtering if lengths match
                 if current_index is not None:
-                    self.csv_table.model.df.index = current_index
-                    print(f"Restored index with {len(current_index)} rows after filtering")
+                    current_df = self.csv_table.model.df
+                    if len(current_df) == len(current_index):
+                        try:
+                            current_df.index = current_index
+                            print(f"Restored index with {len(current_index)} rows after filtering")
+                        except ValueError as e:
+                            print(f"Warning: Could not restore index - {e}")
+                            print(f"Current DataFrame length: {len(current_df)}, Index length: {len(current_index)}")
+                    else:
+                        print(f"Warning: Cannot restore index - length mismatch. DataFrame: {len(current_df)}, Index: {len(current_index)}")
                 
                 # Preserve the index
                 self._safe_preserve_index()
@@ -4489,6 +4862,27 @@ Features:
                     settings['index_column'] = original_name
                     settings['temp_index_column'] = index_name
                     print(f"Saved index column: {original_name}")
+                
+                # Save plot columns if available
+                if hasattr(self.csv_table, 'multiplecollist') and self.csv_table.multiplecollist:
+                    try:
+                        # Convert column indices to column names, handling potential out-of-bounds indices
+                        col_indices = self.csv_table.multiplecollist
+                        col_names = []
+                        
+                        for i in col_indices:
+                            try:
+                                if i < len(self.csv_table.model.df.columns):
+                                    col_names.append(self.csv_table.model.df.columns[i])
+                            except Exception as e:
+                                print(f"Warning: Could not access column index {i}: {e}")
+                        
+                        if col_names:  # Only save if we have valid column names
+                            settings['plot_columns'] = col_names
+                            print(f"Saved plot columns: {col_names}")
+                    except Exception as e:
+                        print(f"Error saving plot columns: {e}")
+                        traceback.print_exc()
             
             # Save visible columns
             if hasattr(self, 'visible_columns') and self.visible_columns is not None:
@@ -4512,23 +4906,8 @@ Features:
             if hasattr(self.csv_table, 'sortOrder'):
                 settings['sort_order'] = self.csv_table.sortOrder
             
-            # Save selected columns for plotting
-            if hasattr(self.csv_table, 'multiplecollist'):
-                # Save the column names instead of indices for better persistence
-                if self.csv_table.multiplecollist and hasattr(self.csv_table.model, 'df'):
-                    try:
-                        # Convert column indices to column names
-                        col_indices = self.csv_table.multiplecollist
-                        col_names = [self.csv_table.model.df.columns[i] for i in col_indices]
-                        settings['plot_columns'] = col_names
-                        print(f"Saved plot columns: {col_names}")
-                    except Exception as e:
-                        print(f"Error saving plot columns: {e}")
-                        traceback.print_exc()
-            
-            # Store the settings
+            # Save the settings
             self.saved_table_settings = settings
-            print("Table settings saved successfully")
             
         except Exception as e:
             print(f"Error saving table settings: {e}")
@@ -4639,20 +5018,40 @@ Features:
             # Restore selected columns for plotting
             if 'plot_columns' in settings and settings['plot_columns'] is not None:
                 try:
-                    # Convert column names to indices
+                    if not hasattr(self.csv_table, 'model') or not hasattr(self.csv_table.model, 'df'):
+                        print("Warning: No DataFrame model available to restore plot columns")
+                        return
+                        
+                    # Get the current column names in the DataFrame
+                    current_columns = list(self.csv_table.model.df.columns)
+                    
+                    # Convert column names to indices, handling missing columns
                     col_names = settings['plot_columns']
                     col_indices = []
                     
                     for col_name in col_names:
-                        if col_name in self.csv_table.model.df.columns:
-                            col_idx = list(self.csv_table.model.df.columns).index(col_name)
-                            col_indices.append(col_idx)
+                        try:
+                            if col_name in current_columns:
+                                col_idx = current_columns.index(col_name)
+                                col_indices.append(col_idx)
+                            else:
+                                print(f"Warning: Column '{col_name}' not found in current DataFrame")
+                        except Exception as e:
+                            print(f"Warning: Error processing column '{col_name}': {e}")
                     
                     if col_indices:
-                        self.csv_table.multiplecollist = col_indices
-                        # Draw the selected columns in the UI
-                        self.csv_table.drawSelectedCol()
-                        print(f"Restored plot columns: {col_names}")
+                        try:
+                            self.csv_table.multiplecollist = col_indices
+                            # Draw the selected columns in the UI
+                            if hasattr(self.csv_table, 'drawSelectedCol'):
+                                self.csv_table.drawSelectedCol()
+                            print(f"Restored {len(col_indices)} plot columns")
+                        except Exception as e:
+                            print(f"Error applying column selection: {e}")
+                            traceback.print_exc()
+                    else:
+                        print("No valid columns found to restore for plotting")
+                        
                 except Exception as e:
                     print(f"Error restoring plot columns: {e}")
                     traceback.print_exc()
@@ -5153,4 +5552,4 @@ Features:
 
 if __name__ == "__main__":
     app = CSVBrowser()
-    app.mainloop()
+    app.mainloop()        

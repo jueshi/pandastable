@@ -12,8 +12,12 @@ pandastable/dialogs.py
 pandastable/handlers.py
 pandastable/headers.py
 pandastable/images.py
+pandastable/plotting - v1.1 subplots.py
+pandastable/plotting - v1.2-add-grid-width-slider.py
+pandastable/plotting - v1.3-gridwidth-working.py
 pandastable/plotting-ori.py
 pandastable/plotting.py
+pandastable/plotting_fix.py
 pandastable/plugin.py
 pandastable/stats.py
 pandastable/tests.py

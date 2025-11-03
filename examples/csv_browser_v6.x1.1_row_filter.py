@@ -272,22 +272,74 @@ class CSVBrowser(tk.Tk):
         
         # Create right-click context menu for filtering instructions
         filter_menu = tk.Menu(filter_entry, tearoff=0)
-        filter_menu.add_command(label="Filtering Instructions", state='disabled', font=('Arial', 10, 'bold'))
+        
+        # Add title and basic instructions
+        filter_menu.add_command(label="📋 File Filtering Help", state='disabled', font=('Arial', 10, 'bold'))
         filter_menu.add_separator()
-        filter_menu.add_command(label="Basic Search: Enter any text to match", state='disabled')
-        filter_menu.add_command(label="Multiple Terms: Use space ' 'to combine", state='disabled')
-        filter_menu.add_command(label="Exclude Terms: Use '!' prefix", state='disabled')
+        
+        # Add basic filtering examples
+        filter_menu.add_command(
+            label="🔍 Basic Search: text", 
+            command=lambda: filter_entry.insert(tk.INSERT, "text"),
+            font=('Arial', 9, 'normal')
+        )
+        filter_menu.add_command(
+            label="🔍 Multiple terms: term1 term2", 
+            command=lambda: filter_entry.insert(tk.INSERT, "term1 term2"),
+            font=('Arial', 9, 'normal')
+        )
         filter_menu.add_separator()
-        filter_menu.add_command(label="Examples:", state='disabled', font=('Arial', 10, 'bold'))
-        filter_menu.add_command(label="'csv': Show files with 'csv'", state='disabled')
-        filter_menu.add_command(label="'2024 report': Files with both terms", state='disabled')
-        filter_menu.add_command(label="'!temp': Exclude files with 'temp'", state='disabled')
-        filter_menu.add_command(label="'csv !old': CSV files, not old", state='disabled')
+        
+        # Add advanced filtering examples
+        adv_menu = tk.Menu(filter_menu, tearoff=0)
+        adv_menu.add_command(
+            label="🔍 Exclude: !text", 
+            command=lambda: filter_entry.insert(tk.INSERT, "!text")
+        )
+        adv_menu.add_command(
+            label="🔍 Exact match: \"exact phrase\"", 
+            command=lambda: filter_entry.insert(tk.INSERT, '\"exact phrase\"')
+        )
+        adv_menu.add_command(
+            label="🔍 File extension: .csv", 
+            command=lambda: filter_entry.insert(tk.INSERT, ".csv")
+        )
+        adv_menu.add_command(
+            label="🔍 Date range: 2023-01-01 to 2023-12-31", 
+            command=lambda: filter_entry.insert(tk.INSERT, "2023")
+        )
+        filter_menu.add_cascade(label="Advanced Filtering...", menu=adv_menu)
+        
+        # Add separator before actions
+        filter_menu.add_separator()
+        
+        # Add action items
+        filter_menu.add_command(
+            label="🔄 Clear Filter", 
+            command=lambda: [self.filter_text.set(""), self.filter_files()]
+        )
+        filter_menu.add_command(
+            label="💾 Save Current Filter", 
+            command=self.save_file_filter
+        )
+        filter_menu.add_command(
+            label="📂 Load Saved Filter", 
+            command=self.load_file_filter
+        )
         
         def show_filter_menu(event):
-            filter_menu.tk_popup(event.x_root, event.y_root)
+            try:
+                filter_menu.tk_popup(event.x_root, event.y_root)
+            finally:
+                # Make sure to release the grab (Tkinter quirk)
+                filter_menu.grab_release()
         
+        # Store the entry as instance variable for later reference
+        self.filter_entry = filter_entry
+        
+        # Bind right-click and right-click release
         filter_entry.bind('<Button-3>', show_filter_menu)  # Right-click
+        filter_entry.bind('<ButtonRelease-3>', lambda e: 'break')  # Keep menu open
         
         # Create table frame
         table_frame = ttk.Frame(self.pt_frame)
@@ -825,6 +877,17 @@ class CSVBrowser(tk.Tk):
                 exact_text = search_text[1:-1]
                 str_df = df.astype(str)
                 mask = str_df.apply(lambda x: x == exact_text).any(axis=1)
+            # Handle prefix/suffix patterns
+            elif search_text.startswith('^') or search_text.endswith('$'):
+                str_df = df.astype(str)
+                if search_text.startswith('^'):
+                    # Prefix match
+                    pattern = f'^{re.escape(search_text[1:])}'
+                    mask = str_df.apply(lambda x: x.str.contains(pattern, case=False, na=False, regex=True)).any(axis=1)
+                elif search_text.endswith('$'):
+                    # Suffix match
+                    pattern = f'{re.escape(search_text[:-1])}$'
+                    mask = str_df.apply(lambda x: x.str.contains(pattern, case=False, na=False, regex=True)).any(axis=1)
             # Handle multiple terms (all must be present)
             else:
                 terms = [t.strip() for t in search_text.split() if t.strip()]
@@ -839,8 +902,11 @@ class CSVBrowser(tk.Tk):
                     str_df = df.astype(str)
                     mask = str_df.apply(lambda x: x.str.contains(re.escape(search_text), case=False, na=False, regex=False)).any(axis=1)
             
-            # Return only matching rows
-            return df[mask].copy()
+            # Return only matching rows, ensuring it's a DataFrame
+            result = df[mask]
+            if isinstance(result, pd.Series):
+                return result.to_frame()
+            return result.copy()
             
         except Exception as e:
             print(f"Error in _apply_single_filter: {e}")
@@ -973,18 +1039,25 @@ class CSVBrowser(tk.Tk):
         if contains_part and query_successful:
             print(f"Applying contains filter: '{contains_part}' to query results")
             filtered_df = self._apply_single_filter(filtered_df, contains_part)
-            print(f"Rows after contains filter: {len(filtered_df)}")
+            print(f"Rows after contains filter: {len(filtered_df) if filtered_df is not None else 0}")
         # If query was not successful and we have a contains part, try that instead
         elif not query_successful and contains_part:
             print(f"Query failed, falling back to contains search for: '{contains_part}'")
             filtered_df = self._apply_single_filter(df, contains_part)  # Use original df since query failed
-            print(f"Rows after contains filter: {len(filtered_df)}")
+            print(f"Rows after contains filter: {len(filtered_df) if filtered_df is not None else 0}")
         # If query was not successful and no contains part, try contains on the original query
         elif not query_successful and not contains_part:
             print(f"Query failed, falling back to contains search for: '{query_part}'")
             filtered_df = self._apply_single_filter(df, query_part)  # Use original df since query failed
-            print(f"Rows after contains filter: {len(filtered_df)}")
-            
+            print(f"Rows after contains filter: {len(filtered_df) if filtered_df is not None else 0}")
+        
+        # Ensure filtered_df is a DataFrame and not empty
+        if filtered_df is not None:
+            if isinstance(filtered_df, pd.Series):
+                filtered_df = filtered_df.to_frame()
+            if not isinstance(filtered_df, pd.DataFrame) or filtered_df.empty:
+                filtered_df = pd.DataFrame(columns=df.columns)
+        
         return filtered_df
 
     def search_columns(self, *args):
@@ -1329,24 +1402,19 @@ class CSVBrowser(tk.Tk):
     def _clean_column_name(self, column_name):
         """Remove any decorative elements from column names"""
         # Remove arrow indicators and any other decorative elements
-        cleaned = str(column_name)
-        cleaned = cleaned.replace('→', '').replace('←', '').strip()
-        # Remove any other decorative characters that might be added
-        return cleaned
 
     def setup_csv_filter_context_menu(self):
         """Create a context menu for row filter with instructions and examples"""
-        print("setup_csv_filter_context_menu called")  # Debug print
+        print("setup_csv_filter_context_menu called")
+        
         # Create context menu if it doesn't exist
         if not hasattr(self, 'csv_filter_context_menu'):
-            print("Creating new context menu")  # Debug print
             try:
                 self.csv_filter_context_menu = tk.Menu(self, tearoff=0)
-                print("Context menu created")
                 
                 # Add title
                 self.csv_filter_context_menu.add_command(
-                    label="Row Filter Instructions: click each item to show more", 
+                    label="Row Filter Help", 
                     state='disabled', 
                     font=('Arial', 10, 'bold')
                 )
@@ -1354,36 +1422,114 @@ class CSVBrowser(tk.Tk):
                 # Add separator
                 self.csv_filter_context_menu.add_separator()
                 
-                # Detailed examples
-                examples = [
-                    ("Basic Filter", "Searches all cells for matching text"),
-                    ("Pandas Query", "Use: column > 30 and other_column < 100"),
-                    ("Multiple Terms", "term1 & term2 (finds rows with both terms)"),
-                    ("Exclude Term", "!exclude (excludes rows with 'exclude')"),
-                    ("Combined Query", "column > 10 @ term1 & !term2"),
+                # Categorized examples
+                categories = [
+                    ("Search Operators", [
+                        ("AND (space)", "Find rows containing ALL terms (implicit AND)", "term1 term2"),
+                        ("OR (list)", "Find rows containing ANY term in list", "[term1,term2]"),
+                        ("Exclude Text", "Exclude rows with text", "!error"),
+                        ("Exact Phrase", "Find exact phrase match", "\"exact phrase\""),
+                    ]),
+                    ("Basic Search", [
+                        ("Text Search", "Search for text in any column", "example"),
+                        ("Multiple Terms", "Find rows with all terms (space = AND)", "term1 term2"),
+                        ("List Pattern", "Find rows with any term in list (OR)", "[term1,term2,term3]"),
+                    ]),
+                    ("Pandas Query", [
+                        ("Numeric Comparison", "Find values greater than", "column > 100"),
+                        ("Text Matching", "Find exact text match", "column == 'value'"),
+                        ("Date Range", "Find dates in range", "'2023-01-01' <= date <= '2023-12-31'"),
+                        ("Multiple Conditions", "Combine conditions", "(age > 30) & (salary < 50000)"),
+                    ]),
+                    ("Advanced Patterns", [
+                        ("Starts With", "Text starts with", "^prefix"),
+                        ("Ends With", "Text ends with", "suffix$"),
+                        ("Regex Pattern", "Match pattern", "col.str.match('^[A-Z]\\w*')"),
+                        ("In List", "Value in list (OR)", "col in [value1,value2,value3]"),
+                        ("List Pattern", "Shortcut for OR conditions", "[value1,value2,value3]"),
+                    ]),
+                    ("Combined Queries", [
+                        ("Query + Text", "Pandas query with text search", "column > 100 @ important"),
+                        ("Multiple Queries", "Chain multiple conditions", "col1 > 10 @ col2 < 5 @ !exclude"),
+                    ]),
                 ]
                 
-                # Create menu items with direct command binding
-                for i, (example, description) in enumerate(examples):
-                    # Create a closure to capture the current values
-                    def make_command(ex=example, desc=description):
-                        def command():
-                            print(f"Menu item clicked: {ex}")
-                            self.show_row_filter_example(ex, desc)
-                        return command
-                    
-                    # Add menu item with the command
+                # Add categories and examples
+                for category, examples in categories:
+                    # Add category header
                     self.csv_filter_context_menu.add_command(
-                        label=f"{example}: {description}",
-                        command=make_command()
+                        label=f"--- {category} ---",
+                        state='disabled',
+                        font=('Arial', 9, 'bold')
                     )
+                    
+                    # Add examples for this category
+                    for name, desc, example in examples:
+                        # Create a submenu for each example
+                        submenu = tk.Menu(self.csv_filter_context_menu, tearoff=0)
+                        
+                        # Add example with description
+                        submenu.add_command(
+                            label=f"{name}: {desc}",
+                            command=lambda e=example, n=name, d=desc: self.show_row_filter_example(n, d, e)
+                        )
+                        
+                        # Add a "Use This" button for quick application
+                        submenu.add_command(
+                            label=f"Use: {example}",
+                            command=lambda e=example: self.apply_filter_example(e)
+                        )
+                        
+                        # Add the submenu to the main menu
+                        self.csv_filter_context_menu.add_cascade(
+                            label=f"{name}: {example}",
+                            menu=submenu
+                        )
                 
-                # Make sure the menu is accessible
+                # Add separator before actions
+                self.csv_filter_context_menu.add_separator()
+                
+                # Add action buttons
+                self.csv_filter_context_menu.add_command(
+                    label="Clear Current Filter",
+                    command=lambda: self.csv_filter_entry.delete(0, tk.END)
+                )
+                
+                self.csv_filter_context_menu.add_command(
+                    label="View All Examples...",
+                    command=lambda: self.show_row_filter_example(
+                        "Complete Filtering Guide", 
+                        "Detailed explanation of all filtering options",
+                        """
+                        === FILTERING GUIDE ===
+                        
+                        1. BASIC SEARCH:
+                           - text: Find text in any column
+                           - !text: Exclude text
+                           - text1 & text2: Both must match (AND)
+                           - text1 | text2: Either can match (OR)
+                        
+                        2. PANDAS QUERY:
+                           - column > 10: Numeric comparison
+                           - col == 'value': Exact match
+                           - col.str.contains('text'): Text contains
+                           - col.isin([1,2,3]): Value in list
+                        
+                        3. COMBINED:
+                           - query @ text: Apply query then text search
+                           - col > 10 @ !exclude: Multiple conditions
+                        
+                        Use @ to chain multiple conditions together!
+                        """
+                    )
+                )
+                
                 self.update_idletasks()
-                print("Context menu items added")
+                print("Enhanced context menu created")
                 
             except Exception as e:
                 print(f"Error creating context menu: {e}")
+                traceback.print_exc()
                 raise
     
     def show_csv_filter_context_menu(self, event):
@@ -1427,11 +1573,23 @@ class CSVBrowser(tk.Tk):
             print(f"Error in show_csv_filter_context_menu: {e}")
             traceback.print_exc()
     
-    def show_row_filter_example(self, example, description):
-        """Show a detailed tooltip with filter example"""
+    def apply_filter_example(self, example_text):
+        """Apply the filter example to the filter entry"""
+        if hasattr(self, 'csv_filter_entry') and self.csv_filter_entry.winfo_exists():
+            self.csv_filter_entry.delete(0, tk.END)
+            self.csv_filter_entry.insert(0, example_text)
+            # Trigger the filter update
+            self.row_filter()
+            # Move focus to the entry for immediate typing
+            self.csv_filter_entry.focus_set()
+            self.csv_filter_entry.icursor(tk.END)
+    
+    def show_row_filter_example(self, example, description, example_text=None):
+        """Show a detailed tooltip with filter example and usage instructions"""
         print(f"\n=== show_row_filter_example called ===")
         print(f"Example: {example}")
         print(f"Description: {description}")
+        print(f"Example text: {example_text}")
         
         # Create a custom tooltip window
         tooltip = tk.Toplevel(self)
@@ -1440,49 +1598,173 @@ class CSVBrowser(tk.Tk):
         tooltip.attributes('-topmost', 1)  # Make sure tooltip stays on top
         
         # Create frame for better styling
-        frame = tk.Frame(tooltip, borderwidth=1, relief=tk.SOLID, bg='white')
+        frame = tk.Frame(tooltip, borderwidth=1, relief=tk.SOLID, bg='#f0f0f0')
         frame.pack(expand=True, fill=tk.BOTH, padx=1, pady=1)
         
-        # Title
-        title_label = tk.Label(frame, text=example, font=('Arial', 10, 'bold'), 
-                             bg='white', justify=tk.LEFT, anchor='w')
-        title_label.pack(pady=(5, 2), padx=5, anchor='w', fill=tk.X)
+        # Make window draggable
+        def start_move(event):
+            tooltip._drag_data = {
+                'x': event.x_root,
+                'y': event.y_root
+            }
+            title_bar.config(cursor='fleur')
+
+        def stop_move(event):
+            if hasattr(tooltip, '_drag_data'):
+                delattr(tooltip, '_drag_data')
+            title_bar.config(cursor='')
+
+        def do_move(event):
+            if not hasattr(tooltip, '_drag_data'):
+                return
+                
+            # Calculate new window position
+            x = tooltip.winfo_x() + (event.x_root - tooltip._drag_data['x'])
+            y = tooltip.winfo_y() + (event.y_root - tooltip._drag_data['y'])
+            
+            # Update drag data
+            tooltip._drag_data['x'] = event.x_root
+            tooltip._drag_data['y'] = event.y_root
+            
+            # Update window position
+            tooltip.geometry(f"+{x}+{y}")
+        
+        # Title bar with proper event binding
+        title_bar = tk.Frame(frame, bg='#e0e0e0', bd=1, relief=tk.RAISED)
+        title_bar.pack(fill=tk.X)
+        
+        # Title with drag handle
+        title_container = tk.Frame(title_bar, bg='#e0e0e0')
+        title_container.pack(fill=tk.X, expand=True)
+        
+        # Title label with drag handle
+        title_label = tk.Label(
+            title_container, 
+            text=example, 
+            font=('Arial', 10, 'bold'), 
+            bg='#e0e0e0', 
+            fg='#333',
+            padx=5,
+            pady=3
+        )
+        title_label.pack(side=tk.LEFT)
+        
+        # Add a transparent label to fill the space for dragging
+        drag_handle = tk.Label(
+            title_container,
+            text='',
+            bg='#e0e0e0',
+            cursor='fleur'
+        )
+        drag_handle.pack(fill=tk.X, expand=True, side=tk.LEFT)
+        
+        # Close button in title bar
+        close_btn = tk.Label(
+            title_bar, 
+            text='×', 
+            font=('Arial', 12, 'bold'),
+            bg='#e0e0e0',
+            fg='#666',
+            padx=8,
+            pady=0,
+            cursor='hand2'
+        )
+        close_btn.pack(side=tk.RIGHT)
+        close_btn.bind('<Button-1>', lambda e: tooltip.destroy())
+        
+        # Bind events to the title bar and drag handle
+        for widget in [title_bar, title_container, drag_handle, title_label]:
+            widget.bind('<ButtonPress-1>', start_move)
+            widget.bind('<B1-Motion>', do_move)
+            widget.bind('<ButtonRelease-1>', stop_move)
+        
+        # Content frame
+        content_frame = tk.Frame(frame, bg='white', padx=10, pady=10)
+        content_frame.pack(fill=tk.BOTH, expand=True)
         
         # Description
-        desc_label = tk.Label(frame, text=description, font=('Arial', 9), 
-                            bg='white', justify=tk.LEFT, anchor='w')
-        desc_label.pack(pady=(0, 5), padx=5, anchor='w', fill=tk.X)
+        desc_frame = tk.Frame(content_frame, bg='white')
+        desc_frame.pack(fill=tk.X, pady=(0, 10))
         
-        # Detailed explanation based on example type
-        explanations = {
-            "Basic Filter": "Searches all cells for matching text.\nCase-insensitive by default.",
-            "Pandas Query": (
-                "Powerful query language for filtering rows.\n"
-                "Examples:\n"
-                "- Numeric: 'age > 30 and salary < 50000'\n"
-                "- Text: 'name.str.contains(\"John\")'\n"
-                "- Date: 'date > \"2023-01-01\"'\n"
-                "- Multiple: '(age > 30) & (department == \"Sales\")'\n"
-                "- In list: 'id in [1, 2, 3]'\n"
-                "- String ops: 'email.str.endswith(\"@company.com\")'"
-            ),
-            "Multiple Terms": "Use '&' to find rows containing ALL terms.\nExample: 'apple & banana' finds rows with both words.",
-            "Exclusion": "Use '!' to exclude rows containing a term.\nCombine with other search terms.",
-            "Mixed Query": "Combine pandas query and contains search using '@'.\nQuery before '@', contains after."
-        }
+        desc_label = tk.Label(
+            desc_frame, 
+            text=description, 
+            font=('Arial', 9), 
+            bg='white', 
+            justify=tk.LEFT, 
+            anchor='w',
+            wraplength=380
+        )
+        desc_label.pack(fill=tk.X)
         
-        # Add detailed explanation if available
-        if example in explanations:
-            expl_text = explanations[example]
-            expl_label = tk.Label(frame, text=expl_text, font=('Arial', 8), 
-                                bg='white', justify=tk.LEFT, anchor='w',
-                                relief=tk.GROOVE, bd=1, padx=5, pady=5)
-            expl_label.pack(pady=(0, 5), padx=5, fill=tk.X)
+        # Example code block if provided
+        if example_text and example_text.strip():
+            example_frame = tk.Frame(content_frame, bg='#f8f8f8', bd=1, relief=tk.SOLID)
+            example_frame.pack(fill=tk.X, pady=(0, 10))
+            
+            # Format the example text with line numbers and syntax highlighting
+            lines = example_text.strip().split('\n')
+            for i, line in enumerate(lines, 1):
+                line_frame = tk.Frame(example_frame, bg='#f8f8f8')
+                line_frame.pack(fill=tk.X)
+                
+                # Line number
+                line_no = tk.Label(
+                    line_frame, 
+                    text=str(i).rjust(2), 
+                    bg='#e8e8e8', 
+                    fg='#666',
+                    font=('Courier New', 9),
+                    width=3,
+                    anchor='e',
+                    padx=2
+                )
+                line_no.pack(side=tk.LEFT, fill=tk.Y)
+                
+                # Code content
+                code_label = tk.Label(
+                    line_frame, 
+                    text=line, 
+                    bg='#f8f8f8',
+                    fg='#0066cc',
+                    font=('Courier New', 9),
+                    justify=tk.LEFT,
+                    anchor='w',
+                    padx=5
+                )
+                code_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
         
-        # Add close button
-        close_btn = tk.Button(frame, text="Close", command=tooltip.destroy,
-                            font=('Arial', 8), bd=1, padx=10)
-        close_btn.pack(pady=(0, 5), padx=5, anchor='e')
+        # Action buttons
+        btn_frame = tk.Frame(content_frame, bg='white')
+        btn_frame.pack(fill=tk.X, pady=(5, 0))
+        
+        if example_text and example_text.strip():
+            use_btn = tk.Button(
+                btn_frame,
+                text="Use This Filter",
+                command=lambda: [self.apply_filter_example(example_text), tooltip.destroy()],
+                bg='#4CAF50',
+                fg='white',
+                bd=0,
+                padx=15,
+                pady=3,
+                font=('Arial', 9)
+            )
+            use_btn.pack(side=tk.LEFT, padx=(0, 10))
+        
+        close_btn = tk.Button(
+            btn_frame,
+            text="Close",
+            command=tooltip.destroy,
+            bg='#f0f0f0',
+            bd=1,
+            padx=15,
+            pady=3,
+            font=('Arial', 9)
+        )
+        close_btn.pack(side=tk.LEFT)
+        
+        # Dragging functions are now defined above
         
         # Bind escape key to close the tooltip
         tooltip.bind('<Escape>', lambda e: tooltip.destroy())
@@ -1491,10 +1773,15 @@ class CSVBrowser(tk.Tk):
         tooltip.focus_set()
         
         # Make tooltip close when clicking outside
-        tooltip.bind('<FocusOut>', lambda e: tooltip.destroy() if tooltip and tooltip.winfo_exists() else None)
+        def on_click_outside(event):
+            if event.widget == tooltip:
+                tooltip.destroy()
         
-        # Don't auto-close the tooltip
-        # User will close it with the close button or by clicking outside
+        tooltip.bind('<Button-1>', on_click_outside, add='+')
+        
+        # Prevent closing when clicking on content
+        for child in [frame, title_bar, content_frame, btn_frame]:
+            child.bind('<Button-1>', lambda e: 'break')
         
         # Return the tooltip window in case we need to modify it later
         return tooltip

@@ -578,7 +578,6 @@ class PlotViewer(Frame):
             return
  
         data = self.data
-        data.columns = self.checkColumnNames(data.columns)
         #print (data)
         #get all options from the mpl options object
         kwds = self.mplopts.kwds
@@ -600,129 +599,84 @@ class PlotViewer(Frame):
         #initialise the figure
         #self._initFigure()
         ax = self.ax
- 
+
         if by != '':
             #groupby needs to be handled per group so we can create the axes
             #for our figure and add them outside the pandas logic
             if by not in data.columns:
-                self.showWarning('the grouping column must be in selected data')
-                return
-            if by2 != '' and by2 in data.columns:
-                by = [by,by2]
+                # try to add missing grouping column from the full table by index
+                try:
+                    full = self.table.model.df
+                    if by in full.columns:
+                        data = data.join(full[[by]], how='left')
+                        self.data = data
+                except Exception:
+                    pass
+                if by not in data.columns:
+                    self.showWarning('the grouping column must be in selected data')
+                    return
+            # ensure optional second grouping column is present; if missing, try to join it
+            if by2 != '':
+                if by2 not in data.columns:
+                    try:
+                        full = self.table.model.df
+                        if by2 in full.columns:
+                            data = data.join(full[[by2]], how='left')
+                            self.data = data
+                    except Exception:
+                        pass
+                if by2 in data.columns:
+                    by = [by,by2]
             g = data.groupby(by)
 
-            if kwargs['subplots'] == True:
-                i=1
-                if len(g) > 30:
-                    self.showWarning('%s is too many subplots' %len(g))
-                    return
-                size = len(g)
-                
-                # Use grid_width from layoutopts if available
-                gl = self.layoutopts
-                
-                # If by2 is used, try to set rows/cols based on the group sizes
-                if isinstance(by, list) and len(by) == 2:
-                    # Get unique values in each grouping column to determine grid dimensions
-                    unique_by1 = len(data[by[0]].unique())
-                    unique_by2 = len(data[by[1]].unique())
-                    
-                    # Set grid_width to match first group by column's unique values
-                    # Only if it hasn't been manually set by the user
-                    if not hasattr(gl, '_grid_width_manually_set') or not gl._grid_width_manually_set:
-                        gl.grid_width = unique_by1
-                
-                grid_width = gl.grid_width if hasattr(gl, 'grid_width') else int(np.ceil(np.sqrt(len(g))))
-                
-                # Calculate rows based on grid_width and size
-                nrows = int(np.ceil(size / grid_width))
-                ncols = grid_width
-                
-                self.ax.set_visible(False)
-                del kwargs['subplots']
-                for n,df in g:
-                    if ncols==1 and nrows==1:
-                        ax = self.fig.add_subplot(111)
-                        self.ax.set_visible(True)
-                    else:
-                        # Calculate row and column position based on grid_width
-                        row = (i-1) // grid_width
-                        col = (i-1) % grid_width
-                        ax = self.fig.add_subplot(nrows, ncols, i)
-                    kwargs['legend'] = False #remove axis legends
-                    try:
-                        d = df.drop(by,axis=1) #remove grouping columns
-                    except: # if by is a list
-                        d = df.drop(columns=by)
-                    axs = self._doplot(d, ax, kind, False, errorbars, useindex,
-                                  bw=bw, yerr=None, kwargs=kwargs)
-                    n = (n[0], str(n[1])) if isinstance(n, tuple) else n
-                    ax.set_title(n)
-                    handles, labels = ax.get_legend_handles_labels()
-                    i+=1
- 
-                if 'sharey' in kwargs and kwargs['sharey'] == True:
-                    self.autoscale()
-                if  'sharex' in kwargs and kwargs['sharex'] == True:
-                    self.autoscale('x')
-                self.fig.legend(handles, labels, loc='center right', bbox_to_anchor=(0.9, 0.5))  #bbox_transform=self.fig.transFigure )
-                axs_list = self.fig.get_axes() # Get all axes after subplot creation
- 
-            else:
-                #single plot grouped only apply to some plot kinds
-                #the remainder are not supported
-                axs_list = [self.ax] # Use a list for consistency in setFigureOptions
-                labels = []; handles=[]
-                cmap = plt.cm.get_cmap(kwargs['colormap'])
-                #handle as pivoted data for some line, bar
-            if kind in ['line','bar','barh']:
-                # Plot each group as separate line
-                cmap = plt.cm.get_cmap(kwargs['colormap'])
-                groups = data.groupby(by)
-                num_groups = len(groups)
-                for i, (name, group) in enumerate(groups):
-                    color = cmap(float(i)/num_groups)
-                    group = group.drop(by, axis=1)  # Remove groupby column
-                    if errorbars:
-                        errs = group.std()
-                        kwargs['color'] = color
-                        self._doplot(group, self.ax, kind, False, errorbars, useindex=None,
-                                   bw=bw, yerr=errs, kwargs=kwargs, label=str(name))
-                    else:
-                        kwargs['color'] = color
-                        self._doplot(group, self.ax, kind, False, errorbars, useindex=None,
-                                   bw=bw, yerr=None, kwargs=kwargs, label=str(name))
-            elif kind == 'scatter':
-                #we plot multiple groups and series in different colors
-                #this logic could be placed in the scatter method?
-                d = data.drop(by,1)
-                d = d._get_numeric_data()
-                xcol = d.columns[0]
-                ycols = d.columns[1:]
-                c=0
-                legnames = []
-                handles = []
-                slen = len(g)*len(ycols)
-                clrs = [cmap(float(i)/slen) for i in range(slen)]
-                for n,df in g:
-                    for y in ycols:
-                        kwargs['color'] = clrs[c]
-                        currax, sc = self.scatter(df[[xcol,y]], ax=self.ax, **kwargs)
-                        if type(n) is tuple:
-                            n = ','.join(n)
-                        legnames.append(','.join([n,y]))
-                        handles.append(sc[0])
-                        c+=1
-                if kwargs['legend'] == True:
-                    if slen>6:
-                        lc = int(np.round(slen/10))
-                    else:
-                        lc = 1
-                    self.ax.legend([])
-                    self.ax.legend(handles, legnames, ncol=lc)
-            else:
-                self.showWarning('single grouped plots not supported for %s\n'
-                                'try using multiple subplots' %kind)
+        if kwargs['subplots'] == True:
+            i = 1
+            if len(g) > 30:
+                self.showWarning('%s is too many subplots' % len(g))
+                return
+            size = len(g)
+
+            # Use grid_width from layoutopts if available
+            gl = self.layoutopts
+
+            # If by2 is used, try to set rows/cols based on the group sizes
+            if isinstance(by, list) and len(by) == 2:
+                unique_by1 = len(data[by[0]].unique())
+                if not hasattr(gl, '_grid_width_manually_set') or not gl._grid_width_manually_set:
+                    gl.grid_width = unique_by1
+
+            grid_width = gl.grid_width if hasattr(gl, 'grid_width') else int(np.ceil(np.sqrt(len(g))))
+
+            # Calculate rows based on grid_width and size
+            nrows = int(np.ceil(size / grid_width))
+            ncols = grid_width
+
+            self.ax.set_visible(False)
+            del kwargs['subplots']
+            for n, df in g:
+                if ncols == 1 and nrows == 1:
+                    ax = self.fig.add_subplot(111)
+                    self.ax.set_visible(True)
+                else:
+                    ax = self.fig.add_subplot(nrows, ncols, i)
+                kwargs['legend'] = False  # remove axis legends
+                try:
+                    d = df.drop(by, axis=1)  # remove grouping columns
+                except:  # if by is a list
+                    d = df.drop(columns=by)
+                axs = self._doplot(d, ax, kind, False, errorbars, useindex,
+                                   bw=bw, yerr=None, kwargs=kwargs)
+                n = (n[0], str(n[1])) if isinstance(n, tuple) else n
+                ax.set_title(n)
+                handles, labels = ax.get_legend_handles_labels()
+                i += 1
+
+            if 'sharey' in kwargs and kwargs['sharey'] == True:
+                self.autoscale()
+            if 'sharex' in kwargs and kwargs['sharex'] == True:
+                self.autoscale('x')
+            self.fig.legend(handles, labels, loc='center right', bbox_to_anchor=(0.9, 0.5))
+            axs_list = self.fig.get_axes()  # Get all axes after subplot creation
         else:
             #non-grouped plot
             try:

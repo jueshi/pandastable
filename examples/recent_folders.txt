@@ -1,10 +1,10 @@
-C:/Users/juesh/OneDrive/Documents/windsurf/stock_data/Jues401k_stocks
-C:/Users/juesh/OneDrive/Documents/windsurf/stock_data/index_tickers
-C:/Users/juesh/OneDrive/Documents/windsurf/stock_data
-C:/Users/juesh/OneDrive/Documents/windsurf/stock_data/index_tickers/index_tickers
-C:/Users/juesh/OneDrive/Documents/windsurf
-C:/Users/juesh/OneDrive/Pictures/Screenshots 1
+C:/Users/juesh/OneDrive/Pictures/caspa_2025
+C:/Users/juesh/OneDrive/Pictures/caspa_2025/AWS_AI_Erran_li
+C:/Users/juesh/CrossDevice/Pixel 6a/storage/DCIM/Camera
 C:/Users/juesh/OneDrive/Pictures
-C:/Users/juesh/OneDrive/Pictures/StarAndStrides2025
+C:/Users/juesh/OneDrive/Pictures/Naveed_NSH_KSA
+C:/Users/juesh/OneDrive/Pictures/Camera Roll
+C:/Users/juesh/OneDrive/Documents/Sound Recordings
 C:/Users/juesh/OneDrive/Pictures/Screenshots
 C:/Users/juesh/Downloads
+D:/pocketflow/PocketFlow-Tutorial-Codebase-Knowledge/output/downloaded_CUDA_Course_git_32072

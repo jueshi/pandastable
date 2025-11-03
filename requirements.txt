@@ -1,0 +1,11 @@
+# Core dependencies for Image Browser with OCR + Gemini explanation
+pandas>=1.5
+Pillow>=10.0
+pandastable>=0.13.0
+
+# Gemini integration
+google-generativeai>=0.8.0
+python-dotenv>=1.0
+
+# OCR
+pytesseract>=0.3.10

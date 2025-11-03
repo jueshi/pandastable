@@ -1,0 +1,6 @@
+image_browser.log
+mermaid_test.log
+.mermaid_cache/
+examples/logs/mermaid_debug.log
+pandastable/__pycache__/
+.env

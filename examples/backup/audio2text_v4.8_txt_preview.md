@@ -1,0 +1,1 @@
+### @audio2text_v4.8_txt_preview.md carefully review the code and make sure the transcript text file preview works when the preview tab is selected.
