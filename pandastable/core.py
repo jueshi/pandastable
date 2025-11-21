@@ -3153,6 +3153,7 @@ class Table(Canvas):
         else:
             if len(rows) < 1 or self.allrows == True:
                 rows = list(range(self.rows))
+            if len(cols) < 1:
                 cols = [self.currentcol]
         try:
             data = df.iloc[rows,cols]

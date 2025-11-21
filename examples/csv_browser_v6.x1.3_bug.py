@@ -42,33 +42,12 @@ import sys
 
 # Add custom pandastable path to sys.path BEFORE importing pandastable
 # custom_pandastable_path = r"C:\Users\juesh\OneDrive\Documents\windsurf\pandastable\pandastable"
-# custom_pandastable_path = r"C:\Users\juesh\OneDrive\Documents\pandastable\pandastable"
-# custom_pandastable_path = r"C:\Users\juesh\OneDrive\Documents\pandastable"
-
-# # custom_pandastable_path = r"C:\Users\JueShi\OneDrive - Astera Labs, Inc\Documents\windsurf\pandastable\pandastable"
-# if os.path.exists(custom_pandastable_path):
-#     # Insert at the beginning of sys.path to prioritize this version
-#     sys.path.insert(0, custom_pandastable_path)
-#     print(f"Using custom pandastable from: {custom_pandastable_path}")
-    
-custom_pandastable_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "pandastable")
-# Fallback paths if needed
-# custom_pandastable_path = r"C:\Users\juesh\OneDrive\Documents\windsurf\pandastable\pandastable"
-# custom_pandastable_path = r"C:\Users\JueShi\OneDrive - Astera Labs, Inc\Documents\windsurf\pandastable\pandastable"
+custom_pandastable_path = r"C:\Users\JueShi\OneDrive - Astera Labs, Inc\Documents\windsurf\pandastable\pandastable"
 if os.path.exists(custom_pandastable_path):
     # Insert at the beginning of sys.path to prioritize this version
-    sys.path.insert(0, os.path.dirname(custom_pandastable_path))
+    sys.path.insert(0, custom_pandastable_path)
     print(f"Using custom pandastable from: {custom_pandastable_path}")
-
-# Force reload of pandastable modules if already imported
-# import importlib
-# if 'pandastable.plotting' in sys.modules:
-#     print("Reloading pandastable.plotting module...")
-#     importlib.reload(sys.modules['pandastable.plotting'])
-
-import pandastable.plotting as p
-print("Using plotting.py from:", p.__file__)
-
+    
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, simpledialog
 import pandas as pd
@@ -89,6 +68,210 @@ import re  # For regex operations
 
 warnings.filterwarnings('ignore', category=FutureWarning)
 
+# Install a global patch so plotting only uses numeric data while preserving categoricals for grouping
+_TABLEPLOT_PATCHED = False
+def _install_tableplot_numeric_guard():
+    global _TABLEPLOT_PATCHED
+    if _TABLEPLOT_PATCHED:
+        return
+    try:
+        from pandastable.plotting import TablePlot
+    except ImportError:
+        print("TablePlot class not available; skipping TablePlot numeric guard patch")
+        _TABLEPLOT_PATCHED = True
+        return
+
+    if not hasattr(TablePlot, '_original_doplot'):
+        TablePlot._original_doplot = TablePlot._doplot
+
+        def _numeric_guard_doplot(self, data, *args, **kwargs):
+            try:
+                if isinstance(data, pd.DataFrame):
+                    original = data
+
+                    def _collect_preserve_columns(plotter):
+                        preserve = []
+                        try:
+                            kw = getattr(plotter, 'mplopts', None)
+                            if kw is None:
+                                return preserve
+                            kw = getattr(kw, 'kwds', {})
+                            for key in ('by', 'by2', 'labelcol', 'clrcol', 'pointsizes'):
+                                val = kw.get(key)
+                                if isinstance(val, (list, tuple)):
+                                    preserve.extend([v for v in val if v])
+                                elif isinstance(val, str) and val:
+                                    preserve.append(val)
+                        except Exception:
+                            pass
+                        return preserve
+
+                    preserve_cols = _collect_preserve_columns(self)
+
+                    numeric_df = data.select_dtypes(include=['number']).copy()
+                    for col in data.columns:
+                        if col in preserve_cols or col in numeric_df.columns:
+                            continue
+                        if data[col].dtype == object or str(data[col].dtype).startswith('string'):
+                            coerced = pd.to_numeric(data[col], errors='coerce')
+                            if coerced.notna().any():
+                                numeric_df[col] = coerced
+
+                    if not numeric_df.empty:
+                        numeric_df = numeric_df.loc[:, numeric_df.notna().any()]
+                    if numeric_df.empty:
+                        try:
+                            messagebox.showerror("Plot Error", "No numeric data to plot")
+                        except Exception:
+                            pass
+                        return
+
+                    data = numeric_df.copy()
+                    for col in preserve_cols:
+                        if col in original.columns:
+                            data[col] = original[col]
+            except Exception:
+                pass
+            # Call original implementation
+            return TablePlot._original_doplot(self, data, *args, **kwargs)
+
+        TablePlot._doplot = _numeric_guard_doplot
+    _TABLEPLOT_PATCHED = True
+
+# Patch PlotViewer._doplot which is the actual function in this pandastable version
+_PLOTVIEWER_PATCHED = False
+def _install_plotviewer_numeric_guard():
+    global _PLOTVIEWER_PATCHED
+    if _PLOTVIEWER_PATCHED:
+        return
+    try:
+        from pandastable.plotting import PlotViewer
+        if not hasattr(PlotViewer, '_original_doplot'):
+            PlotViewer._original_doplot = PlotViewer._doplot
+
+            def _numeric_guard_doplot(self, data, ax, kind, subplots, errorbars, useindex, bw, yerr, kwargs):
+                try:
+                    if isinstance(data, pd.DataFrame):
+                        original = data
+
+                        def _collect_preserve_columns(plotter):
+                            preserve = []
+                            try:
+                                kw = getattr(plotter, 'mplopts', None)
+                                if kw is None:
+                                    return preserve
+                                kw = getattr(kw, 'kwds', {})
+                                for key in ('by', 'by2', 'labelcol', 'clrcol', 'pointsizes'):
+                                    val = kw.get(key)
+                                    if isinstance(val, (list, tuple)):
+                                        preserve.extend([v for v in val if v])
+                                    elif isinstance(val, str) and val:
+                                        preserve.append(val)
+                            except Exception:
+                                pass
+                            return preserve
+
+                        preserve_cols = _collect_preserve_columns(self)
+
+                        numeric_df = data.select_dtypes(include=['number']).copy()
+                        for col in data.columns:
+                            if col in preserve_cols or col in numeric_df.columns:
+                                continue
+                            if data[col].dtype == object or str(data[col].dtype).startswith('string'):
+                                coerced = pd.to_numeric(data[col], errors='coerce')
+                                if coerced.notna().any():
+                                    numeric_df[col] = coerced
+
+                        if not numeric_df.empty:
+                            numeric_df = numeric_df.loc[:, numeric_df.notna().any()]
+                        if numeric_df.empty:
+                            try:
+                                messagebox.showerror("Plot Error", "No numeric data to plot")
+                            except Exception:
+                                pass
+                            return
+
+                        data = numeric_df.copy()
+                        for col in preserve_cols:
+                            if col in original.columns:
+                                data[col] = original[col]
+                except Exception:
+                    pass
+                try:
+                    return PlotViewer._original_doplot(self, data, ax, kind, subplots, errorbars, useindex, bw, yerr, kwargs)
+                except TypeError as te:
+                    # Gracefully handle pandas' TypeError: no numeric data to plot
+                    msg = str(te)
+                    if 'no numeric data to plot' in msg:
+                        try:
+                            messagebox.showerror("Plot Error", "No numeric data to plot")
+                        except Exception:
+                            pass
+                        return
+                    raise
+
+            PlotViewer._doplot = _numeric_guard_doplot
+            _PLOTVIEWER_PATCHED = True
+    except Exception as e:
+        print(f"Failed to patch PlotViewer for numeric guard: {e}")
+
+# Patch PlotViewer._checkNumeric to return False when there are no numeric columns
+_PLOTVIEWER_CHECKNUM_PATCHED = False
+def _install_plotviewer_checknumeric_patch():
+    global _PLOTVIEWER_CHECKNUM_PATCHED
+    if _PLOTVIEWER_CHECKNUM_PATCHED:
+        return
+    try:
+        from pandastable.plotting import PlotViewer
+        if not hasattr(PlotViewer, '_original_checkNumeric'):
+            PlotViewer._original_checkNumeric = PlotViewer._checkNumeric
+
+            def _better_check_numeric(self, df):
+                try:
+                    if df is None or len(df) == 0:
+                        return False
+                    # Coerce to numeric and then check if any numeric column remains
+                    coerced = df.apply(lambda x: pd.to_numeric(x, errors='coerce', downcast='float'))
+                    numeric_df = coerced.select_dtypes(include=['number'])
+                    # Return False if no numeric columns or all columns are entirely NaN
+                    if numeric_df.shape[1] == 0:
+                        return False
+                    # Also ensure at least one column has at least one non-NaN
+                    has_valid = any(numeric_df[col].notna().any() for col in numeric_df.columns)
+                    return has_valid
+                except Exception:
+                    return False
+
+            PlotViewer._checkNumeric = _better_check_numeric
+            _PLOTVIEWER_CHECKNUM_PATCHED = True
+    except Exception as e:
+        print(f"Failed to patch PlotViewer._checkNumeric: {e}")
+
+# Ensure the patch is installed at import time
+try:
+    _install_tableplot_numeric_guard()
+    _install_plotviewer_numeric_guard()
+    _install_plotviewer_checknumeric_patch()
+except Exception:
+    pass
+
+try:
+    from pandastable.core import Table as _PTTable
+    if not hasattr(_PTTable, "_original_setindex"):
+        _PTTable._original_setindex = _PTTable.setindex
+
+        def _safe_setindex(self, *args, **kwargs):
+            try:
+                return _PTTable._original_setindex(self, *args, **kwargs)
+            except AttributeError as e:
+                if "updateData" in str(e):
+                    return
+                raise
+
+        _PTTable.setindex = _safe_setindex
+except Exception as e:
+    print(f"Failed to patch pandastable Table.setindex: {e}")
+
 class CSVBrowser(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -100,12 +283,14 @@ class CSVBrowser(tk.Tk):
         import warnings
         warnings.filterwarnings('ignore', message='.*color.*and.*colormap.*cannot be used simultaneously.*')
         warnings.filterwarnings('ignore', message='.*Tight layout not applied.*')
+        warnings.filterwarnings('ignore', message='.*DataFrame is highly fragmented.*', category=pd.errors.PerformanceWarning)
         
         # Initialize variables
         self.current_file = None
         self.is_horizontal = False  # Start with vertical layout
         self.filter_text = tk.StringVar()
-        self.filter_text.trace_add("write", self.filter_files)
+        self.filter_text.trace_add("write", lambda *args: self.filter_files())
+        self.filter_text.trace_add("write", lambda *args: self.update_max_fields())
         self.last_clicked_row = None
         self.csv_frame = None
         self.include_subfolders = tk.BooleanVar(value=False)
@@ -113,7 +298,7 @@ class CSVBrowser(tk.Tk):
         # Initialize CSV filter variables
         self.current_csv_filter = ""
         self.csv_filter_text = tk.StringVar(value="")
-        self.csv_filter_text.trace_add("write", self.row_filter)
+        self.csv_filter_text.trace_add("write", lambda *args: self.row_filter())
         
         # Initialize column search variable
         self.column_search_var = tk.StringVar(value="")
@@ -334,6 +519,14 @@ class CSVBrowser(tk.Tk):
         self.table.columnwidths['Name'] = 50
         self.table.columnwidths['File_Path'] = 90
 
+        # Patch pandastable plot to safely handle non-numeric data
+        try:
+            if hasattr(self.table, 'showPlot') and not hasattr(self.table, '_original_showPlot'):
+                self.table._original_showPlot = self.table.showPlot
+                self.table.showPlot = types.MethodType(CSVBrowser.safe_show_plot, self.table)
+        except Exception as e:
+            print(f"Failed to patch showPlot for file table: {e}")
+        
         for col in self.df.columns:
             if col not in ['Name', 'File_Path']:
                 # Check if DataFrame is not empty before calculating max width
@@ -421,189 +614,65 @@ class CSVBrowser(tk.Tk):
         except Exception as e:
             messagebox.showerror("Merge CSV Error", f"An error occurred while merging files:\n{str(e)}")
 
-    def filter_files(self, *args):
-        """Filter files based on the filter text"""
-        if hasattr(self, 'table'):
-            try:
-                # Get filter text and remove any quotes
-                filter_text = self.filter_text.get().lower().strip('"\'')
-                print(f"\n=== Filtering files with: '{filter_text}' ===")  # Debug print
-                
-                if filter_text:
-                    # Split filter text by AND (both & and +)
-                    filter_terms = [term.strip() for term in filter_text.split()]
-                    print(f"Searching for terms: {filter_terms}")  # Debug print
-                    
-                    # Start with all rows
-                    mask = pd.Series([True] * len(self.df), index=self.df.index)
-                    
-                    # Apply each filter term with AND logic
-                    for term in filter_terms:
-                        term = term.strip()
-                        if term:  # Skip empty terms
-                            if term.startswith('!'):  # Exclusion term
-                                exclude_term = term[1:].strip()  # Remove ! and whitespace
-                                if exclude_term:  # Only if there's something to exclude
-                                    term_mask = ~self.df['Name'].str.contains(exclude_term, case=False, na=False)
-                                    print(f"Excluding rows with name containing: '{exclude_term}'")  # Debug print
-                            else:  # Inclusion term
-                                term_mask = self.df['Name'].str.contains(term, case=False, na=False)
-                                print(f"Including rows with name containing: '{term}'")  # Debug print
-                            mask = mask & term_mask
-                    
-                    # Debug print matches
-                    print("\nMatching results:")
-                    for idx, row in self.df[mask].iterrows():
-                        print(f"Match found in row {idx}: {row['Name']}")
-                    
-                    filtered_df = self.df[mask].copy()
-                    print(f"\nFound {len(filtered_df)} matching files")  # Debug print
-                else:
-                    filtered_df = self.df.copy()
-                    print("No filter applied, showing all files")  # Debug print
-                
-                # Update table
-                self.table.model.df = filtered_df
-                
-                # Only update column widths if we have data
-                if not filtered_df.empty:
-                    # Preserve column widths
-                    for col in filtered_df.columns:
-                        if col in self.table.columnwidths:
-                            width = max(
-                                len(str(filtered_df[col].max())),
-                                len(str(filtered_df[col].min())),
-                                len(col),
-                                self.table.columnwidths[col]
-                            )
-                            self.table.columnwidths[col] = width
-                
-                # Redraw the table
-                self.table.redraw()
-                
-            except Exception as e:
-                print(f"Error in filter_files: {str(e)}")
-                traceback.print_exc()  # Print the full traceback for debugging
-                self.update_file_dataframe()
     def on_key_press(self, event):
-        """Handle key press events"""
+        """Handle key press events for the file list table"""
         try:
-            if event.keysym in ('Up', 'Down'):
-                # Handle arrow key navigation
+            if event.keysym in ('Up', 'Down') and hasattr(self, 'table'):
                 current_row = self.table.getSelectedRow()
                 num_rows = len(self.table.model.df)
-                
+                if current_row is None:
+                    current_row = 0
                 if event.keysym == 'Up' and current_row > 0:
                     new_row = current_row - 1
                 elif event.keysym == 'Down' and current_row < num_rows - 1:
                     new_row = current_row + 1
                 else:
                     return
-                
-                # Select the new row and ensure it's visible
                 self.table.setSelectedRow(new_row)
-                self.table.redraw()  # Ensure table updates
-                
-                # Get filename and path directly from the displayed DataFrame
+                self.table.redraw()
                 displayed_df = self.table.model.df
-                if new_row < 0 or new_row >= len(displayed_df):  # Fixed variable name from 'row' to 'new_row'
-                    print(f"Row index {new_row} out of bounds for displayed_df of length {len(displayed_df)}")
-                    return
-                file_path = str(displayed_df.iloc[new_row]['File_Path'])
-    
-                # Load the CSV file
-                self.load_csv_file(file_path)   
-            elif event.char and event.char.isprintable():
-                row = self.table.getSelectedRow()
-                col = self.table.getSelectedColumn()
+                if 0 <= new_row < len(displayed_df):
+                    file_path = str(displayed_df.iloc[new_row].get('File_Path', ''))
+                    if file_path:
+                        self.load_csv_file(file_path)
+            elif getattr(event, 'char', '') and event.char.isprintable():
+                row = self.table.getSelectedRow() if hasattr(self, 'table') else None
+                col = self.table.getSelectedColumn() if hasattr(self, 'table') else None
                 if row is not None and col is not None:
-                    # Then check for changes
                     self.check_for_changes(row, col)
         except Exception as e:
             print(f"Error handling key press: {e}")
             traceback.print_exc()
 
     def on_return_press(self, event):
-        """Handle return key press"""
+        """Handle Return key to commit edits if needed"""
         try:
-            row = self.table.getSelectedRow()
-            col = self.table.getSelectedColumn()
-            if row is not None and col is not None:
-                self.check_for_changes(row, col)
+            if hasattr(self, 'table'):
+                row = self.table.getSelectedRow()
+                col = self.table.getSelectedColumn()
+                if row is not None and col is not None:
+                    self.check_for_changes(row, col)
         except Exception as e:
             print(f"Error handling return press: {e}")
             traceback.print_exc()
 
     def on_focus_out(self, event):
-        """Handle focus out events"""
+        """Handle focus out to commit edits if needed"""
         try:
-            row = self.table.getSelectedRow()
-            col = self.table.getSelectedColumn()
-            if row is not None and col is not None:
-                self.check_for_changes(row, col)
+            if hasattr(self, 'table'):
+                row = self.table.getSelectedRow()
+                col = self.table.getSelectedColumn()
+                if row is not None and col is not None:
+                    self.check_for_changes(row, col)
         except Exception as e:
             print(f"Error handling focus out: {e}")
             traceback.print_exc()
-    
+
     def check_for_changes(self, row, col):
-        """Check for changes in the cell and handle file renaming"""
-        # try:
-        #     # Get the displayed DataFrame before any filter operations
-        #     displayed_df = self.table.model.df
-        #     if row < len(displayed_df):
-        #         # Get current filename and path from displayed DataFrame
-        #         file_path = os.path.normpath(str(displayed_df.iloc[row]['File_Path']))
-        #         current_name = displayed_df.iloc[row]['Name']
-                
-        #         # Reconstruct filename from Field_ columns
-        #         new_filename = self.reconstruct_filename(displayed_df.iloc[row])
-                
-        #         # If filename is different, rename the file
-        #         if new_filename != current_name:
-        #             print(f"Renaming file from {current_name} to {new_filename}")  # Debug print
-        #             new_filepath = self.rename_csv_file(file_path, new_filename)
-                    
-        #             if new_filepath != file_path:  # Only update if rename was successful
-        #                 # Update the displayed DataFrame
-        #                 displayed_df.loc[row, 'Name'] = new_filename
-        #                 displayed_df.loc[row, 'File_Path'] = new_filepath
-                        
-        #                 # Find and update the corresponding row in the original DataFrame
-        #                 orig_idx = self.df[self.df['File_Path'] == file_path].index
-        #                 if len(orig_idx) > 0:
-        #                     # Update all Field_ columns in the original DataFrame
-        #                     for col in self.df.columns:
-        #                         if col.startswith('Field_'):
-        #                             self.df.loc[orig_idx[0], col] = displayed_df.iloc[row][col]
-        #                     # Update Name and File_Path
-        #                     self.df.loc[orig_idx[0], 'Name'] = new_filename
-        #                     self.df.loc[orig_idx[0], 'File_Path'] = new_filepath
-                        
-        #                 # Store current filter text
-        #                 filter_text = self.filter_text.get()
-                        
-        #                 # Temporarily disable filter to update the model
-        #                 if filter_text:
-        #                     self.filter_text.set('')
-        #                     self.table.model.df = displayed_df
-        #                     self.table.redraw()
-                        
-        #                 # Reapply the filter if it was active
-        #                 if filter_text:
-        #                     self.filter_text.set(filter_text)
-                        
-        #                 # Show confirmation
-        #                 messagebox.showinfo("File Renamed", 
-        #                                 f"File has been renamed from:\n{current_name}\nto:\n{new_filename}")
-                        
-        #         else:
-        #             print("No changes detected")  # Debug print
-            
-        # except Exception as e:
-        #     print(f"Error checking for changes: {e}")
-        #     traceback.print_exc()
-        pass
-    
+        """Placeholder for rename/update logic when table cell edits occur"""
+        # Intentionally minimal to avoid regressions; add full rename logic later
+        return
+
     def setup_csv_viewer(self):
         """Setup the CSV viewer panel"""
         try:
@@ -731,6 +800,14 @@ class CSVBrowser(tk.Tk):
             self.csv_table = Table(self.csv_table_frame, dataframe=empty_df,
                                 showtoolbar=True, showstatusbar=True)
             self.csv_table.show()
+            
+            # Patch pandastable plot to safely handle non-numeric data in CSV viewer
+            try:
+                if hasattr(self.csv_table, 'showPlot') and not hasattr(self.csv_table, '_original_showPlot'):
+                    self.csv_table._original_showPlot = self.csv_table.showPlot
+                    self.csv_table.showPlot = types.MethodType(CSVBrowser.safe_show_plot, self.csv_table)
+            except Exception as e:
+                print(f"Failed to patch showPlot for CSV table: {e}")
             
             # Store original data
             self.original_csv_df = None
@@ -1963,6 +2040,51 @@ class CSVBrowser(tk.Tk):
         print(f"Max fields found: {max_fields}")  # Debug print
         return max_fields
 
+    def update_max_fields(self, *args):
+        """Recompute max_fields and refresh file browser if it changed.
+        This is used by trace callbacks that react to filter text updates.
+        """
+        try:
+            old_max = getattr(self, 'max_fields', None)
+            new_max = self.get_max_fields()
+            self.max_fields = new_max
+            if old_max is None or new_max != old_max:
+                print(f"Max fields changed from {old_max} to {new_max}")
+                # Refresh file browser to reflect potential column changes
+                if hasattr(self, 'setup_file_browser'):
+                    self.setup_file_browser()
+        except Exception as e:
+            print(f"update_max_fields error: {e}")
+
+    @staticmethod
+    def safe_show_plot(table_self, event=None):
+        """Wrapper for Table.showPlot that preserves categorical columns for grouping
+        while ensuring there is numeric data available to plot. It defers plotting
+        to the original implementation, with a global guard enforcing numeric-only
+        series during the actual plot call.
+        """
+        try:
+            df = getattr(table_self.model, 'df', None)
+            if df is None or len(df) == 0:
+                messagebox.showinfo("Plot", "No data to plot")
+                return
+            numeric_df = df.select_dtypes(include=['number'])
+            if numeric_df.empty:
+                # No numeric series at all -> bail out gracefully
+                messagebox.showerror("Plot Error", "No numeric data to plot")
+                return
+            # Call the original plot UI so the dialog can show categorical columns for grouping
+            if hasattr(table_self, '_original_showPlot'):
+                return table_self._original_showPlot()
+            else:
+                from pandastable.plotting import TablePlot
+                tp = TablePlot(table_self)
+                return tp.plot(df)
+        except Exception as e:
+            import logging, traceback
+            logging.error("Exception in safe_show_plot", exc_info=True)
+            messagebox.showerror("Plot Error", f"{e}")
+
     def open_in_excel(self):
         """Open the selected CSV file in Excel"""
         selected_rows = self.table.multiplerowlist
@@ -2308,16 +2430,31 @@ class CSVBrowser(tk.Tk):
             
             # Ensure data types are numeric
             try:
-                # Convert target column to numeric
-                data_df[target_column] = pd.to_numeric(data_df[target_column], errors='coerce')
+                # Collect all columns to convert
+                columns_to_convert = [target_column] + corr_df['Column'].tolist()
                 
-                # Convert correlated columns to numeric
-                for _, row in corr_df.iterrows():
-                    corr_col = row['Column']
-                    data_df[corr_col] = pd.to_numeric(data_df[corr_col], errors='coerce')
+                # Convert all columns at once using pd.concat to avoid DataFrame fragmentation
+                converted_series = []
+                for col in columns_to_convert:
+                    converted_series.append(pd.to_numeric(data_df[col], errors='coerce'))
+                
+                # Create a new DataFrame with all converted columns at once
+                converted_df = pd.concat(converted_series, axis=1, keys=columns_to_convert)
+                
+                # Get other columns that weren't converted
+                other_columns = [col for col in data_df.columns if col not in columns_to_convert]
+                
+                # Combine converted and other columns using pd.concat to avoid fragmentation
+                if other_columns:
+                    data_df = pd.concat([converted_df, data_df[other_columns]], axis=1)
+                else:
+                    data_df = converted_df
                 
                 # Remove any rows with NaN values
-                data_df = data_df.dropna(subset=[target_column] + corr_df['Column'].tolist())
+                data_df = data_df.dropna(subset=columns_to_convert)
+                
+                # Create a defragmented copy to eliminate any fragmentation warnings
+                data_df = data_df.copy()
                 
                 if len(data_df) == 0:
                     messagebox.showerror("Error", "No valid numeric data found after conversion")
@@ -3782,53 +3919,6 @@ Features:
             except Exception as e:
                 print(f"Warning: Error in _safe_preserve_index: {e}")
 
-    def _safe_draw_selected_columns(self):
-        """Validate and render the currently selected plot columns safely"""
-        if not hasattr(self, 'csv_table'):
-            return False
-
-        table = self.csv_table
-        if not hasattr(table, 'multiplecollist') or not table.multiplecollist:
-            return False
-
-        df = getattr(getattr(table, 'model', None), 'df', None)
-        if df is None:
-            print("Warning: No DataFrame available to highlight selected columns")
-            return False
-
-        total_cols = len(df.columns)
-        if total_cols == 0:
-            print("Warning: No columns available to highlight")
-            table.multiplecollist = []
-            return False
-
-        valid_cols = []
-        for col_idx in table.multiplecollist:
-            try:
-                idx = int(col_idx)
-            except (TypeError, ValueError):
-                continue
-            if 0 <= idx < total_cols:
-                valid_cols.append(idx)
-
-        if not valid_cols:
-            print("Warning: Selected plot columns are no longer available; clearing selection")
-            table.multiplecollist = []
-            return False
-
-        if valid_cols != table.multiplecollist:
-            print("DEBUG: _safe_draw_selected_columns - Filtered invalid column indices")
-            table.multiplecollist = valid_cols
-
-        if hasattr(table, 'drawSelectedCol'):
-            try:
-                table.drawSelectedCol()
-                return True
-            except Exception as e:
-                print(f"Warning: Failed to draw selected columns safely: {e}")
-
-        return False
-
     def _preserve_index(self):
         """Ensure the index is preserved after operations that might reset it"""
         if hasattr(self, 'csv_table') and hasattr(self.csv_table, 'model') and hasattr(self.csv_table.model, 'df'):
@@ -3960,7 +4050,7 @@ Features:
         except Exception as e:
             print(f"Error resetting column filter: {e}")
             traceback.print_exc()
-
+    
     def setup_column_filter_context_menu(self):
         """Create a context menu for column filter with instructions and examples"""
         try:
@@ -4031,7 +4121,7 @@ Features:
                     state='disabled'
                 )
                 self.column_filter_menu.add_command(
-                    label="  \"Date\", *, \"Time\": Show 'Date' and 'Time' columns first, then others", 
+                    label="  \"Date\", *, \"Time\": Show 'Date' and 'Time' first, then others", 
                     state='disabled'
                 )
                 self.column_filter_menu.add_command(
@@ -4376,7 +4466,7 @@ Features:
         except Exception as e:
             print(f"Error resetting filters: {e}")
             traceback.print_exc()
-
+    
     def save_file_filter(self):
         """Save the current file filter configuration"""
         try:
@@ -5104,8 +5194,9 @@ Features:
                     if col_indices:
                         try:
                             self.csv_table.multiplecollist = col_indices
-                            # Draw the selected columns in the UI with validation
-                            self._safe_draw_selected_columns()
+                            # Draw the selected columns in the UI
+                            if hasattr(self.csv_table, 'drawSelectedCol'):
+                                self.csv_table.drawSelectedCol()
                             print(f"Restored {len(col_indices)} plot columns")
                         except Exception as e:
                             print(f"Error applying column selection: {e}")
@@ -5492,9 +5583,9 @@ Features:
                 # Automatically replot with the selected columns
                 if hasattr(self.csv_table, 'multiplecollist') and self.csv_table.multiplecollist:
                     try:
-                        # Draw the selected columns in the UI with validation
-                        self._safe_draw_selected_columns()
-
+                        # Draw the selected columns in the UI
+                        self.csv_table.drawSelectedCol()
+                        
                         # Use our safe replot method that ensures index preservation
                         if self._safe_replot_with_index_preservation(pf):
                             print("Automatically replotted with the selected columns")

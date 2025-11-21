@@ -41,16 +41,7 @@ import os
 import sys
 
 # Add custom pandastable path to sys.path BEFORE importing pandastable
-# custom_pandastable_path = r"C:\Users\juesh\OneDrive\Documents\windsurf\pandastable\pandastable"
-# custom_pandastable_path = r"C:\Users\juesh\OneDrive\Documents\pandastable\pandastable"
-# custom_pandastable_path = r"C:\Users\juesh\OneDrive\Documents\pandastable"
-
-# # custom_pandastable_path = r"C:\Users\JueShi\OneDrive - Astera Labs, Inc\Documents\windsurf\pandastable\pandastable"
-# if os.path.exists(custom_pandastable_path):
-#     # Insert at the beginning of sys.path to prioritize this version
-#     sys.path.insert(0, custom_pandastable_path)
-#     print(f"Using custom pandastable from: {custom_pandastable_path}")
-    
+# Use the pandastable from the current project directory
 custom_pandastable_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "pandastable")
 # Fallback paths if needed
 # custom_pandastable_path = r"C:\Users\juesh\OneDrive\Documents\windsurf\pandastable\pandastable"
@@ -61,13 +52,14 @@ if os.path.exists(custom_pandastable_path):
     print(f"Using custom pandastable from: {custom_pandastable_path}")
 
 # Force reload of pandastable modules if already imported
-# import importlib
-# if 'pandastable.plotting' in sys.modules:
-#     print("Reloading pandastable.plotting module...")
-#     importlib.reload(sys.modules['pandastable.plotting'])
-
+import importlib
+if 'pandastable.plotting' in sys.modules:
+    print("Reloading pandastable.plotting module...")
+    importlib.reload(sys.modules['pandastable.plotting'])
+    
 import pandastable.plotting as p
 print("Using plotting.py from:", p.__file__)
+
 
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, simpledialog
@@ -100,6 +92,7 @@ class CSVBrowser(tk.Tk):
         import warnings
         warnings.filterwarnings('ignore', message='.*color.*and.*colormap.*cannot be used simultaneously.*')
         warnings.filterwarnings('ignore', message='.*Tight layout not applied.*')
+        warnings.filterwarnings('ignore', message='.*DataFrame is highly fragmented.*', category=pd.errors.PerformanceWarning)
         
         # Initialize variables
         self.current_file = None
@@ -2308,16 +2301,31 @@ class CSVBrowser(tk.Tk):
             
             # Ensure data types are numeric
             try:
-                # Convert target column to numeric
-                data_df[target_column] = pd.to_numeric(data_df[target_column], errors='coerce')
+                # Collect all columns to convert
+                columns_to_convert = [target_column] + corr_df['Column'].tolist()
                 
-                # Convert correlated columns to numeric
-                for _, row in corr_df.iterrows():
-                    corr_col = row['Column']
-                    data_df[corr_col] = pd.to_numeric(data_df[corr_col], errors='coerce')
+                # Convert all columns at once using pd.concat to avoid DataFrame fragmentation
+                converted_series = []
+                for col in columns_to_convert:
+                    converted_series.append(pd.to_numeric(data_df[col], errors='coerce'))
+                
+                # Create a new DataFrame with all converted columns at once
+                converted_df = pd.concat(converted_series, axis=1, keys=columns_to_convert)
+                
+                # Get other columns that weren't converted
+                other_columns = [col for col in data_df.columns if col not in columns_to_convert]
+                
+                # Combine converted and other columns using pd.concat to avoid fragmentation
+                if other_columns:
+                    data_df = pd.concat([converted_df, data_df[other_columns]], axis=1)
+                else:
+                    data_df = converted_df
                 
                 # Remove any rows with NaN values
-                data_df = data_df.dropna(subset=[target_column] + corr_df['Column'].tolist())
+                data_df = data_df.dropna(subset=columns_to_convert)
+                
+                # Create a defragmented copy to eliminate any fragmentation warnings
+                data_df = data_df.copy()
                 
                 if len(data_df) == 0:
                     messagebox.showerror("Error", "No valid numeric data found after conversion")
@@ -3782,53 +3790,6 @@ Features:
             except Exception as e:
                 print(f"Warning: Error in _safe_preserve_index: {e}")
 
-    def _safe_draw_selected_columns(self):
-        """Validate and render the currently selected plot columns safely"""
-        if not hasattr(self, 'csv_table'):
-            return False
-
-        table = self.csv_table
-        if not hasattr(table, 'multiplecollist') or not table.multiplecollist:
-            return False
-
-        df = getattr(getattr(table, 'model', None), 'df', None)
-        if df is None:
-            print("Warning: No DataFrame available to highlight selected columns")
-            return False
-
-        total_cols = len(df.columns)
-        if total_cols == 0:
-            print("Warning: No columns available to highlight")
-            table.multiplecollist = []
-            return False
-
-        valid_cols = []
-        for col_idx in table.multiplecollist:
-            try:
-                idx = int(col_idx)
-            except (TypeError, ValueError):
-                continue
-            if 0 <= idx < total_cols:
-                valid_cols.append(idx)
-
-        if not valid_cols:
-            print("Warning: Selected plot columns are no longer available; clearing selection")
-            table.multiplecollist = []
-            return False
-
-        if valid_cols != table.multiplecollist:
-            print("DEBUG: _safe_draw_selected_columns - Filtered invalid column indices")
-            table.multiplecollist = valid_cols
-
-        if hasattr(table, 'drawSelectedCol'):
-            try:
-                table.drawSelectedCol()
-                return True
-            except Exception as e:
-                print(f"Warning: Failed to draw selected columns safely: {e}")
-
-        return False
-
     def _preserve_index(self):
         """Ensure the index is preserved after operations that might reset it"""
         if hasattr(self, 'csv_table') and hasattr(self.csv_table, 'model') and hasattr(self.csv_table.model, 'df'):
@@ -3960,7 +3921,7 @@ Features:
         except Exception as e:
             print(f"Error resetting column filter: {e}")
             traceback.print_exc()
-
+    
     def setup_column_filter_context_menu(self):
         """Create a context menu for column filter with instructions and examples"""
         try:
@@ -4031,7 +3992,7 @@ Features:
                     state='disabled'
                 )
                 self.column_filter_menu.add_command(
-                    label="  \"Date\", *, \"Time\": Show 'Date' and 'Time' columns first, then others", 
+                    label="  \"Date\", *, \"Time\": Show 'Date' and 'Time' first, then others", 
                     state='disabled'
                 )
                 self.column_filter_menu.add_command(
@@ -4376,7 +4337,7 @@ Features:
         except Exception as e:
             print(f"Error resetting filters: {e}")
             traceback.print_exc()
-
+    
     def save_file_filter(self):
         """Save the current file filter configuration"""
         try:
@@ -5104,8 +5065,9 @@ Features:
                     if col_indices:
                         try:
                             self.csv_table.multiplecollist = col_indices
-                            # Draw the selected columns in the UI with validation
-                            self._safe_draw_selected_columns()
+                            # Draw the selected columns in the UI
+                            if hasattr(self.csv_table, 'drawSelectedCol'):
+                                self.csv_table.drawSelectedCol()
                             print(f"Restored {len(col_indices)} plot columns")
                         except Exception as e:
                             print(f"Error applying column selection: {e}")
@@ -5492,9 +5454,9 @@ Features:
                 # Automatically replot with the selected columns
                 if hasattr(self.csv_table, 'multiplecollist') and self.csv_table.multiplecollist:
                     try:
-                        # Draw the selected columns in the UI with validation
-                        self._safe_draw_selected_columns()
-
+                        # Draw the selected columns in the UI
+                        self.csv_table.drawSelectedCol()
+                        
                         # Use our safe replot method that ensures index preservation
                         if self._safe_replot_with_index_preservation(pf):
                             print("Automatically replotted with the selected columns")

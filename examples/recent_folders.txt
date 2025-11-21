@@ -1,3 +1,5 @@
+C:/Users/juesh/OneDrive/Pictures/personal_growth
+C:/Users/juesh/OneDrive/Pictures/Screenshots
 C:/Users/juesh/OneDrive/Documents/windsurf/stock_data/Jues401k_stocks
 C:/Users/juesh/OneDrive/Documents/windsurf/stock_data/index_tickers
 C:/Users/juesh/OneDrive/Documents/windsurf/stock_data
@@ -6,5 +8,3 @@ C:/Users/juesh/OneDrive/Documents/windsurf
 C:/Users/juesh/OneDrive/Pictures/Screenshots 1
 C:/Users/juesh/OneDrive/Pictures
 C:/Users/juesh/OneDrive/Pictures/StarAndStrides2025
-C:/Users/juesh/OneDrive/Pictures/Screenshots
-C:/Users/juesh/Downloads

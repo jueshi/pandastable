@@ -12,7 +12,6 @@ pandastable/dialogs.py
 pandastable/handlers.py
 pandastable/headers.py
 pandastable/images.py
-pandastable/plotting-ori.py
 pandastable/plotting.py
 pandastable/plugin.py
 pandastable/stats.py

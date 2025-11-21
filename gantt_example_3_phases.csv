@@ -1,0 +1,24 @@
+Task,Start,End,Progress,Status,Phase
+Requirements Workshop,2025-01-02,2025-01-05,100,Complete,Phase 1 - Planning
+Stakeholder Interviews,2025-01-03,2025-01-08,100,Complete,Phase 1 - Planning
+Requirements Document,2025-01-06,2025-01-12,100,Complete,Phase 1 - Planning
+Architecture Design,2025-01-10,2025-01-20,100,Complete,Phase 2 - Design
+Database Schema,2025-01-15,2025-01-25,100,Complete,Phase 2 - Design
+API Specification,2025-01-18,2025-01-28,90,In Progress,Phase 2 - Design
+UI Mockups,2025-01-20,2025-02-05,85,In Progress,Phase 2 - Design
+Backend Setup,2025-01-25,2025-02-05,80,In Progress,Phase 3 - Development
+Authentication Module,2025-02-01,2025-02-15,60,In Progress,Phase 3 - Development
+User Management,2025-02-05,2025-02-20,50,In Progress,Phase 3 - Development
+Data Processing,2025-02-10,2025-02-28,40,In Progress,Phase 3 - Development
+Reporting Module,2025-02-15,2025-03-05,30,In Progress,Phase 3 - Development
+Frontend Components,2025-02-18,2025-03-10,25,In Progress,Phase 3 - Development
+Integration Layer,2025-02-25,2025-03-15,20,In Progress,Phase 3 - Development
+Unit Tests,2025-03-01,2025-03-20,15,Not Started,Phase 4 - Testing
+Integration Tests,2025-03-10,2025-03-25,10,Not Started,Phase 4 - Testing
+Performance Tests,2025-03-15,2025-03-28,5,Not Started,Phase 4 - Testing
+UAT Preparation,2025-03-20,2025-03-30,0,Not Started,Phase 4 - Testing
+UAT Execution,2025-03-25,2025-04-05,0,Not Started,Phase 4 - Testing
+Production Setup,2025-04-01,2025-04-08,0,Not Started,Phase 5 - Deployment
+Data Migration,2025-04-03,2025-04-10,0,Not Started,Phase 5 - Deployment
+Go-Live,2025-04-08,2025-04-10,0,Not Started,Phase 5 - Deployment
+Post-Launch Support,2025-04-10,2025-04-30,0,Not Started,Phase 5 - Deployment

@@ -1,0 +1,9 @@
+Task,Start,End,Progress,Status
+Project Planning,2025-01-01,2025-01-15,100,Complete
+Requirements Gathering,2025-01-10,2025-01-25,100,Complete
+Design Phase,2025-01-20,2025-02-10,80,In Progress
+Development - Backend,2025-02-01,2025-03-15,50,In Progress
+Development - Frontend,2025-02-10,2025-03-20,30,In Progress
+Testing,2025-03-10,2025-04-05,10,Not Started
+Documentation,2025-03-15,2025-04-10,5,Not Started
+Deployment,2025-04-05,2025-04-15,0,Not Started

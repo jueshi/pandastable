@@ -269,7 +269,12 @@ def dialogFromOptions(parent, opts, groups=None, callback=None,
                 w = Button(frame, text=opt['label'], command=lambda v=v : func(v))
 
             if w != None:
-                w.pack(fill=BOTH,expand=1,pady=1)
+                pack_kwargs = {'pady': 1}
+                if opt['type'] == 'scrolledtext':
+                    pack_kwargs.update({'fill': BOTH, 'expand': 1})
+                else:
+                    pack_kwargs.update({'fill': X, 'expand': 0})
+                w.pack(**pack_kwargs)
                 widgets[i] = w
             row+=1
 

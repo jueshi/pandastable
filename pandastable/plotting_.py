@@ -370,13 +370,8 @@ class PlotViewer(Frame):
         """Get only numeric data that can be plotted"""
 
         #x = df.convert_objects()._get_numeric_data()
-        try:
-            x = df.apply(lambda s: pd.to_numeric(s, errors='coerce', downcast='float'))
-            # consider there is numeric data only if we have at least one numeric column
-            num_cols = x.select_dtypes(include=[np.number])
-            if num_cols.shape[1] == 0:
-                return False
-        except Exception:
+        x = df.apply( lambda x: pd.to_numeric(x,errors='coerce',downcast='float') )
+        if x.empty==True:
             return False
 
     def _initFigure(self):
@@ -536,6 +531,7 @@ class PlotViewer(Frame):
             return
 
         data = self.data
+        data.columns = self.checkColumnNames(data.columns)
         #print (data)
         #get all options from the mpl options object
         kwds = self.mplopts.kwds
@@ -559,32 +555,23 @@ class PlotViewer(Frame):
         ax = self.ax
 
         if by != '':
-            # groupby needs to be handled per group so we can create the axes
-            # for our figure and add them outside the pandas logic
-            if by not in data.columns:
-                # attempt to join the missing grouping column from the full table by index
-                try:
-                    full = self.table.model.df
-                    if by in full.columns:
-                        data = data.join(full[[by]], how='left')
-                        self.data = data
-                except Exception:
-                    pass
-            if by not in data.columns:
-                self.showWarning('the grouping column must be in selected data')
-                return
-            # ensure optional second grouping column is present; if missing, try to join it
+            #groupby needs to be handled per group so we can create the axes
+            #for our figure and add them outside the pandas logic
+            group_cols = [by]
             if by2 != '':
-                if by2 not in data.columns:
-                    try:
-                        full = self.table.model.df
-                        if by2 in full.columns:
-                            data = data.join(full[[by2]], how='left')
-                            self.data = data
-                    except Exception:
-                        pass
-                if by2 in data.columns:
-                    by = [by, by2]
+                group_cols.append(by2)
+            try:
+                full = self.table.model.df
+            except Exception:
+                full = None
+            for col in group_cols:
+                if col not in data.columns:
+                    if full is not None and col in full.columns:
+                        data = data.join(full[[col]], how='left')
+                    else:
+                        self.showWarning('the grouping column must be in selected data')
+                        return
+            by = group_cols[0] if len(group_cols) == 1 else group_cols
             g = data.groupby(by)
 
             if kwargs['subplots'] == True:
@@ -597,8 +584,6 @@ class PlotViewer(Frame):
                 ncols = int(np.ceil(size/nrows))
                 self.ax.set_visible(False)
                 del kwargs['subplots']
-                any_plotted = False
-                last_handles, last_labels = [], []
                 for n,df in g:
                     if ncols==1 and nrows==1:
                         ax = self.fig.add_subplot(111)
@@ -606,37 +591,25 @@ class PlotViewer(Frame):
                     else:
                         ax = self.fig.add_subplot(nrows,ncols,i)
                     kwargs['legend'] = False #remove axis legends
-                    # remove grouping columns (handle single string or list)
+                    d = df.drop(by,axis=1) #remove grouping columns
+                    # coerce potential object columns to numeric before filtering to avoid dropping numeric-like strings
                     try:
-                        d = df.drop(by, axis=1)
+                        d = d.apply(lambda s: pd.to_numeric(s, errors='coerce') if s.dtype == 'O' else s)
+                        d = d._get_numeric_data()
                     except Exception:
-                        d = df.drop(columns=by)
-                    # restrict to numeric columns for plotting; skip if none
-                    d_num = d._get_numeric_data()
-                    if d_num.shape[1] == 0:
-                        i+=1
-                        continue
-                    axs = self._doplot(d_num, ax, kind, False,  errorbars, useindex,
+                        pass
+                    axs = self._doplot(d, ax, kind, False,  errorbars, useindex,
                                   bw=bw, yerr=None, kwargs=kwargs)
-                    # set subplot title; handle tuple group keys
-                    if isinstance(n, tuple):
-                        try:
-                            n = (n[0], str(n[1]))
-                        except Exception:
-                            n = ", ".join(map(str, n))
                     ax.set_title(n)
                     handles, labels = ax.get_legend_handles_labels()
-                    last_handles, last_labels = handles, labels
-                    any_plotted = True
                     i+=1
 
                 if 'sharey' in kwargs and kwargs['sharey'] == True:
                     self.autoscale()
                 if  'sharex' in kwargs and kwargs['sharex'] == True:
                     self.autoscale('x')
-                if any_plotted and last_handles:
-                    self.fig.legend(last_handles, last_labels, loc='center right', #bbox_to_anchor=(0.9, 0),
-                                    bbox_transform=self.fig.transFigure )
+                self.fig.legend(handles, labels, loc='center right', #bbox_to_anchor=(0.9, 0),
+                                 bbox_transform=self.fig.transFigure )
                 axs = self.fig.get_axes()
 
             else:
@@ -645,25 +618,12 @@ class PlotViewer(Frame):
                 axs = self.ax
                 labels = []; handles=[]
                 cmap = plt.cm.get_cmap(kwargs['colormap'])
-                # plot each group separately for line/bar/barh to avoid pivot issues
+                #handle as pivoted data for some line, bar
                 if kind in ['line','bar','barh']:
-                    groups = data.groupby(by)
-                    num_groups = len(groups)
-                    for i, (name, group) in enumerate(groups):
-                        color = cmap(float(i)/num_groups)
-                        group = group.drop(by, axis=1)
-                        group_num = group._get_numeric_data()
-                        if group_num.shape[1] == 0:
-                            continue
-                        if errorbars:
-                            errs = group_num.std()
-                            kwargs['color'] = color
-                            self._doplot(group_num, axs, kind, False, errorbars, useindex=None,
-                                         bw=bw, yerr=errs, kwargs=kwargs)
-                        else:
-                            kwargs['color'] = color
-                            self._doplot(group_num, axs, kind, False, errorbars, useindex=None,
-                                         bw=bw, yerr=None, kwargs=kwargs)
+                    df = pd.pivot_table(data,index=by)
+                    errs = data.groupby(by).std()
+                    self._doplot(df, axs, kind, False, errorbars, useindex=None, yerr=errs,
+                                      bw=bw, kwargs=kwargs)
                 elif kind == 'scatter':
                     #we plot multiple groups and series in different colors
                     #this logic could be placed in the scatter method?
@@ -698,12 +658,7 @@ class PlotViewer(Frame):
         else:
             #non-grouped plot
             try:
-                # restrict to numeric data to avoid pandas raising on non-numeric frames
-                numeric_data = data._get_numeric_data()
-                if numeric_data.shape[1] == 0:
-                    self.showWarning('no numeric data to plot')
-                    return
-                axs = self._doplot(numeric_data, ax, kind, kwds['subplots'], errorbars,
+                axs = self._doplot(data, ax, kind, kwds['subplots'], errorbars,
                                  useindex, bw=bw, yerr=None, kwargs=kwargs)
             except Exception as e:
                 self.showWarning(e)

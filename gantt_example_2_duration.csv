@@ -1,0 +1,17 @@
+Task,Start,Duration,Progress,Status,Owner
+Kickoff Meeting,2025-01-05,1,100,Complete,Alice
+Market Research,2025-01-06,10,100,Complete,Bob
+Competitive Analysis,2025-01-10,7,100,Complete,Carol
+Feature Specification,2025-01-15,14,90,In Progress,Alice
+UI/UX Design,2025-01-20,21,70,In Progress,David
+Database Design,2025-02-01,10,60,In Progress,Bob
+API Development,2025-02-05,30,40,In Progress,Carol
+Frontend Development,2025-02-15,35,25,In Progress,David
+Unit Testing,2025-03-01,15,10,Not Started,Alice
+Integration Testing,2025-03-10,10,0,Not Started,Bob
+User Acceptance Testing,2025-03-15,7,0,Not Started,Carol
+Bug Fixes,2025-03-20,10,0,Not Started,David
+Performance Optimization,2025-03-25,7,0,Not Started,Alice
+Security Audit,2025-03-28,5,0,Not Started,Bob
+Final Review,2025-04-01,3,0,Not Started,Carol
+Go Live,2025-04-05,1,0,Not Started,Alice
