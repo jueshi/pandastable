@@ -102,7 +102,15 @@ class DataExplore(Frame):
     """
 
     def __init__(self, parent=None, data=None, projfile=None, msgpack=None):
-        """Initialize the application. """
+        """
+        Initialize the application.
+
+        Args:
+            parent: Parent tkinter Frame.
+            data: A pandas DataFrame to load initially.
+            projfile: Path to a project file to open.
+            msgpack: Path to a DataFrame stored as msgpack.
+        """
 
         self.parent=parent
         if not self.parent:
@@ -155,12 +163,18 @@ class DataExplore(Frame):
         return
 
     def start_logging(self):
+        """
+        Start basic logging configuration.
+        Logs are written to a file specified in pandastable.core.logfile.
+        """
         import logging
         # logfile already imported at module level
         logging.basicConfig(filename=logfile,format='%(asctime)s %(message)s')
 
     def setStyles(self):
-        """Set theme and widget styles"""
+        """
+        Set the application theme and widget styles based on the OS.
+        """
 
         style = self.style = Style(self)
         available_themes = self.style.theme_names()
@@ -179,7 +193,10 @@ class DataExplore(Frame):
         return
 
     def setConfigDir(self):
-        """Set up config folder"""
+        """
+        Set up the configuration directory in the user's home folder.
+        Creates the directory and plugins subdirectory if they don't exist.
+        """
 
         homepath = os.path.join(os.path.expanduser('~'))
         path = '.dataexplore'
@@ -191,7 +208,9 @@ class DataExplore(Frame):
         return
 
     def setupGUI(self):
-        """Add all GUI elements"""
+        """
+        Initialize and pack the main GUI elements (PanedWindow, Notebook).
+        """
 
         self.m = PanedWindow(self.main, orient=HORIZONTAL)
         self.m.pack(fill=BOTH,expand=1)
@@ -201,7 +220,9 @@ class DataExplore(Frame):
         return
 
     def createMenuBar(self):
-        """Create the menu bar for the application. """
+        """
+        Create the main menu bar with File, Edit, Sheet, View, Tools, Datasets, Plots, Plugins, and Help menus.
+        """
 
         self.menu = Menu(self.main)
         file_menu = Menu(self.menu,tearoff=0)
@@ -314,7 +335,12 @@ class DataExplore(Frame):
         return
 
     def createRecentMenu(self, menu):
-        """Recent projects menu"""
+        """
+        Create a submenu for opening recent projects.
+
+        Args:
+            menu: The parent File menu.
+        """
 
         from functools import partial
         recent = self.appoptions['recent']
@@ -325,6 +351,12 @@ class DataExplore(Frame):
         return
 
     def bring_to_foreground(self, set_focus=False):
+        """
+        Bring the application window to the foreground.
+
+        Args:
+            set_focus (bool): Whether to force focus on the window.
+        """
         self.main.deiconify()
         self.main.attributes('-topmost', True)
         self.main.after_idle(self.main.attributes, '-topmost', False)
@@ -341,7 +373,12 @@ class DataExplore(Frame):
         return
 
     def getBestGeometry(self):
-        """Calculate optimal geometry from screen size"""
+        """
+        Calculate optimal window geometry based on screen size.
+
+        Returns:
+            str: A geometry string (e.g., '800x600+0+0').
+        """
 
         ws = self.main.winfo_screenwidth()
         hs = self.main.winfo_screenheight()
@@ -355,17 +392,26 @@ class DataExplore(Frame):
         return g
 
     def setGeometry(self):
+        """
+        Set the application window geometry to the calculated optimal size.
+        """
         self.winsize = self.getBestGeometry()
         self.main.geometry(self.winsize)
         return
 
     def createPulldown(self, menu, dict, var=None):
-        """Create pulldown menu, returns a dict.
+        """
+        Create a pulldown menu from a dictionary configuration.
+
         Args:
-            menu: parent menu bar
-            dict: dictionary of the form -
-            {'01item name':{'cmd':function name, 'sc': shortcut key}}
-            var: an already created menu
+            menu: The parent menu bar.
+            dict: Dictionary configuration for menu items.
+                  Keys should be strings (e.g., '01New Project') to sort items.
+                  Values are dicts with keys 'cmd' (function), 'sc' (shortcut), 'img' (image).
+            var: An optional existing Menu instance to add items to.
+
+        Returns:
+            dict: The updated dictionary with the 'var' key pointing to the created Menu.
         """
 
         if var is None:
@@ -395,6 +441,12 @@ class DataExplore(Frame):
         return dict
 
     def progressDialog(self):
+        """
+        Show an indeterminate progress dialog.
+
+        Returns:
+            Progressbar: The progress bar widget.
+        """
 
         t = Toplevel(self)
         pb = Progressbar(t, mode="indeterminate")
@@ -406,15 +458,22 @@ class DataExplore(Frame):
         return pb
 
     def currentTablePrefs(self):
-        """Preferences dialog"""
+        """
+        Open the preferences dialog for the currently active table.
+        """
 
         table = self.getCurrentTable()
         table.showPreferences()
         return
 
     def loadMeta(self, table, meta):
-        """Load meta data for a sheet, this includes plot options and
-        table selections"""
+        """
+        Load metadata for a sheet, including plot options and table settings.
+
+        Args:
+            table (Table): The table instance to update.
+            meta (dict): A dictionary containing metadata.
+        """
 
         tablesettings = meta['table']
         if 'childtable' in meta:
@@ -457,7 +516,15 @@ class DataExplore(Frame):
         return
 
     def saveMeta(self, table):
-        """Save meta data such as current plot options"""
+        """
+        Extract and save metadata from a table, including plot options and settings.
+
+        Args:
+            table (Table): The table instance to save metadata from.
+
+        Returns:
+            dict: A dictionary containing the metadata.
+        """
 
         meta = {}
         #save plot options
@@ -480,7 +547,9 @@ class DataExplore(Frame):
         return meta
 
     def saveAppOptions(self):
-        """Save global app options to config dir"""
+        """
+        Save global application options to a pickle file in the config directory.
+        """
 
         appfile = os.path.join(self.configpath, 'app.p')
         file = open(appfile,'wb')
@@ -489,7 +558,10 @@ class DataExplore(Frame):
         return
 
     def loadAppOptions(self):
-        """Load global app options if present"""
+        """
+        Load global application options from the config directory if available.
+        Otherwise, initializes default options.
+        """
 
         appfile = os.path.join(self.configpath, 'app.p')
         if os.path.exists(appfile):
@@ -500,7 +572,14 @@ class DataExplore(Frame):
         return
 
     def newProject(self, data=None, df=None):
-        """Create a new project from data or empty"""
+        """
+        Create a new project, clearing existing tabs.
+        Can initialize with data.
+
+        Args:
+            data (dict): Optional dictionary of data to load (sheet_name -> {table: df, meta: meta}).
+            df (pd.DataFrame): Not used directly, legacy argument?
+        """
 
         w = self.closeProject()
         if w == None:
@@ -533,7 +612,13 @@ class DataExplore(Frame):
         return
 
     def loadProject(self, filename=None, asksave=False):
-        """Open project file"""
+        """
+        Load a project from a file (.dexpl).
+
+        Args:
+            filename (str): Path to the project file.
+            asksave (bool): Whether to ask to save the current project before loading.
+        """
 
         w=True
         if asksave == True:
@@ -582,7 +667,12 @@ class DataExplore(Frame):
         return
 
     def removeRecent(self, filename):
-        """Remove file from recent list"""
+        """
+        Remove a filename from the list of recent projects.
+
+        Args:
+            filename (str): The filename to remove.
+        """
 
         recent = self.appoptions['recent']
         if filename in recent:
@@ -591,7 +681,13 @@ class DataExplore(Frame):
         return
 
     def addRecent(self, filename):
-        """Add file name to recent projects"""
+        """
+        Add a filename to the list of recent projects.
+        Keeps the list to a maximum of 5 entries.
+
+        Args:
+            filename (str): The filename to add.
+        """
 
         recent = self.appoptions['recent']
         if not os.path.abspath(filename) in recent:
@@ -602,7 +698,12 @@ class DataExplore(Frame):
         return
 
     def saveProject(self, filename=None):
-        """Save project"""
+        """
+        Save the current project. If no filename is set, prompts for one.
+
+        Args:
+            filename (str): The path to save to.
+        """
 
         if filename != None:
             self.filename = filename
@@ -613,7 +714,9 @@ class DataExplore(Frame):
         return
 
     def saveasProject(self):
-        """Save as a new filename"""
+        """
+        Prompt user for a filename and save the project.
+        """
 
         filename = filedialog.asksaveasfilename(parent=self.main,
                                                 defaultextension='.dexpl',
@@ -628,7 +731,12 @@ class DataExplore(Frame):
         return
 
     def doSaveProject(self, filename):
-        """Save sheets as dict in msgpack"""
+        """
+        Perform the actual saving of project data to a gzipped pickle file.
+
+        Args:
+            filename (str): The path to save the file.
+        """
 
         self._checkTables()
         data={}
@@ -645,8 +753,10 @@ class DataExplore(Frame):
         return
 
     def _checkTables(self):
-        """Check tables before saving that so we are not saving
-        filtered copies"""
+        """
+        Reset filtered tables to show all data before saving.
+        Ensures full datasets are saved.
+        """
 
         for s in self.sheets:
             t=self.sheets[s]
@@ -655,7 +765,12 @@ class DataExplore(Frame):
         return
 
     def closeProject(self):
-        """Close"""
+        """
+        Close the current project. Prompts to save changes.
+
+        Returns:
+            bool: True if closed/saved successfully, False/None if cancelled.
+        """
 
         if self.projopen == False:
             w = False
@@ -677,7 +792,9 @@ class DataExplore(Frame):
         return w
 
     def importCSV(self):
-        """Import csv to a new sheet"""
+        """
+        Open dialog to import a CSV file into a new sheet.
+        """
 
         self.addSheet(select=True)
         table = self.getCurrentTable()
@@ -685,7 +802,9 @@ class DataExplore(Frame):
         return
 
     def importHDF(self):
-        """Import csv to a new sheet"""
+        """
+        Open dialog to import an HDF5 file into a new sheet.
+        """
 
         self.addSheet(select=True)
         table = self.getCurrentTable()
@@ -693,7 +812,9 @@ class DataExplore(Frame):
         return
 
     def importURL(self):
-        """Import CSV from URL"""
+        """
+        Open dialog to import a CSV file from a URL into a new sheet.
+        """
 
         url = simpledialog.askstring("Import url", "Input CSV URL",
                                      parent=self.master)
@@ -704,13 +825,21 @@ class DataExplore(Frame):
         return
 
     def exportCSV(self):
-        """Import csv to a new sheet"""
+        """
+        Export the current table to a CSV file.
+        """
 
         table = self.getCurrentTable()
         table.doExport()
         return
 
     def importExcel(self, filename=None):
+        """
+        Import an Excel file. Each sheet becomes a tab in the application.
+
+        Args:
+            filename (str): Path to the Excel file. If None, prompts user.
+        """
         if filename is None:
             filename = filedialog.askopenfilename(parent=self.master,
                                                           defaultextension='.xls',
@@ -725,11 +854,13 @@ class DataExplore(Frame):
         return
 
     def load_dataframe(self, df, name=None, select=False):
-        """Load a DataFrame into a new sheet
-           Args:
-            df: dataframe
-            name: name of new sheet
-            select: set new sheet as selected
+        """
+        Load a DataFrame into a new sheet.
+
+        Args:
+            df (pd.DataFrame): The DataFrame to load.
+            name (str): The name of the new sheet.
+            select (bool): Whether to select the new sheet.
         """
 
         if hasattr(self,'sheets'):
@@ -740,7 +871,12 @@ class DataExplore(Frame):
         return
 
     def load_msgpack(self, filename):
-        """Load a msgpack file"""
+        """
+        Load a DataFrame from a msgpack file into a new sheet.
+
+        Args:
+            filename (str): Path to the msgpack file.
+        """
 
         size = round((os.path.getsize(filename)/1.0485e6),2)
         print (size)
@@ -750,7 +886,12 @@ class DataExplore(Frame):
         return
 
     def load_pickle(self, filename):
-        """Load a pickle file"""
+        """
+        Load a DataFrame from a pickle file into a new sheet.
+
+        Args:
+            filename (str): Path to the pickle file.
+        """
 
         df = pd.read_pickle(filename)
         name = os.path.splitext(os.path.basename(filename))[0]
@@ -758,7 +899,12 @@ class DataExplore(Frame):
         return
 
     def getData(self, name):
-        """Get predefined data from dataset folder"""
+        """
+        Load a predefined dataset from the 'datasets' folder.
+
+        Args:
+            name (str): Filename of the dataset (e.g., 'iris.csv').
+        """
 
         filename = os.path.join(self.modulepath, 'datasets', name)
         df = pd.read_csv(filename, index_col=0)
@@ -767,7 +913,18 @@ class DataExplore(Frame):
         return
 
     def addSheet(self, sheetname=None, df=None, meta=None, select=False):
-        """Add a sheet with new or existing data"""
+        """
+        Add a new sheet to the notebook.
+
+        Args:
+            sheetname (str): Name of the sheet. If None, prompts user.
+            df (pd.DataFrame): DataFrame to populate the table.
+            meta (dict): Metadata to load into the table (plot options, etc.).
+            select (bool): Whether to select the new sheet.
+
+        Returns:
+            str: The name of the added sheet.
+        """
 
         names = [self.nb.tab(i, "text") for i in self.nb.tabs()]
         def checkName(name):
@@ -820,7 +977,12 @@ class DataExplore(Frame):
         return sheetname
 
     def deleteSheet(self, ask=False):
-        """Delete a sheet"""
+        """
+        Delete the currently selected sheet.
+
+        Args:
+            ask (bool): Whether to prompt for confirmation.
+        """
 
         s = self.nb.index(self.nb.select())
         name = self.nb.tab(s, 'text')
@@ -837,7 +999,12 @@ class DataExplore(Frame):
         return
 
     def copySheet(self, newname=None):
-        """Copy a sheet"""
+        """
+        Create a copy of the current sheet.
+
+        Args:
+            newname (str): Name for the new sheet.
+        """
 
         currenttable = self.getCurrentTable()
         newdata = currenttable.model.df
@@ -846,7 +1013,9 @@ class DataExplore(Frame):
         return
 
     def renameSheet(self):
-        """Rename a sheet"""
+        """
+        Prompt user to rename the current sheet.
+        """
 
         s = self.nb.tab(self.nb.select(), 'text')
         newname = simpledialog.askstring("New sheet name?",
@@ -859,7 +1028,9 @@ class DataExplore(Frame):
         return
 
     def editSheetDescription(self):
-        """Add some meta data about the sheet"""
+        """
+        Open an editor to add description/metadata for the sheet.
+        """
 
         # SimpleEditor already imported at module level
         w = Toplevel(self.main)
@@ -871,13 +1042,24 @@ class DataExplore(Frame):
         return
 
     def getCurrentSheet(self):
-        """Get current sheet name"""
+        """
+        Get the name of the currently active sheet.
+
+        Returns:
+            str: The sheet name.
+        """
 
         s = self.nb.index(self.nb.select())
         name = self.nb.tab(s, 'text')
         return name
 
     def getCurrentTable(self):
+        """
+        Get the Table instance of the currently active sheet.
+
+        Returns:
+            Table: The active Table instance.
+        """
 
         s = self.nb.index(self.nb.select())
         name = self.nb.tab(s, 'text')
@@ -885,10 +1067,18 @@ class DataExplore(Frame):
         return table
 
     def getSheetList(self):
+        """
+        Get a list of all sheet names.
+
+        Returns:
+            list: List of sheet names.
+        """
         return list(self.sheets.keys())
 
     def describe(self):
-        """Describe dataframe"""
+        """
+        Generate descriptive statistics for the current table and show in a child table.
+        """
 
         table = self.getCurrentTable()
         df = table.model.df
@@ -897,13 +1087,19 @@ class DataExplore(Frame):
         return
 
     def findText(self):
+        """
+        Open the find text dialog for the current table.
+        """
 
         table = self.getCurrentTable()
         table.findText()
         return
 
     def concat(self):
-        """Concat 2 tables"""
+        """
+        Concatenate two tables (sheets) together.
+        Prompts user to select tables.
+        """
 
         vals = list(self.sheets.keys())
         if len(vals)<=1:
@@ -927,7 +1123,10 @@ class DataExplore(Frame):
         return
 
     def sampleData(self):
-        """Load sample table"""
+        """
+        Generate and load sample data into a new sheet.
+        Prompts user for rows and columns.
+        """
 
         d = MultipleValDialog(title='Sample Data',
                                 initialvalues=(100,5),
@@ -948,13 +1147,18 @@ class DataExplore(Frame):
         return
 
     def getStackedData(self):
+        """
+        Load a stacked sample dataset.
+        """
 
         df = TableModel.getStackedData()
         self.addSheet(sheetname='stacked-data', df=df)
         return
 
     def fileRename(self):
-        """Start file renaming util"""
+        """
+        Start the batch file renaming utility plugin.
+        """
 
         # BatchRenameApp already imported at module level
         if BatchRenameApp is not None:
@@ -964,14 +1168,24 @@ class DataExplore(Frame):
         return
 
     def copyTable(self, subtable=False):
-        """Copy current table dataframe"""
+        """
+        Copy the current table data to the clipboard.
+
+        Args:
+            subtable (bool): Unused in current implementation?
+        """
 
         table = self.getCurrentTable()
         table.model.df.to_clipboard()
         return
 
     def pasteTable(self, subtable=False):
-        """Paste copied dataframe into current table"""
+        """
+        Paste data from clipboard (self.clipboarddf) into the current table.
+
+        Args:
+            subtable (bool): If True, creates a child table. Otherwise updates current model.
+        """
 
         #add warning?
         if self.clipboarddf is None:
@@ -986,7 +1200,9 @@ class DataExplore(Frame):
         return
 
     def discoverPlugins(self):
-        """Discover available plugins"""
+        """
+        Search for and initialize plugins in default locations.
+        """
 
         if getattr(sys, 'frozen', False):
             #the application is frozen
@@ -1001,7 +1217,10 @@ class DataExplore(Frame):
         return
 
     def installPlugin(self):
-        """Adds a user supplied .py file to plugin folder"""
+        """
+        Prompt user to select a python file to install as a plugin.
+        Copies the file to the plugin folder.
+        """
 
         filename = filedialog.askopenfilename(defaultextension='.py"',
                                               initialdir=os.getcwd(),
@@ -1014,7 +1233,9 @@ class DataExplore(Frame):
         return
 
     def updatePluginMenu(self):
-        """Update plugins"""
+        """
+        Refresh the plugins menu with discovered plugins.
+        """
 
         self.plugin_menu['var'].delete(3, self.plugin_menu['var'].index(END))
         plgmenu = self.plugin_menu['var']
@@ -1029,7 +1250,12 @@ class DataExplore(Frame):
         return
 
     def loadPlugin(self, plugin):
-        """Instantiate the plugin and call it's main method"""
+        """
+        Instantiate and run a plugin.
+
+        Args:
+            plugin: The plugin class to load.
+        """
 
         p = plugin()
         #plugin should add itself to the table frame if it's a dialog
@@ -1044,12 +1270,18 @@ class DataExplore(Frame):
         return
 
     def hidePlot(self):
+        """
+        Hide the plot frame for the current sheet.
+        """
         name = self.getCurrentSheet()
         pw = self.sheetframes[name]
         pw.forget(1)
         return
 
     def showPlot(self):
+        """
+        Show the plot frame for the current sheet.
+        """
         name = self.getCurrentSheet()
         table = self.sheets[name]
         pw = self.sheetframes[name]
@@ -1057,7 +1289,9 @@ class DataExplore(Frame):
         return
 
     def addPlot(self):
-        """Store the current plot so it can be re-loaded"""
+        """
+        Store the current plot in memory so it can be re-opened in a separate window.
+        """
 
         import pickle
         # plotting already imported at module level
@@ -1082,7 +1316,12 @@ class DataExplore(Frame):
         return
 
     def updatePlotsMenu(self, clear=True):
-        """Clear stored plots"""
+        """
+        Clear stored plots and reset the plots menu.
+
+        Args:
+            clear (bool): Whether to clear the stored plots dictionary.
+        """
 
         if clear == True:
             self.plots = {}
@@ -1091,7 +1330,9 @@ class DataExplore(Frame):
         return
 
     def pdfReport(self):
-        """Create pdf report from stored plots"""
+        """
+        Generate a PDF report containing all stored plots.
+        """
 
         from matplotlib.backends.backend_pdf import PdfPages
         filename = filedialog.asksaveasfilename(parent=self.main,
@@ -1111,7 +1352,9 @@ class DataExplore(Frame):
         return
 
     def undo(self):
-        """Restores last version of current table"""
+        """
+        Undo the last change in the current table.
+        """
 
         table = self.getCurrentTable()
         table.undo()
@@ -1119,25 +1362,45 @@ class DataExplore(Frame):
         return
 
     def toggleUndoMenu(self, state='active'):
+        """
+        Enable or disable the Undo menu item.
+
+        Args:
+            state (str): 'active' or 'disabled'.
+        """
         menu = self.edit_menu['var']
         menu.entryconfigure(0, state=state)
         return
 
     def _call(self, func, **args):
-        """Call a table function from it's string name"""
+        """
+        Helper to call a method on the current table by string name.
+
+        Args:
+            func (str): Name of the function to call.
+            **args: Arguments to pass to the function.
+        """
 
         table = self.getCurrentTable()
         getattr(table, func)(**args)
         return
 
     def _check_snap(self):
+        """
+        Check if the application is running inside a Snap container.
+
+        Returns:
+            bool: True if running in Snap, False otherwise.
+        """
         if os.environ.has_key('SNAP_USER_COMMON'):
             print ('running inside snap')
             return True
         return False
 
     def about(self):
-        """About dialog"""
+        """
+        Show the About dialog.
+        """
 
         abwin = Toplevel()
         x,y,w,h = dialogs.getParentGeometry(self.main)
@@ -1184,7 +1447,9 @@ class DataExplore(Frame):
         return
 
     def showErrorLog(self):
-        """Open log file"""
+        """
+        Display the error log in a window.
+        """
 
         # logfile and SimpleEditor already imported at module level
         f=open(logfile,'r')
@@ -1198,18 +1463,31 @@ class DataExplore(Frame):
         return
 
     def online_documentation(self,event=None):
-        """Open the online documentation"""
+        """
+        Open the online documentation in a web browser.
+
+        Args:
+            event: The triggering event (optional).
+        """
         import webbrowser
         link='https://pandastable.readthedocs.io/en/latest/'
         webbrowser.open(link,autoraise=1)
         return
 
     def quit(self):
+        """
+        Close the application.
+        """
         self.main.destroy()
         return
 
 class TestApp(Frame):
-    """Basic test frame for the table"""
+    """
+    A basic test application frame for demonstrating the Table widget.
+
+    Args:
+        parent: Parent widget (optional).
+    """
     def __init__(self, parent=None):
         self.parent = parent
         Frame.__init__(self)
@@ -1242,7 +1520,9 @@ class TestApp(Frame):
         return
 
 def main():
-    "Run the application"
+    """
+    Main entry point for the application. Parses arguments and starts the GUI.
+    """
     import sys, os
     from optparse import OptionParser
     parser = OptionParser()
