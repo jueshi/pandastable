@@ -11,22 +11,30 @@ from enum import Enum
 import json
 
 class TaskStatus(Enum):
+    """Enum for task status."""
     PENDING = "Pending"
     RUNNING = "Running"
     COMPLETED = "Completed"
     FAILED = "Failed"
+
 class TaskSchedulerGUI:
+    """
+    GUI Application for scheduling and launching Python scripts/tasks.
+    """
     def browse_python_path(self):
+        """Open file dialog to select Python interpreter."""
         path = filedialog.askopenfilename(title="选择Python解释器", filetypes=[("Python Executable", "python.exe"), ("All Files", "*")])
         if path:
             self.python_path_var.set(path)
 
     def browse_script_path(self):
+        """Open file dialog to select Python script."""
         path = filedialog.askopenfilename(title="选择要运行的脚本", filetypes=[("Python Files", "*.py"), ("All Files", "*")])
         if path:
             self.script_path_var.set(path)
 
     def launch_script(self):
+        """Launch the configured script using the selected Python interpreter."""
         python_path = self.python_path_var.get().strip()
         script_path = self.script_path_var.get().strip()
         if not os.path.isfile(python_path):
@@ -41,6 +49,12 @@ class TaskSchedulerGUI:
             messagebox.showerror("运行出错", f"无法启动脚本:\n{e}")
 
     def __init__(self, root):
+        """
+        Initialize the TaskSchedulerGUI.
+
+        Args:
+            root: The tkinter root window.
+        """
         self.root = root
         self.root.title("Windows App Launcher")
 
@@ -123,7 +137,7 @@ class TaskSchedulerGUI:
                 messagebox.showwarning("Warning", f"Failed to load default tasks file: {str(e)}")
 
     def create_control_panel(self):
-        """Create the control panel with file browser and buttons"""
+        """Create the control panel with file browser and buttons."""
         control_frame = ttk.LabelFrame(self.main_container, text="Control Panel")
         control_frame.pack(fill=tk.X, pady=(0, 10))
         
@@ -177,7 +191,7 @@ class TaskSchedulerGUI:
         ttk.Button(save_load_frame, text="Load Tasks", command=self.load_tasks).pack(side=tk.LEFT, padx=5)
 
     def stop_selected(self):
-        """Stop the selected running task"""
+        """Stop the selected running task."""
         selected_items = self.tree.selection()
         if not selected_items:
             messagebox.showinfo("Info", "Please select a task to stop")
@@ -194,7 +208,7 @@ class TaskSchedulerGUI:
             messagebox.showinfo("Info", "Can only stop running tasks")
 
     def reveal_in_explorer(self):
-        """Reveal the selected script in Windows Explorer"""
+        """Reveal the selected script in Windows Explorer."""
         selected_items = self.tree.selection()
         if not selected_items:
             return
@@ -216,7 +230,7 @@ class TaskSchedulerGUI:
 
         
     def start_selected(self):
-        """Start execution from the selected task"""
+        """Start execution from the selected task."""
         selected_items = self.tree.selection()
         if not selected_items:
             messagebox.showinfo("Info", "Please select a task to start")
@@ -231,7 +245,7 @@ class TaskSchedulerGUI:
         self.scheduler.start_from_task(task_id)
 
     def create_task_table(self):
-        """Create the task table to display tasks"""
+        """Create the task table to display tasks."""
         # Create table frame
         table_frame = ttk.LabelFrame(self.main_container, text="Tasks")
         table_frame.pack(fill=tk.BOTH, expand=True)
@@ -309,7 +323,12 @@ class TaskSchedulerGUI:
         self.tree.bind('<Button-3>', self.show_context_menu)
 
     def show_context_menu(self, event):
-        """Show context menu on right click"""
+        """
+        Show context menu on right click.
+
+        Args:
+            event: The mouse event.
+        """
         item = self.tree.identify_row(event.y)
         if item:
             # Select the item under cursor
@@ -318,7 +337,7 @@ class TaskSchedulerGUI:
             self.context_menu.post(event.x_root, event.y_root)
 
     def open_in_notepad(self):
-        """Open the selected script in Notepad++"""
+        """Open the selected script in Notepad++."""
         selected_items = self.tree.selection()
         if not selected_items:
             return
@@ -348,7 +367,7 @@ class TaskSchedulerGUI:
             messagebox.showerror("Error", f"Failed to open file: {str(e)}")
                             
     def browse_file(self):
-        """Open file browser dialog for any executable or file"""
+        """Open file browser dialog for any executable or file."""
         filenames = filedialog.askopenfilenames(
             title="Select Applications or Files",
             filetypes=[
@@ -364,7 +383,7 @@ class TaskSchedulerGUI:
             self.add_task()  # Add as task
 
     def add_task(self):
-        """Add a new task to the scheduler"""
+        """Add a new task to the scheduler."""
         script_path = self.path_var.get().strip()
         if not script_path:
             messagebox.showerror("Error", "Please select a script file")
@@ -378,7 +397,7 @@ class TaskSchedulerGUI:
         self.args_var.set("")
 
     def adjust_column_widths(self):
-        """Adjust column widths based on content"""
+        """Adjust column widths based on content."""
         columns = ('ID', 'Script', 'Arguments', 'Status', 'Added Time', 'Start Time', 'End Time')
         
         # Initialize minimum widths
@@ -411,7 +430,7 @@ class TaskSchedulerGUI:
             self.tree.column(col, width=min_widths[col])
 
     def remove_selected(self):
-        """Remove selected task from the table"""
+        """Remove selected task from the table."""
         selected_items = self.tree.selection()
         if not selected_items:
             messagebox.showinfo("Info", "Please select a task to remove")
@@ -430,7 +449,7 @@ class TaskSchedulerGUI:
         self.adjust_column_widths()
 
     def clear_completed(self):
-        """Clear completed tasks from the table"""
+        """Clear completed tasks from the table."""
         for item in self.tree.get_children():
             status = self.tree.item(item)['values'][3]
             if status in (TaskStatus.COMPLETED.value, TaskStatus.FAILED.value):
@@ -442,7 +461,12 @@ class TaskSchedulerGUI:
         self.adjust_column_widths()
 
     def on_double_click(self, event):
-        """Handle double click on table cell"""
+        """
+        Handle double click on table cell.
+
+        Args:
+            event: The mouse event.
+        """
         region = self.tree.identify("region", event.x, event.y)
         if region == "cell":
             column = self.tree.identify_column(event.x)
@@ -453,7 +477,12 @@ class TaskSchedulerGUI:
                 self.edit_cell(item, column)
 
     def on_select(self, event):
-        """Update output display when selecting a row"""
+        """
+        Update output display when selecting a row.
+
+        Args:
+            event: The selection event.
+        """
         selected_items = self.tree.selection()
         if selected_items:
             # Get the task ID from the selected row
@@ -470,7 +499,13 @@ class TaskSchedulerGUI:
             if task_output:
                 self.output_text.insert('1.0', task_output)
     def edit_cell(self, item, column):
-        """Create entry widget for editing cell"""
+        """
+        Create entry widget for editing cell.
+
+        Args:
+            item: The tree item.
+            column: The column identifier.
+        """
         # Get cell bounds
         x, y, w, h = self.tree.bbox(item, column)
         
@@ -499,7 +534,7 @@ class TaskSchedulerGUI:
         entry.focus_set()
 
     def reset_selected(self):
-        """Reset status of selected tasks to PENDING"""
+        """Reset status of selected tasks to PENDING."""
         selected_items = self.tree.selection()
         if not selected_items:
             messagebox.showinfo("Info", "Please select tasks to reset")
@@ -514,7 +549,7 @@ class TaskSchedulerGUI:
                 self.tree.selection_set(item)
 
     def move_up(self):
-        """Move selected task up in the list"""
+        """Move selected task up in the list."""
         selected_items = self.tree.selection()
         if not selected_items:
             return
@@ -526,7 +561,7 @@ class TaskSchedulerGUI:
             self.tree.selection_set(prev)
 
     def move_down(self):
-        """Move selected task down in the list"""
+        """Move selected task down in the list."""
         selected_items = self.tree.selection()
         if not selected_items:
             return
@@ -538,7 +573,13 @@ class TaskSchedulerGUI:
             self.tree.selection_set(next_)
 
     def _swap_items(self, item1, item2):
-        """Swap two items in the treeview and update task order"""
+        """
+        Swap two items in the treeview and update task order.
+
+        Args:
+            item1: The first tree item.
+            item2: The second tree item.
+        """
         # Get values
         values1 = self.tree.item(item1)['values']
         values2 = self.tree.item(item2)['values']
@@ -551,7 +592,7 @@ class TaskSchedulerGUI:
         self.scheduler.renumber_tasks()
 
     def save_tasks(self):
-        """Save current task list to a file"""
+        """Save current task list to a file."""
         filename = filedialog.asksaveasfilename(
             defaultextension=".tasks",
             filetypes=[("Task files", "*.tasks"), ("All files", "*.*")],
@@ -582,7 +623,7 @@ class TaskSchedulerGUI:
             messagebox.showerror("Error", f"Failed to save task list: {str(e)}")
 
     def load_tasks(self):
-        """Load task list from a file"""
+        """Load task list from a file."""
         filename = filedialog.askopenfilename(
             filetypes=[("Task files", "*.tasks"), ("All files", "*.*")],
             title="Load Task List"
@@ -641,7 +682,16 @@ class TaskSchedulerGUI:
             messagebox.showerror("Error", f"Failed to load task list: {str(e)}")
 
 class TaskScheduler:
+    """
+    Handles task scheduling and execution.
+    """
     def __init__(self, gui):
+        """
+        Initialize the TaskScheduler.
+
+        Args:
+            gui: The TaskSchedulerGUI instance.
+        """
         self.gui = gui
         self.task_queue = Queue()
         self.stop_event = Event()
@@ -652,7 +702,12 @@ class TaskScheduler:
         self.tasks = {}  # Store all tasks by ID
 
     def stop_task(self, task_id):
-        """Stop a running task"""
+        """
+        Stop a running task.
+
+        Args:
+            task_id: The ID of the task to stop.
+        """
         if task_id in self.tasks:
             task = self.tasks[task_id]
             if task['status'] == TaskStatus.RUNNING:
@@ -680,7 +735,7 @@ class TaskScheduler:
                     messagebox.showerror("Error", f"Failed to stop task: {str(e)}")
 
     def renumber_tasks(self):
-        """Renumber all tasks based on their current order in the table"""
+        """Renumber all tasks based on their current order in the table."""
         tree_items = self.gui.tree.get_children()
         new_tasks = {}
         new_outputs = {}
@@ -738,7 +793,12 @@ class TaskScheduler:
         self.task_counter = new_counter
         
     def reset_task(self, task_id):
-        """Reset a task to PENDING status"""
+        """
+        Reset a task to PENDING status.
+
+        Args:
+            task_id: The ID of the task to reset.
+        """
         if task_id in self.tasks:
             task = self.tasks[task_id]
             task['status'] = TaskStatus.PENDING
@@ -749,7 +809,13 @@ class TaskScheduler:
             self._update_task_in_tree(task)
 
     def swap_tasks(self, task_id1, task_id2):
-        """Swap the order of two tasks"""
+        """
+        Swap the order of two tasks.
+
+        Args:
+            task_id1: The ID of the first task.
+            task_id2: The ID of the second task.
+        """
         if task_id1 in self.tasks and task_id2 in self.tasks:
             # Get both tasks
             task1 = self.tasks[task_id1]
@@ -792,11 +858,24 @@ class TaskScheduler:
                 self.task_outputs[task_id2] = output1
                 
     def get_task_output(self, task_id):
-        """Get the output for a specific task"""
+        """
+        Get the output for a specific task.
+
+        Args:
+            task_id: The ID of the task.
+
+        Returns:
+            The output string of the task.
+        """
         return self.task_outputs.get(task_id, "")
 
     def _update_task_in_tree(self, task):
-        """Update task status in the treeview"""
+        """
+        Update task status in the treeview.
+
+        Args:
+            task: The task dictionary to update.
+        """
         def update():
             # Store output separately
             self.task_outputs[task['id']] = task['output']
@@ -823,7 +902,13 @@ class TaskScheduler:
         self.gui.root.after(0, update)
 
     def add_task(self, script_path, args=None):
-        """Add task to queue and update GUI"""
+        """
+        Add task to queue and update GUI.
+
+        Args:
+            script_path: The path to the script.
+            args: List of arguments for the script.
+        """
         script_path = os.path.normpath(script_path)
         self.task_counter += 1
         
@@ -863,7 +948,12 @@ class TaskScheduler:
         self.gui.root.after(0, insert_to_table)
 
     def start_from_task(self, task_id):
-        """Start executing the selected task"""
+        """
+        Start executing the selected task.
+
+        Args:
+            task_id: The ID of the task to start from.
+        """
         # Get tasks in current tree order
         tree_items = self.gui.tree.get_children()
         
@@ -893,7 +983,12 @@ class TaskScheduler:
                 break
 
     def _execute_task(self, task):
-        """Execute a task and update GUI"""
+        """
+        Execute a task and update GUI.
+
+        Args:
+            task: The task dictionary to execute.
+        """
         try:
             # Update status to running
             task['status'] = TaskStatus.RUNNING
@@ -956,14 +1051,14 @@ class TaskScheduler:
             self._update_task_in_tree(task)
 
     def start(self):
-        """Start the scheduler and initialize thread pool"""
+        """Start the scheduler and initialize thread pool."""
         if not self.is_running:
             self.is_running = True
             if self.executor is None:
                 self.executor = ThreadPoolExecutor(max_workers=4) # Example max_workers, adjust as needed
 
     def stop(self):
-        """Stop the scheduler and shutdown thread pool"""
+        """Stop the scheduler and shutdown thread pool."""
         if self.is_running:
             self.is_running = False
             if self.executor:

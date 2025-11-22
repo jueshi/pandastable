@@ -14,9 +14,16 @@ from datetime import datetime
 
 class CreateToolTip(object):
     """
-    Create a tooltip for a given widget with delayed show/hide
+    Create a tooltip for a given widget with delayed show/hide.
     """
     def __init__(self, widget, text='widget info'):
+        """
+        Initialize the tooltip.
+
+        Args:
+            widget: The widget to attach the tooltip to.
+            text (str): The text to display in the tooltip.
+        """
         self.waittime = 500     # miliseconds
         self.wraplength = 300   # pixels
         self.widget = widget
@@ -28,23 +35,28 @@ class CreateToolTip(object):
         self.tw = None
 
     def enter(self, event=None):
+        """Schedule the tooltip to appear on mouse enter."""
         self.schedule()
 
     def leave(self, event=None):
+        """Hide the tooltip on mouse leave."""
         self.unschedule()
         self.hidetip()
 
     def schedule(self):
+        """Schedule the tooltip to appear after a delay."""
         self.unschedule()
         self.id = self.widget.after(self.waittime, self.showtip)
 
     def unschedule(self):
+        """Cancel the scheduled tooltip appearance."""
         id = self.id
         self.id = None
         if id:
             self.widget.after_cancel(id)
 
     def showtip(self, event=None):
+        """Show the tooltip window."""
         if self.tw:
             return
         x = self.widget.winfo_rootx() + self.widget.winfo_width() + 5
@@ -71,13 +83,23 @@ class CreateToolTip(object):
         self.tw.lift()
 
     def hidetip(self):
+        """Hide the tooltip window."""
         tw = self.tw
         self.tw = None
         if tw:
             tw.destroy()
 
 class FileSearchGUI:
+    """
+    GUI Application for searching files and content within files.
+    """
     def __init__(self, root):
+        """
+        Initialize the FileSearchGUI.
+
+        Args:
+            root: The tkinter root window.
+        """
         # Convert root to Tix root if it's not already
         if not isinstance(root, tk.Tk):
             self.root = tk.Tk()
@@ -289,11 +311,23 @@ class FileSearchGUI:
         self.update_filtered_files()
 
     def on_pattern_change(self, *_):
-        """Called when the file pattern is changed"""
+        """
+        Called when the file pattern is changed.
+        Triggers an update of the filtered files list.
+        """
         self.update_filtered_files()
 
     def matches_patterns(self, filename, patterns):
-        """Check if filename matches patterns, supporting AND (space), OR (|), and exclusion (!)"""
+        """
+        Check if filename matches patterns, supporting AND (space), OR (|), and exclusion (!).
+
+        Args:
+            filename (str): The filename to check.
+            patterns (str): The patterns string.
+
+        Returns:
+            bool: True if the filename matches the patterns, False otherwise.
+        """
         # First split by spaces (AND operator)
         and_patterns = [p.strip().lower() for p in patterns.split()]
         filename_lower = filename.lower()
@@ -355,7 +389,15 @@ class FileSearchGUI:
         return True
 
     def format_size(self, size):
-        """Format file size in human-readable format"""
+        """
+        Format file size in human-readable format.
+
+        Args:
+            size (int): The size in bytes.
+
+        Returns:
+            str: The formatted size string.
+        """
         for unit in ['B', 'KB', 'MB', 'GB']:
             if size < 1024:
                 return f"{size:6.1f} {unit}"
@@ -363,12 +405,22 @@ class FileSearchGUI:
         return f"{size:6.1f} TB"
 
     def format_date(self, timestamp):
-        """Format modification date"""
+        """
+        Format modification date.
+
+        Args:
+            timestamp (float): The timestamp to format.
+
+        Returns:
+            str: The formatted date string.
+        """
         from datetime import datetime
         return datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
 
     def update_filtered_files(self):
-        """Update the list of filtered files based on current pattern"""
+        """
+        Update the list of filtered files based on current pattern.
+        """
         search_path = self.dir_path.get()
         file_pattern = self.file_pattern.get()
         
@@ -419,7 +471,12 @@ class FileSearchGUI:
             self.status_var.set(f"Error accessing directory: {str(e)}")
 
     def get_selected_files(self):
-        """Get a list of selected file paths from the filtered files treeview"""
+        """
+        Get a list of selected file paths from the filtered files treeview.
+
+        Returns:
+            list: A list of full file paths for the selected items.
+        """
         try:
             # Get selected items
             selections = self.filtered_files.selection()
@@ -449,7 +506,12 @@ class FileSearchGUI:
             return []
 
     def get_selected_file(self):
-        """Get the selected file path from the filtered files treeview"""
+        """
+        Get the selected file path from the filtered files treeview.
+
+        Returns:
+            str: The full file path of the selected item, or None if no item is selected.
+        """
         try:
             # Get selected item
             selection = self.filtered_files.selection()
@@ -476,7 +538,15 @@ class FileSearchGUI:
             return None
 
     def safe_update_results(self, text, clickable=False, filepath=None, line_number=None):
-        """Thread-safe update of results text widget"""
+        """
+        Thread-safe update of results text widget.
+
+        Args:
+            text (str): The text to append to the results.
+            clickable (bool): Whether the text should be clickable (link).
+            filepath (str): The file path associated with the link (if clickable).
+            line_number (int): The line number associated with the link (if clickable).
+        """
         def update():
             if self.simple_results.get():
                 # For simple results, only show the matched line
@@ -500,6 +570,13 @@ class FileSearchGUI:
         self.root.after(0, update)
 
     def open_file(self, filepath, line_number):
+        """
+        Open a file at a specific line number (if supported) or just open the file.
+
+        Args:
+            filepath (str): The path to the file.
+            line_number (int): The line number to navigate to (currently only used for context).
+        """
         try:
             if sys.platform == 'win32':
                 os.startfile(filepath)
@@ -513,6 +590,12 @@ class FileSearchGUI:
             self.status_var.set(f"Error opening file: {str(e)}")
 
     def on_click(self, event):
+        """
+        Handle click event on result links.
+
+        Args:
+            event: The mouse event.
+        """
         for tag in self.results_text.tag_names(tk.CURRENT):
             if tag.startswith("clickable_"):
                 filepath, line_number = self.file_locations[tag]
@@ -520,7 +603,17 @@ class FileSearchGUI:
                 break
 
     def matches_search_terms(self, line, search_terms, case_sensitive):
-        """Check if line matches any of the search terms (OR logic) and return matching terms"""
+        """
+        Check if line matches any of the search terms (OR logic) and return matching terms.
+
+        Args:
+            line (str): The line of text to check.
+            search_terms (list): List of terms to search for.
+            case_sensitive (bool): Whether search should be case sensitive.
+
+        Returns:
+            list: A list of terms that matched.
+        """
         matches = []
         line_to_search = line if case_sensitive else line.lower()
         for term in search_terms:
@@ -530,7 +623,15 @@ class FileSearchGUI:
         return matches
 
     def split_search_terms(self, keyword):
-        """Split search string into terms using OR or | as delimiters"""
+        """
+        Split search string into terms using OR or | as delimiters.
+
+        Args:
+            keyword (str): The search string.
+
+        Returns:
+            list: A list of individual search terms.
+        """
         if not keyword:
             return []
             
@@ -547,7 +648,15 @@ class FileSearchGUI:
         return terms
 
     def search_files(self, search_path, file_pattern, keyword, case_sensitive=False):
-        """Search for keyword in files"""
+        """
+        Search for keyword in files.
+
+        Args:
+            search_path (str): Directory to search in.
+            file_pattern (str): Pattern to filter files.
+            keyword (str): Content to search for within files.
+            case_sensitive (bool): Whether search is case sensitive.
+        """
         try:
             # Clear previous results
             self.results_text.delete('1.0', tk.END)
@@ -619,11 +728,20 @@ class FileSearchGUI:
             self.status_var.set(f"Search error: {str(e)}")
 
     def update_results(self, text):
+        """
+        Update the results text area.
+
+        Args:
+            text (str): Text to append.
+        """
         self.results_text.insert(tk.END, text)
         self.results_text.see(tk.END)
         self.results_text.update_idletasks()
 
     def start_search(self):
+        """
+        Start the file search process in a separate thread.
+        """
         # Get search parameters
         search_path = self.dir_path.get()
         file_pattern = self.file_pattern.get()
@@ -653,6 +771,9 @@ class FileSearchGUI:
         thread.start()
 
     def toggle_auto_refresh(self):
+        """
+        Toggle auto-refresh functionality.
+        """
         if self.auto_refresh.get():
             try:
                 interval = int(self.auto_refresh_interval.get())
@@ -668,13 +789,21 @@ class FileSearchGUI:
                 self._auto_refresh_id = None
 
     def schedule_auto_refresh(self):
+        """
+        Schedule the next auto-refresh.
+        """
         if self.auto_refresh.get():
             self.start_search()
             interval = int(self.auto_refresh_interval.get()) * 1000  # Convert to milliseconds
             self._auto_refresh_id = self.root.after(interval, self.schedule_auto_refresh)
 
     def show_context_menu(self, event):
-        """Show the context menu on right click"""
+        """
+        Show the context menu on right click.
+
+        Args:
+            event: The mouse event.
+        """
         try:
             # Identify the item under cursor
             item = self.filtered_files.identify_row(event.y)
@@ -717,13 +846,20 @@ class FileSearchGUI:
             self.context_menu.grab_release()
 
     def on_double_click(self, event):
-        """Handle double-click on filtered files listbox"""
+        """
+        Handle double-click on filtered files listbox.
+
+        Args:
+            event: The mouse event.
+        """
         file_path = self.get_selected_file()
         if file_path:
             self.open_with_default()
 
     def open_with_notepadpp(self):
-        """Open selected file with Notepad++"""
+        """
+        Open selected file with Notepad++.
+        """
         file_path = self.get_selected_file()
         if file_path:
             try:
@@ -737,7 +873,9 @@ class FileSearchGUI:
                     messagebox.showerror("Error", "Failed to open file with Notepad")
 
     def show_in_explorer(self):
-        """Show selected file in Windows Explorer"""
+        """
+        Show selected file in Windows Explorer.
+        """
         file_path = self.get_selected_file()
         if file_path:
             try:
@@ -746,7 +884,9 @@ class FileSearchGUI:
                 messagebox.showerror("Error", "Failed to open File Explorer")
 
     def open_with_default(self):
-        """Open selected file with default application"""
+        """
+        Open selected file with default application.
+        """
         file_path = self.get_selected_file()
         if file_path:
             try:
@@ -755,7 +895,9 @@ class FileSearchGUI:
                 messagebox.showerror("Error", "Failed to open file with default application")
 
     def copy_file(self):
-        """Copy selected files to a chosen destination"""
+        """
+        Copy selected files to a chosen destination.
+        """
         file_paths = self.get_selected_files()
         if not file_paths:
             return
@@ -804,7 +946,9 @@ class FileSearchGUI:
             messagebox.showerror("Error", f"Failed to copy files:\n{str(e)}")
 
     def move_file(self):
-        """Move selected files to a chosen destination"""
+        """
+        Move selected files to a chosen destination.
+        """
         file_paths = self.get_selected_files()
         if not file_paths:
             return
@@ -856,7 +1000,9 @@ class FileSearchGUI:
             messagebox.showerror("Error", f"Failed to move files:\n{str(e)}")
 
     def delete_file(self):
-        """Delete selected files"""
+        """
+        Delete selected files.
+        """
         file_paths = self.get_selected_files()
         if not file_paths:
             return
@@ -901,14 +1047,22 @@ class FileSearchGUI:
             messagebox.showerror("Error", f"Failed to delete files:\n{str(e)}")
 
     def browse_directory(self):
-        """Browse for a directory and update the file list"""
+        """
+        Browse for a directory and update the file list.
+        """
         directory = filedialog.askdirectory()
         if directory:
             self.dir_path.set(directory)
             self.update_filtered_files()  # Update files when directory changes
 
     def sort_treeview(self, col, reverse):
-        """Sort treeview by column"""
+        """
+        Sort treeview by column.
+
+        Args:
+            col (str): The column to sort by.
+            reverse (bool): Whether to sort in reverse order.
+        """
         # Get all items
         items = [(self.filtered_files.set(item, col), item) for item in self.filtered_files.get_children('')]
         
@@ -955,7 +1109,9 @@ class FileSearchGUI:
         self.filtered_files.heading(col, command=lambda: self.sort_treeview(col, not reverse))
 
     def generate_search_code(self):
-        """Generate a standalone Python script that reproduces the current search configuration"""
+        """
+        Generate a standalone Python script that reproduces the current search configuration.
+        """
         search_path = self.dir_path.get()
         if not search_path:
             messagebox.showerror("Error", "Please select a search directory first")
