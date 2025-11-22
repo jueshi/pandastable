@@ -48,14 +48,29 @@ from .data import TableModel
 from . import util, images
 
 def setGeometry(win, width=None):
-    """Set window geometry to center of screen"""
+    """
+    Set window geometry to center of screen.
+
+    Args:
+        win: The window object.
+        width (int): Optional width.
+    """
 
     winsize = getBestGeometry(win, width)
     win.geometry(winsize)
     return
 
 def getBestGeometry(win, width=None):
-    """Calculate optimal geometry from screen size or given width"""
+    """
+    Calculate optimal geometry from screen size or given width.
+
+    Args:
+        win: The window object.
+        width (int): Optional width.
+
+    Returns:
+        str: Geometry string (WxH+X+Y).
+    """
 
     ws = win.winfo_screenwidth()
     hs = win.winfo_screenheight()
@@ -70,6 +85,15 @@ def getBestGeometry(win, width=None):
     return g
 
 def getParentGeometry(parent):
+    """
+    Get the geometry of the parent window.
+
+    Args:
+        parent: The parent window.
+
+    Returns:
+        tuple: (x, y, w, h).
+    """
     x = parent.winfo_rootx()
     y = parent.winfo_rooty()
     w = parent.winfo_width()
@@ -77,6 +101,17 @@ def getParentGeometry(parent):
     return x,y,w,h
 
 def getDictfromTkVars(opts, tkvars, widgets):
+    """
+    Convert tkinter variables to a dictionary.
+
+    Args:
+        opts (dict): Options configuration.
+        tkvars (dict): Dictionary of tkinter variables.
+        widgets (dict): Dictionary of widgets (for listboxes).
+
+    Returns:
+        dict: Values extracted from the variables.
+    """
     kwds = {}
     for i in opts:
         if not i in tkvars:
@@ -93,6 +128,16 @@ def getDictfromTkVars(opts, tkvars, widgets):
     return kwds
 
 def pickColor(parent, oldcolor):
+    """
+    Open a color chooser dialog.
+
+    Args:
+        parent: Parent window.
+        oldcolor (str): Initial color.
+
+    Returns:
+        str: The selected color in hex format, or None if cancelled.
+    """
 
     import tkinter.colorchooser
     ctuple, newcolor = tkinter.colorchooser.askcolor(title='pick a color',
@@ -104,8 +149,20 @@ def pickColor(parent, oldcolor):
 
 def dialogFromOptions(parent, opts, groups=None, callback=None,
                         sticky='news',  layout='horizontal'):
-    """Auto create tk vars and widgets for corresponding options and
-       and return the enclosing frame"""
+    """
+    Auto create tk vars and widgets for corresponding options and return the enclosing frame.
+
+    Args:
+        parent: Parent widget.
+        opts (dict): Dictionary of options.
+        groups (dict): Dictionary mapping group names to option keys.
+        callback (function): Function to call on widget updates.
+        sticky (str): Sticky parameter for grid layout.
+        layout (str): 'horizontal' or 'vertical' layout for groups.
+
+    Returns:
+        tuple: (frame, tkvars, widgets)
+    """
 
     tkvars = {}
     widgets = {}
@@ -282,7 +339,23 @@ def dialogFromOptions(parent, opts, groups=None, callback=None,
 
 def addButton(frame, name, callback, img=None, tooltip=None,
               side=TOP, compound=None, width=None, padding=1):
-    """Add a button with image, toolip to a tkinter frame"""
+    """
+    Add a button with image and tooltip to a tkinter frame.
+
+    Args:
+        frame: Parent frame.
+        name (str): Button text.
+        callback (function): Button command.
+        img: Button image.
+        tooltip (str): Tooltip text.
+        side: Pack side.
+        compound: Compound option for text/image.
+        width (int): Button width.
+        padding (int): Padding.
+
+    Returns:
+        Button: The created button.
+    """
 
     #style = ttk.Style()
     #style.configure('TButton', padding=1)
@@ -298,7 +371,12 @@ def addButton(frame, name, callback, img=None, tooltip=None,
     return
 
 def applyStyle(w):
-    """Apply style to individual widget to prevent widget color issues on linux"""
+    """
+    Apply style to individual widget to prevent widget color issues on linux.
+
+    Args:
+        w: The widget.
+    """
 
     plf = util.checkOS()
     if plf in ['linux','darwin']:
@@ -308,7 +386,12 @@ def applyStyle(w):
     return
 
 def setWidgetStyles(widgets):
-    """set styles of list of widgets"""
+    """
+    Set styles of a list of widgets.
+
+    Args:
+        widgets (list): List of widgets.
+    """
 
     style = Style()
     bg = style.lookup('TLabel.label', 'background')
@@ -320,7 +403,13 @@ def setWidgetStyles(widgets):
     return
 
 class Progress():
-    """ threaded progress bar for tkinter gui """
+    """
+    Threaded progress bar for tkinter GUI.
+
+    Args:
+        parent: Parent widget.
+        side: Pack side.
+    """
     def __init__(self, parent, side=LEFT):
         import threading
         self.maximum = 100
@@ -367,7 +456,19 @@ class Progress():
                                        value=self.maximum)
 
 class MultipleValDialog(Dialog):
-    """Simple dialog to get multiple values"""
+    """
+    Simple dialog to get multiple values from the user.
+
+    Args:
+        parent: Parent window.
+        title (str): Dialog title.
+        initialvalues (list): List of initial values.
+        labels (list): List of labels for the inputs.
+        types (list): List of types for inputs (e.g., 'int', 'string', 'combobox').
+        tooltips (list): List of tooltips.
+        width (int): Width of entry fields.
+        **kwargs: Additional arguments.
+    """
 
     def __init__(self, parent, title=None, initialvalues=None, labels=None,
                     types=None, tooltips=None, width=14, **kwargs):
@@ -439,7 +540,15 @@ class MultipleValDialog(Dialog):
         return
 
     def getResults(self, null=None):
-        """Return a dict of options/values"""
+        """
+        Return a dict of options/values.
+
+        Args:
+            null: Value to replace with None.
+
+        Returns:
+            dict: The results.
+        """
 
         res = dict(zip(self.labels,self.results))
         #replace null values with None
@@ -454,7 +563,12 @@ class MultipleValDialog(Dialog):
         return res
 
 class ToolTip(object):
-    """Tooltip class for tkinter widgets"""
+    """
+    Tooltip class for tkinter widgets.
+
+    Args:
+        widget: The widget to attach the tooltip to.
+    """
     def __init__(self, widget):
         self.widget = widget
         self.tipwindow = None
@@ -462,7 +576,13 @@ class ToolTip(object):
         self.x = self.y = 0
 
     def showtip(self, text, event=None):
-        "Display text in tooltip window"
+        """
+        Display text in tooltip window.
+
+        Args:
+            text (str): The text to display.
+            event: The triggering event.
+        """
 
         self.text = text
         if self.tipwindow or not self.text:
@@ -488,7 +608,12 @@ class ToolTip(object):
         label.pack(ipadx=1)
 
     def hidetip(self, event=None):
-        """Hide tooltip"""
+        """
+        Hide the tooltip.
+
+        Args:
+            event: The triggering event.
+        """
 
         tw = self.tipwindow
         self.tipwindow = None
@@ -497,7 +622,13 @@ class ToolTip(object):
 
     @classmethod
     def createToolTip(self, widget, text):
-        """Create a tooltip for a widget"""
+        """
+        Create a tooltip for a widget.
+
+        Args:
+            widget: The widget.
+            text (str): The tooltip text.
+        """
 
         toolTip = ToolTip(widget)
         def enter(event):
@@ -515,7 +646,13 @@ class ProgressDialog(Toplevel):
                             length=200, mode='indeterminate')
 
 class ImportDialog(Frame):
-    """Provides a frame for figure canvas and MPL settings"""
+    """
+    Dialog for importing CSV files with various options.
+
+    Args:
+        parent: Parent widget.
+        filename (str): The file to import.
+    """
 
     def __init__(self, parent=None, filename=None):
 
@@ -599,7 +736,12 @@ class ImportDialog(Frame):
         return
 
     def showText(self, encoding='utf-8'):
-        """Show text contents"""
+        """
+        Show text contents of the file in the preview area.
+
+        Args:
+            encoding (str): File encoding.
+        """
 
         with open(self.filename, 'r', encoding=encoding) as stream:
             try:
@@ -611,7 +753,9 @@ class ImportDialog(Frame):
         return
 
     def update(self):
-        """Reload previews"""
+        """
+        Reload previews based on current settings.
+        """
 
         kwds = {}
         other = ['rowsperfile','time format','numbers_as_string']
@@ -667,7 +811,9 @@ class ImportDialog(Frame):
         return
 
     def doImport(self):
-        """Do the import"""
+        """
+        Perform the import and close the dialog.
+        """
 
         self.update()
         self.df = pd.read_csv(self.filename, converters=self.converters, **self.kwds)
@@ -679,7 +825,14 @@ class ImportDialog(Frame):
         return
 
 class CombineDialog(Frame):
-    """Provides a frame for setting up merge/combine operations"""
+    """
+    Provides a frame for setting up merge/combine operations between two DataFrames.
+
+    Args:
+        parent: Parent widget.
+        df1 (pd.DataFrame): First DataFrame.
+        df2 (pd.DataFrame): Second DataFrame.
+    """
 
     def __init__(self, parent=None, df1=None, df2=None):
 
@@ -747,7 +900,9 @@ class CombineDialog(Frame):
         return
 
     def apply(self):
-        """Apply operation"""
+        """
+        Apply the merge/concat operation.
+        """
         kwds = {}
         method = self.opvar.get()
         for i in self.opts:
@@ -782,7 +937,12 @@ class CombineDialog(Frame):
         return
 
     def getResult(self, df):
-        """Show result of merge and let user choose to replace current table"""
+        """
+        Show result of merge and let user choose to replace current table.
+
+        Args:
+            df (pd.DataFrame): The result DataFrame.
+        """
 
         self.result = df
         from . import core
@@ -802,7 +962,9 @@ class CombineDialog(Frame):
         return
 
     def replaceTable(self):
-        """replace parent table"""
+        """
+        Replace the parent table with the merged result.
+        """
 
         n = messagebox.askyesno("Replace with merged",
                                  "Are you sure?",
@@ -825,8 +987,14 @@ class CombineDialog(Frame):
         return
 
 class BaseDialog(Frame):
-    """Generic dialog - inherit from this and customise the
-       createWidgets and apply methods."""
+    """
+    Generic dialog base class. Inherit from this and customise createWidgets and apply methods.
+
+    Args:
+        parent: Parent widget.
+        df (pd.DataFrame): DataFrame to operate on.
+        title (str): Dialog title.
+    """
 
     def __init__(self, parent=None, df=None, title=''):
 
@@ -845,7 +1013,12 @@ class BaseDialog(Frame):
         return
 
     def createWidgets(self, m):
-        """Override this"""
+        """
+        Create widgets for the dialog. Should be overridden.
+
+        Args:
+            m: The frame to add widgets to.
+        """
 
         cols = list(self.df.columns)
         f = LabelFrame(m, text='frame')
@@ -865,18 +1038,28 @@ class BaseDialog(Frame):
         return
 
     def apply(self):
-        """Code to run when Apply is pressed"""
+        """
+        Code to run when Apply is pressed.
+        """
         return
 
     def help(self):
-        """Help button code"""
+        """
+        Help button code.
+        """
         return
 
     def quit(self):
+        """
+        Close the dialog.
+        """
         self.main.destroy()
         return
 
 class CrosstabDialog(BaseDialog):
+    """
+    Dialog for creating a crosstab of the DataFrame.
+    """
     def __init__(self, parent=None, df=None, title=''):
 
         BaseDialog.__init__(self, parent, df, title)
@@ -886,7 +1069,12 @@ class CrosstabDialog(BaseDialog):
         return
 
     def createWidgets(self, m):
-        """Create a set of grp-agg-func options together"""
+        """
+        Create options for columns, rows, values, and functions.
+
+        Args:
+            m: Parent frame.
+        """
 
         cols = list(self.df.columns)
         funcs = ['mean','median','sum','size','count','std','first','last',
@@ -911,7 +1099,9 @@ class CrosstabDialog(BaseDialog):
         return
 
     def apply(self):
-        """Apply crosstab"""
+        """
+        Apply the crosstab operation.
+        """
 
         cols = self.colsvar.getSelectedItem()
         rows = self.rowsvar.getSelectedItem()
@@ -940,7 +1130,9 @@ class CrosstabDialog(BaseDialog):
         return
 
 class AggregateDialog(BaseDialog):
-    """Provides a frame for split-apply-combine operations"""
+    """
+    Provides a frame for split-apply-combine (groupby and aggregate) operations.
+    """
 
     def __init__(self, parent=None, df=None):
 
@@ -965,7 +1157,12 @@ class AggregateDialog(BaseDialog):
         return
 
     def createWidgets(self, m):
-        """Create a set of grp-agg-func options together"""
+        """
+        Create aggregation options widgets.
+
+        Args:
+            m: Parent frame.
+        """
 
         cols = list(self.df.columns)
         funcs = ['mean','median','sum','size','count','std','first','last',
@@ -986,7 +1183,9 @@ class AggregateDialog(BaseDialog):
         return
 
     def apply(self):
-        """Apply operation"""
+        """
+        Apply the aggregation.
+        """
 
         funcs = self.funcvar.getSelectedItem()
         grpcols = self.grpvar.getSelectedItem()
@@ -1022,7 +1221,19 @@ class AggregateDialog(BaseDialog):
         return
 
 def addListBox(parent, values=[], width=10, height=6, label=''):
-    """Add an EasyListBox"""
+    """
+    Add an EasyListBox to the parent.
+
+    Args:
+        parent: Parent widget.
+        values (list): List of values to populate.
+        width (int): Width of the listbox.
+        height (int): Height of the listbox.
+        label (str): Label text.
+
+    Returns:
+        tuple: (frame, listbox)
+    """
 
     frame=Frame(parent)
     Label(frame, text=label).grid(row=0)
@@ -1039,12 +1250,23 @@ def addListBox(parent, values=[], width=10, height=6, label=''):
     return frame, lbx
 
 def getListBoxSelection(w):
+    """
+    Get selected items from a listbox.
+
+    Args:
+        w: The listbox widget.
+
+    Returns:
+        list: Selected values.
+    """
     items = w.curselection()
     return [w.get(j) for j in items]
 
 class AutoScrollbar(Scrollbar):
-    """A scrollbar that hides itself if it's not needed. only \
-       works if you use the grid geometry manager."""
+    """
+    A scrollbar that hides itself if it's not needed.
+    Only works if you use the grid geometry manager.
+    """
 
     def set(self, lo, hi):
         if float(lo) <= 0.0 and float(hi) >= 1.0:
@@ -1054,19 +1276,24 @@ class AutoScrollbar(Scrollbar):
         Scrollbar.set(self, lo, hi)
 
     def pack(self, **kw):
-        """pack"""
+        """pack method raises error"""
         raise TclError("cannot use pack with this widget")
         return
 
     def place(self, **kw):
-        """place"""
+        """place method raises error"""
         raise TclError("cannot use place with this widget")
         return
 
 class VerticalScrolledFrame(Frame):
-    """A pure Tkinter scrollable frame \
-    see http://tkinter.unpythonic.net/wiki/VerticalScrolledFrame. \
+    """
+    A pure Tkinter scrollable frame.
     Use the 'interior' attribute to place widgets inside the scrollable frame.
+
+    Args:
+        parent: Parent widget.
+        height (int): Height.
+        width (int): Width.
     """
 
     def __init__(self, parent, height=None, width=None, *args, **kw):
@@ -1112,7 +1339,16 @@ class VerticalScrolledFrame(Frame):
         return
 
 class EasyListbox(Listbox):
-    """Customised list box to replace useless default one"""
+    """
+    Customised list box with easier selection handling.
+
+    Args:
+        parent: Parent widget.
+        width (int): Width.
+        height (int): Height.
+        yscrollcommand: Scroll command.
+        listItemSelected (function): Callback.
+    """
 
     def __init__(self, parent, width, height, yscrollcommand, listItemSelected):
         self._listItemSelected = listItemSelected
@@ -1126,8 +1362,11 @@ class EasyListbox(Listbox):
         return
 
     def triggerListItemSelected(self, event):
-        """Strategy method to respond to an item selection in the list box. \
-        Runs the client's listItemSelected method with the selected index.
+        """
+        Respond to an item selection in the list box.
+
+        Args:
+            event: The event.
         """
 
         if self.size() == 0: return
@@ -1175,7 +1414,15 @@ class EasyListbox(Listbox):
             return -1
 
 class SimpleEditor(Frame):
-    """Simple text editor"""
+    """
+    Simple text editor widget using ScrolledText.
+
+    Args:
+        parent: Parent widget.
+        width (int): Width in characters.
+        height (int): Height in characters.
+        font: Font tuple.
+    """
 
     def __init__(self, parent=None, width=100, height=40, font=None):
 
@@ -1199,7 +1446,9 @@ class SimpleEditor(Frame):
         return
 
     def onSave(self):
-        """Save text"""
+        """
+        Save text to a file.
+        """
 
         filename = filedialog.asksaveasfilename(defaultextension='.txt',
                                     initialdir=os.path.expanduser('~'),
@@ -1211,11 +1460,16 @@ class SimpleEditor(Frame):
         return
 
     def onClear(self):
-        """Clear text"""
+        """
+        Clear the text area.
+        """
         self.text.delete('1.0',END)
         return
 
     def onFind(self):
+        """
+        Find text within the editor.
+        """
         self.target = simpledialog.askstring('SimpleEditor', 'Search String?',
                                 initialvalue=self.target)
         if self.target:
@@ -1228,7 +1482,12 @@ class SimpleEditor(Frame):
                 self.text.focus()
 
 class FindReplaceDialog(Frame):
-    """Find/replace dialog."""
+    """
+    Dialog for finding and replacing text in the table.
+
+    Args:
+        table: The table instance.
+    """
 
     def __init__(self, table):
         parent = table.parentframe
@@ -1269,13 +1528,19 @@ class FindReplaceDialog(Frame):
         return
 
     def updated(self, name='', index='', mode=''):
-        """Widgets changed so run search again"""
+        """
+        Callback when search widgets change.
+        """
         self.search_changed=True
         return
 
     def find(self, event=None):
-        """Do string search. Creates a masked dataframe for results and then stores each cell
-        coordinate in a list."""
+        """
+        Execute the search. Highlights matching cells.
+
+        Args:
+            event: Optional triggering event.
+        """
 
         table = self.table
         df = table.model.df
@@ -1305,7 +1570,9 @@ class FindReplaceDialog(Frame):
         return
 
     def findAll(self):
-        """Highlight all found cells"""
+        """
+        Highlight all occurrences of the search string.
+        """
 
         table = self.table
         table.delete('temprect')
@@ -1315,7 +1582,9 @@ class FindReplaceDialog(Frame):
         return
 
     def findNext(self):
-        """Show next cell of search results"""
+        """
+        Select the next matching cell.
+        """
 
         table = self.table
         s = self.searchvar.get()
@@ -1334,7 +1603,9 @@ class FindReplaceDialog(Frame):
         return
 
     def replace(self):
-        """Replace all instances of search text"""
+        """
+        Replace all occurrences of the search string with the replacement string.
+        """
 
         table = self.table
         table.storeCurrent()
@@ -1363,8 +1634,12 @@ class FindReplaceDialog(Frame):
         return
 
 class QueryDialog(Frame):
-    """Use string query to filter. Will not work with spaces in column
-        names, so these would need to be converted first."""
+    """
+    Dialog for filtering the table using query strings or manual filters.
+
+    Args:
+        table: The table instance.
+    """
 
     def __init__(self, table):
         parent = table.parentframe
@@ -1410,7 +1685,12 @@ class QueryDialog(Frame):
         self.table.showAll()
 
     def query(self, evt=None):
-        """Do query"""
+        """
+        Execute the query and update the table view.
+
+        Args:
+            evt: Optional event.
+        """
 
         table = self.table
         s = self.queryvar.get()
@@ -1453,7 +1733,12 @@ class QueryDialog(Frame):
         return
 
     def addFilter(self):
-        """Add a filter using widgets"""
+        """
+        Add a new manual filter row.
+
+        Returns:
+            FilterBar: The added filter bar.
+        """
 
         df = self.table.model.df
         fb = FilterBar(self, self.fbar, list(df.columns))
@@ -1462,7 +1747,15 @@ class QueryDialog(Frame):
         return fb
 
     def addFilterRow(self, column=None, operator=None, value=None, booleanop='AND'):
-        """Add filter with predefined values"""
+        """
+        Add a filter row with predefined settings.
+
+        Args:
+            column (str): Column name.
+            operator (str): Operator.
+            value: Value to compare.
+            booleanop (str): Boolean operator ('AND', 'OR', 'NOT').
+        """
 
         filter_bar = self.addFilter()
 
@@ -1477,7 +1770,16 @@ class QueryDialog(Frame):
         return
 
     def applyFilter(self, df, mask=None):
-        """Apply the widget based filters, returns a boolean mask"""
+        """
+        Apply the manual filters to the DataFrame.
+
+        Args:
+            df (pd.DataFrame): The DataFrame.
+            mask (pd.Series): Initial mask.
+
+        Returns:
+            pd.Series: The resulting boolean mask.
+        """
 
         if mask is None:
             mask = df.index==df.index
@@ -1528,7 +1830,9 @@ class QueryDialog(Frame):
         return mask
 
     def colorResult(self):
-        """Color filtered rows in main table"""
+        """
+        Apply color to the rows matching the current filter in the main table.
+        """
 
         table=self.table
         if not hasattr(self.table,'dataframe') or not hasattr(self, 'filtdf'):
@@ -1549,7 +1853,9 @@ class QueryDialog(Frame):
         return
 
 class FilterBar(Frame):
-    """Class providing filter widgets"""
+    """
+    A single row of filter widgets (Column, Operator, Value).
+    """
 
     operators = ['contains','excludes','equals','not equals','>','<','is empty','not empty',
                  'starts with','ends with','has length','is number','is lowercase','is uppercase']
@@ -1595,14 +1901,21 @@ class FilterBar(Frame):
         return
 
     def close(self):
-        """Destroy and remove from parent"""
+        """
+        Remove this filter bar.
+        """
 
         self.parent.filters.remove(self)
         self.destroy()
         return
 
     def getFilter(self):
-        """Get filter values for this instance"""
+        """
+        Get the filter configuration.
+
+        Returns:
+            tuple: (column, value, operator, boolean_operator)
+        """
 
         col = self.filtercol.get()
         val = self.filtercolvalue.get()
@@ -1615,7 +1928,17 @@ class FilterBar(Frame):
         return
 
 class BaseTable(Canvas):
-    """Basic table class based on tk canvas. inherit from this to add your own functionality"""
+    """
+    Basic table widget based on tkinter Canvas.
+    Inherit from this to add functionality.
+
+    Args:
+        parent: Parent widget.
+        width (int): Width.
+        height (int): Height.
+        rows (int): Number of rows.
+        cols (int): Number of columns.
+    """
     def __init__(self, parent=None, width=280, height=190, rows=2, cols=2, **kwargs):
 
         Canvas.__init__(self, parent, bg='white',
@@ -1666,7 +1989,12 @@ class BaseTable(Canvas):
         return
 
     def handle_left_click(self, event):
-        """Respond to a single press"""
+        """
+        Handle left mouse click (cell selection).
+
+        Args:
+            event: The event.
+        """
 
         #self.clearSelected()
         #which row and column is the click inside?
@@ -1685,7 +2013,12 @@ class BaseTable(Canvas):
         return
 
     def handle_mouse_drag(self, event):
-        """Handle mouse moved with button held down, multiple selections"""
+        """
+        Handle mouse drag (range selection).
+
+        Args:
+            event: The event.
+        """
 
         rowover = self.get_row_clicked(event)
         colover = self.get_col_clicked(event)
@@ -1713,7 +2046,15 @@ class BaseTable(Canvas):
         return
 
     def get_row_clicked(self, event):
-        """Get row where event on canvas occurs"""
+        """
+        Get row index from event coordinates.
+
+        Args:
+            event: The event.
+
+        Returns:
+            int: Row index.
+        """
 
         h = self.height/self.rows
         #get coord on canvas, not window, need this if scrolling
@@ -1722,7 +2063,15 @@ class BaseTable(Canvas):
         return row
 
     def get_col_clicked(self, event):
-        """Get column where event on the canvas occurs"""
+        """
+        Get column index from event coordinates.
+
+        Args:
+            event: The event.
+
+        Returns:
+            int: Column index.
+        """
 
         w = self.width/self.cols
         x = int(self.canvasx(event.x))
@@ -1730,7 +2079,16 @@ class BaseTable(Canvas):
         return col
 
     def getCellCoords(self, row, col):
-        """Get x-y coordinates to drawing a cell in a given row/col"""
+        """
+        Get coordinates for a cell.
+
+        Args:
+            row (int): Row index.
+            col (int): Column index.
+
+        Returns:
+            tuple: (x1, y1, x2, y2).
+        """
 
         h = self.height/self.rows
         x_start=0
@@ -1744,7 +2102,16 @@ class BaseTable(Canvas):
         return x1,y1,x2,y2
 
     def drawSelectedRect(self, row, col, color='#c2c2d6',pad=4, tags=''):
-        """User has clicked to select area"""
+        """
+        Draw selection rectangle.
+
+        Args:
+            row (int): Row index.
+            col (int): Column index.
+            color (str): Color.
+            pad (int): Padding.
+            tags (str): Tags.
+        """
 
         if col >= self.cols:
             return
@@ -1759,7 +2126,13 @@ class BaseTable(Canvas):
         return
 
     def drawMultipleCells(self, rows, cols):
-        """Draw more than one row selection"""
+        """
+        Draw multiple selected cells.
+
+        Args:
+            rows (list): Row indices.
+            cols (list): Column indices.
+        """
 
         self.delete('multiplesel')
         self.delete('currentrect')

@@ -47,7 +47,14 @@ class TableModel(object):
         return
 
     def setup(self, dataframe, rows=20, columns=5):
-        """Create table model"""
+        """
+        Initialize the table model with a DataFrame or empty dimensions.
+
+        Args:
+            dataframe (pd.DataFrame): The DataFrame to be used.
+            rows (int): Number of rows for an empty table.
+            columns (int): Number of columns for an empty table.
+        """
 
         if not dataframe is None:
             self.df = dataframe
@@ -60,11 +67,16 @@ class TableModel(object):
 
     @classmethod
     def getSampleData(self, rows=400, cols=5, n=2):
-        """Generate sample data
+        """
+        Generate sample data for testing.
+
         Args:
-            rows: no. of rows
-            cols: columns
-            n: length of column names
+            rows (int): Number of rows.
+            cols (int): Number of columns.
+            n (int): Length of random column names.
+
+        Returns:
+            pd.DataFrame: A DataFrame with generated sample data.
         """
 
         import random
@@ -96,7 +108,12 @@ class TableModel(object):
 
     @classmethod
     def getIrisData(self):
-        """Get iris dataset"""
+        """
+        Get the Iris dataset.
+
+        Returns:
+            pd.DataFrame: The Iris dataset.
+        """
 
         path = os.path.dirname(__file__)
         cols = ['sepal length','sepal width','petal length','petal width','class']
@@ -105,7 +122,12 @@ class TableModel(object):
 
     @classmethod
     def getStackedData(self):
-        """Get a dataframe to pivot test"""
+        """
+        Get a stacked DataFrame for testing pivoting.
+
+        Returns:
+            pd.DataFrame: A stacked DataFrame.
+        """
 
         import pandas.util.testing as tm; tm.N = 4
         frame = tm.makeTimeDataFrame()
@@ -116,13 +138,20 @@ class TableModel(object):
         return pd.DataFrame(data, columns=['date', 'variable', 'value'])
 
     def initialiseFields(self):
-        """Create meta data fields"""
+        """
+        Initialize metadata fields.
+        """
         self.meta = {}
         #self.columnwidths = {} #used to store col widths
         return
 
     def save(self, filename):
-        """Save dataframe"""
+        """
+        Save the DataFrame to a file based on extension.
+
+        Args:
+            filename (str): The path to the file.
+        """
 
         ftype = os.path.splitext(filename)[1]
         if ftype == '.pickle':
@@ -136,7 +165,13 @@ class TableModel(object):
         return
 
     def load(self, filename, filetype=None):
-        """Load file, if no filetype given assume it's pickle format"""
+        """
+        Load data from a file into the model.
+
+        Args:
+            filename (str): The path to the file.
+            filetype (str): Optional file type extension.
+        """
 
         if filetype == '.mpk':
             self.df = pd.read_msgpack(filename)
@@ -146,8 +181,17 @@ class TableModel(object):
         return
 
     def getlongestEntry(self, colindex, n=500):
-        """Get the longest string in the column for determining width. Just uses the first
-         n rows for speed"""
+        """
+        Get the length of the longest string in a column for auto-sizing.
+        Uses a sample of the first n rows for performance.
+
+        Args:
+            colindex (int): The column index.
+            n (int): The number of rows to sample.
+
+        Returns:
+            int: The length of the longest entry.
+        """
 
         df = self.df
         col = df.columns[colindex]
@@ -164,13 +208,27 @@ class TableModel(object):
         return longest
 
     def getRecordAtRow(self, rowindex):
-        """Get the entire record at the specifed row"""
+        """
+        Get the entire record (row) at the specified index.
+
+        Args:
+            rowindex (int): The row index.
+
+        Returns:
+            pd.Series: The row data.
+        """
 
         record = self.df.iloc[rowindex]
         return record
 
     def moveColumn(self, oldindex, newindex):
-        """Changes the order of columns"""
+        """
+        Move a column from one position to another.
+
+        Args:
+            oldindex (int): The current index of the column.
+            newindex (int): The new index for the column.
+        """
 
         df = self.df
         cols = list(df.columns)
@@ -181,8 +239,12 @@ class TableModel(object):
         return
 
     def autoAddRows(self, num):
-        """Add n rows to end of dataframe. Will create rows with index starting
-           from highest previous row count"""
+        """
+        Add rows to the end of the DataFrame.
+
+        Args:
+            num (int): Number of rows to add.
+        """
 
         df = self.df
         if len(df) == 0:
@@ -198,7 +260,15 @@ class TableModel(object):
         return
 
     def insertRow(self, row):
-        """Inserts a row at the required index by append/concat"""
+        """
+        Insert a single empty row at a specific index.
+
+        Args:
+            row (int): The index to insert at.
+
+        Returns:
+            int: The new row index.
+        """
 
         df = self.df
         a, b = df[:row], df[row:]
@@ -209,13 +279,25 @@ class TableModel(object):
         return idx
 
     def deleteRow(self, row, unique=True):
-        """Delete a row"""
+        """
+        Delete a single row.
+
+        Args:
+            row (int): The row index to delete.
+            unique (bool): If true, assumes unique index.
+        """
 
         self.deleteRows([row], unique)
         return
 
     def deleteRows(self, rowlist=None, unique=True):
-        """Delete multiple or all rows"""
+        """
+        Delete multiple rows.
+
+        Args:
+            rowlist (list): List of row indices to delete.
+            unique (bool): Whether the index is unique.
+        """
 
         df = self.df
         if unique == True:
@@ -226,7 +308,14 @@ class TableModel(object):
         return
 
     def addColumn(self, colname=None, dtype=None, data=None):
-        """Add a column"""
+        """
+        Add a new column to the DataFrame.
+
+        Args:
+            colname (str): The name of the new column.
+            dtype: The data type for the column.
+            data (pd.Series): Data to populate the column (optional).
+        """
 
         if data is None:
             data = pd.Series(dtype=dtype)
@@ -234,7 +323,12 @@ class TableModel(object):
         return
 
     def deleteColumn(self, colindex):
-        """delete a column"""
+        """
+        Delete a column by index.
+
+        Args:
+            colindex (int): The index of the column to delete.
+        """
 
         df = self.df
         colname = df.columns[colindex]
@@ -242,7 +336,12 @@ class TableModel(object):
         return
 
     def deleteColumns(self, cols=None):
-        """Remove all cols or list provided"""
+        """
+        Delete multiple columns.
+
+        Args:
+            cols (list): List of column indices to delete.
+        """
 
         df = self.df
         colnames = df.columns[cols]
@@ -250,18 +349,35 @@ class TableModel(object):
         return
 
     def deleteCells(self, rows, cols):
+        """
+        Set the values of specified cells to NaN.
+
+        Args:
+            rows (list): List of row indices.
+            cols (list): List of column indices.
+        """
         self.df.iloc[rows,cols] = np.nan
         return
 
     def resetIndex(self, drop=False):
-        """Reset index behaviour"""
+        """
+        Reset the DataFrame index.
+
+        Args:
+            drop (bool): Whether to drop the current index.
+        """
 
         df = self.df
         df.reset_index(drop=drop,inplace=True)
         return
 
     def setindex(self, colindex):
-        """Index setting behaviour"""
+        """
+        Set the index of the DataFrame using a column.
+
+        Args:
+            colindex (int): The column index to use as the index.
+        """
 
         df = self.df
         colnames = list(df.columns[colindex])
@@ -272,7 +388,9 @@ class TableModel(object):
         return
 
     def copyIndex(self):
-        """Copy index to a column"""
+        """
+        Copy the index to a new column.
+        """
 
         df = self.df
         name = df.index.name
@@ -281,7 +399,15 @@ class TableModel(object):
         return
 
     def groupby(self, cols):
-        """Group by cols"""
+        """
+        Group the DataFrame by specified columns.
+
+        Args:
+            cols (list): List of column indices to group by.
+
+        Returns:
+            pd.GroupBy: The groupby object.
+        """
 
         df = self.df
         colnames = df.columns[cols]
@@ -289,29 +415,63 @@ class TableModel(object):
         return grps
 
     def getColumnType(self, columnIndex):
-        """Get the column type"""
+        """
+        Get the data type of a column.
+
+        Args:
+            columnIndex (int): The column index.
+
+        Returns:
+            dtype: The data type of the column.
+        """
 
         coltype = self.df.dtypes.iloc[columnIndex]
         return coltype
 
     def getColumnCount(self):
-         """Returns the number of columns in the data model"""
+         """
+         Get the total number of columns.
+
+         Returns:
+            int: Number of columns.
+         """
          return len(self.df.columns)
 
     def getColumnName(self, columnIndex):
-        """Returns the name of the given column by columnIndex"""
+        """
+        Get the name of a column by its index.
+
+        Args:
+            columnIndex (int): The column index.
+
+        Returns:
+            str: The column name.
+        """
         try:
             return str(self.df.columns[columnIndex])
         except:
             return self.df.columns[columnIndex].encode('ascii', 'ignore')
 
     def getRowCount(self):
-         """Returns the number of rows in the table model."""
+         """
+         Get the total number of rows.
+
+         Returns:
+            int: Number of rows.
+         """
          return len(self.df)
 
     def getValueAt(self, row, col):
-         """Returns the cell value at location specified
-             by columnIndex and rowIndex."""
+         """
+         Get the value at a specific cell.
+
+         Args:
+            row (int): Row index.
+            col (int): Column index.
+
+         Returns:
+            The value at the cell. Returns empty string if NaN.
+         """
 
          df = self.df
          value = self.df.iloc[row,col]
@@ -320,8 +480,18 @@ class TableModel(object):
          return value
 
     def setValueAt(self, value, row, col, df=None):
-        """Change dataframe according to row/col numbers. You can
-        also pass an arbitrary dataframe here."""
+        """
+        Set the value of a specific cell.
+
+        Args:
+            value: The new value.
+            row (int): Row index.
+            col (int): Column index.
+            df (pd.DataFrame): Optional DataFrame to operate on (defaults to self.df).
+
+        Returns:
+            bool: True if successful, False otherwise.
+        """
 
         if df is None:
             df = self.df
@@ -351,7 +521,9 @@ class TableModel(object):
         return True
 
     def transpose(self):
-        """Transpose dataframe"""
+        """
+        Transpose the DataFrame (swap rows and columns).
+        """
 
         df = self.df
         rows = df.index
@@ -370,10 +542,16 @@ class TableModel(object):
         return
 
     def query(self):
+        """
+        Placeholder for query functionality.
+        """
 
         return
 
     def filterby(self):
+        """
+        Placeholder for filtering functionality.
+        """
         import filtering
         funcs = filtering.operatornames
         floatops = ['=','>','<']

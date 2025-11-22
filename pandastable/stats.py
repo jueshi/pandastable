@@ -47,6 +47,13 @@ class StatsViewer(Frame):
     """Provides a frame for model viewing interaction"""
 
     def __init__(self, table, parent=None):
+        """
+        Initialize the StatsViewer.
+
+        Args:
+            table: The parent table instance.
+            parent: The parent widget.
+        """
 
         self.parent = parent
         self.table = table
@@ -66,7 +73,9 @@ class StatsViewer(Frame):
         return
 
     def setupGUI(self):
-        """Add GUI elements"""
+        """
+        Set up the GUI elements for the stats viewer.
+        """
 
         df = self.table.getSelectedDataFrame()
         formula = self.guessFormula()
@@ -116,7 +125,12 @@ class StatsViewer(Frame):
         return
 
     def guessFormula(self):
-        """Suggest a start formula"""
+        """
+        Suggest a starting formula based on column names.
+
+        Returns:
+            str: A suggested formula string (e.g. 'y ~ x').
+        """
 
         df = self.table.model.df
         #df = df.convert_objects(convert_numeric='force')
@@ -128,7 +142,17 @@ class StatsViewer(Frame):
         return formula
 
     def getModel(self, formula, data, est='ols'):
-        """Select model to use"""
+        """
+        Create a statsmodels model object based on the formula and estimator type.
+
+        Args:
+            formula (str): The R-style formula string.
+            data (pd.DataFrame): The data to use.
+            est (str): The estimator type ('ols', 'gls', 'logit').
+
+        Returns:
+            statsmodels model object.
+        """
 
         s = self.table.multiplerowlist
         if len(s) == 0:
@@ -152,8 +176,10 @@ class StatsViewer(Frame):
         return model
 
     def doFit(self):
-        """Do model fit on selected subset of rows. Will only use
-        the currently selected rows for fitting."""
+        """
+        Perform the model fit on the selected subset of rows.
+        Updates the summary and data widgets.
+        """
 
         data = self.table.model.df
         if len(data) == 0 or len(data.columns)<1:
@@ -172,7 +198,9 @@ class StatsViewer(Frame):
         return
 
     def showPlot(self):
-        """Do plots"""
+        """
+        Generate and display the selected plot type for the fitted model.
+        """
 
         pf = self.pf
         fit = self.fit
@@ -225,7 +253,13 @@ class StatsViewer(Frame):
         return
 
     def plotPrediction(self, fit, ax):
-        """Plot predicted vs. test"""
+        """
+        Plot predicted values against test data.
+
+        Args:
+            fit: The fitted model result.
+            ax: The axis to plot on.
+        """
 
         sub = self.sub
         if len(sub) == 0:
@@ -247,7 +281,15 @@ class StatsViewer(Frame):
         return
 
     def plotRegression(self, fit, indvar, ax, **kwds):
-        """Plot custom statsmodels fit result for linear regression"""
+        """
+        Plot custom regression results (fitted line, confidence intervals, etc.).
+
+        Args:
+            fit: The fitted model result.
+            indvar (str): The independent variable name.
+            ax: The axis to plot on.
+            **kwds: Additional keywords.
+        """
 
         depvar = self.model.endog_names
         if indvar == '':
@@ -304,7 +346,15 @@ class StatsViewer(Frame):
         return
 
     def plotLogit(self, fit, indvar, ax, **kwds):
-        """Plot Logit results"""
+        """
+        Plot Logit model results.
+
+        Args:
+            fit: The fitted model result.
+            indvar (str): The independent variable name.
+            ax: The axis to plot on.
+            **kwds: Additional keywords.
+        """
 
         X = self.X
         y = self.y
@@ -318,7 +368,9 @@ class StatsViewer(Frame):
         return
 
     def summary(self):
-        """Fit summary"""
+        """
+        Display the model fit summary in a separate window.
+        """
 
         s = self.fit.summary()
         from .dialogs import SimpleEditor
@@ -336,7 +388,12 @@ class StatsViewer(Frame):
 
     @classmethod
     def _doimport(self):
-        """Try to import statsmodels. If not installed return false"""
+        """
+        Try to import statsmodels.
+
+        Returns:
+            int: 1 if successful, 0 otherwise.
+        """
         try:
             import statsmodels
             return 1
@@ -345,12 +402,23 @@ class StatsViewer(Frame):
             return 0
 
     def _checkNumeric(self, df):
+        """
+        Check if DataFrame contains numeric data.
+
+        Args:
+            df (pd.DataFrame): The DataFrame to check.
+
+        Returns:
+            bool: False if empty numeric data, otherwise None (implicitly True/Success).
+        """
         x = df.convert_objects()._get_numeric_data()
         if x.empty==True:
             return False
 
     def updateData(self):
-        """Update data widgets"""
+        """
+        Update the independent variable dropdown based on model exogenous names.
+        """
 
         df = self.table.model.df
         if self.model is not None:
@@ -358,6 +426,9 @@ class StatsViewer(Frame):
         return
 
     def quit(self):
+        """
+        Close the stats viewer window.
+        """
         #self.main.withdraw()
         self.table.sv = None
         self.main.destroy()

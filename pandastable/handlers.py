@@ -34,10 +34,18 @@ from matplotlib.collections import PathCollection
 from matplotlib.backend_bases import key_press_handler
 
 class DragHandler(object):
-    """ A simple class to handle picking and dragging"""
+    """
+    A class to handle matplotlib pick, drag, and key press events on the plot figure.
+    Used mainly for interacting with annotations.
+    """
 
     def __init__(self, parent, figure=None):
-        """ Create a handler and connect it to the plotviewer figure.
+        """
+        Create a handler and connect it to the plotviewer figure.
+
+        Args:
+            parent: The parent PlotViewer instance.
+            figure: The matplotlib figure to attach to (optional, defaults to parent.fig).
         """
 
         self.parent = parent
@@ -48,7 +56,9 @@ class DragHandler(object):
         return
 
     def connect(self):
-        """Connect events"""
+        """
+        Connect the matplotlib event handlers (pick, button press/release, key press).
+        """
 
         fig = self.parent.fig
         fig.canvas.mpl_connect("pick_event", self.on_pick_event)
@@ -58,6 +68,13 @@ class DragHandler(object):
         return
 
     def button_press_event(self, event):
+        """
+        Handle mouse button press events on the canvas.
+        Sets focus to the canvas and hides selection rectangles.
+
+        Args:
+            event: The matplotlib event object.
+        """
 
         #print (event)
         fig = self.parent.fig
@@ -67,7 +84,16 @@ class DragHandler(object):
         return
 
     def on_pick_event(self, event):
-        " Store which text object was picked and were the pick event occurs."
+        """
+        Handle picking of plot artists (scatter points, lines, text).
+        Stores the picked artist.
+
+        Args:
+            event: The matplotlib pick event.
+
+        Returns:
+            bool: True.
+        """
 
         df = self.parent.data
         self.dragged = event.artist
@@ -92,7 +118,16 @@ class DragHandler(object):
         return True
 
     def on_release_event(self, event):
-        " Update and store text/annotation position "
+        """
+        Handle mouse button release.
+        Updates position of dragged annotations in the parent's label options.
+
+        Args:
+            event: The matplotlib event.
+
+        Returns:
+            bool: True.
+        """
 
         fig = self.parent.fig
         #ax = fig.axes[0]
@@ -123,7 +158,13 @@ class DragHandler(object):
         return True
 
     def key_press_event(self, event):
-        """Handle key press"""
+        """
+        Handle key press events.
+        Currently handles 'delete' key to remove selected annotations.
+
+        Args:
+            event: The matplotlib key press event.
+        """
 
         if event.key == 'delete':
             if self.selected == None:
@@ -139,7 +180,9 @@ class DragHandler(object):
         return
 
     def drawSelectionRect(self):
-        """Draw a selection box"""
+        """
+        Draw a selection rectangle around the currently selected artist (annotation).
+        """
 
         from matplotlib.patches import FancyBboxPatch
         if self.selectedrect != None:

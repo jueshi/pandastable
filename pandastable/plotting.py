@@ -105,6 +105,15 @@ valid_kwds = {'line': ['alpha', 'colormap', 'grid', 'legend', 'linestyle','ms',
             }
 
 def get_defaults(name):
+    """
+    Get the default options for a given options class name.
+
+    Args:
+        name (str): The name of the options class ('mplopts', 'mplopts3d', 'labelopts').
+
+    Returns:
+        dict: The default options dictionary.
+    """
     if name == 'mplopts':
         return MPLBaseOptions().opts
     elif name == 'mplopts3d':
@@ -122,6 +131,14 @@ class PlotViewer(Frame):
     """
 
     def __init__(self, table, parent=None, showoptions=True):
+        """
+        Initialize the PlotViewer.
+
+        Args:
+            table: The parent table instance.
+            parent: The parent widget (optional). If None, a new Toplevel is created.
+            showoptions (bool): Whether to show the options panel. Default is True.
+        """
 
         self.parent = parent
         self.table = table
@@ -159,7 +176,9 @@ class PlotViewer(Frame):
         return
 
     def setupGUI(self):
-        """Add GUI elements"""
+        """
+        Setup the GUI elements including the figure canvas and control panel.
+        """
 
         #import tkinter as tk
         #self.m = PanedWindow(self.main, orient=self.orient)
@@ -230,7 +249,9 @@ class PlotViewer(Frame):
         return
 
     def addWidgets(self):
-        """Add option widgets to control panel"""
+        """
+        Add option widgets (Notebook tabs) to the control panel.
+        """
 
         self.nb = Notebook(self.ctrlfr, height=210)
         if self.showoptions == 1:
@@ -259,7 +280,13 @@ class PlotViewer(Frame):
         return
 
     def setGlobalOption(self, name='', *args):
-        """Set global value from widgets"""
+        """
+        Update a global option value from the associated widget variable.
+
+        Args:
+            name (str): The name of the option.
+            *args: Additional arguments (unused).
+        """
 
         try:
             self.globalopts[name] = self.globalvars[name].get()
@@ -269,11 +296,20 @@ class PlotViewer(Frame):
         return
 
     def updateWidgets(self):
-        """Set global widgets from values"""
+        """
+        Update the global option widgets with current values.
+        """
         for n in self.globalopts:
             self.globalvars[n].set(self.globalopts[n])
 
     def setOption(self, option, value):
+        """
+        Set a specific option value in the appropriate options class.
+
+        Args:
+            option (str): The option name.
+            value: The value to set.
+        """
         basewidgets = self.mplopts.tkvars
         labelwidgets = self.labelopts.tkvars
         try:
@@ -285,10 +321,13 @@ class PlotViewer(Frame):
         return
 
     def replot(self, data=None):
-        """Re-plot using current parent table selection.
+        """
+        Re-plot the data using current settings and selection.
+
         Args:
-        data: set current dataframe, otherwise use
-        current table selection"""
+            data (pd.DataFrame): Optional DataFrame to plot.
+                                 If None, uses the current table selection.
+        """
 
         #print (self.table.getSelectedRows())
         if data is None:
@@ -306,7 +345,9 @@ class PlotViewer(Frame):
         return
 
     def applyPlotoptions(self):
-        """Apply the current plotter/options"""
+        """
+        Apply the current options from all option tabs.
+        """
 
         self.mplopts.applyOptions()
         self.mplopts3d.applyOptions()
@@ -316,14 +357,21 @@ class PlotViewer(Frame):
         return
 
     def updatePlot(self):
-        """Update the current plot with new options"""
+        """
+        Update the current plot with the latest applied options.
+        """
 
         self.applyPlotoptions()
         self.plotCurrent()
         return
 
     def plotCurrent(self, redraw=True):
-        """Plot the current data"""
+        """
+        Execute the plotting based on current data and configuration.
+
+        Args:
+            redraw (bool): Whether to redraw the canvas immediately. Default is True.
+        """
 
         layout = self.globalopts['grid layout']
         gridmode = self.layoutopts.modevar.get()
@@ -340,7 +388,12 @@ class PlotViewer(Frame):
         return
 
     def zoom(self, zoomin=True):
-        """Zoom in/out to plot by changing size of elements"""
+        """
+        Zoom in/out by adjusting element sizes (linewidth, markersize, fontsize).
+
+        Args:
+            zoomin (bool): True to zoom in (increase sizes), False to zoom out.
+        """
 
         if zoomin == False:
             val=-1.0
@@ -357,7 +410,9 @@ class PlotViewer(Frame):
         return
 
     def clear(self):
-        """Clear plot"""
+        """
+        Clear the current figure.
+        """
 
         self.fig.clear()
         self.ax = None
@@ -367,7 +422,15 @@ class PlotViewer(Frame):
         return
 
     def _checkNumeric(self, df):
-        """Get only numeric data that can be plotted"""
+        """
+        Check if the DataFrame contains plottable numeric data.
+
+        Args:
+            df (pd.DataFrame): The DataFrame to check.
+
+        Returns:
+            bool: True if numeric columns exist, False otherwise.
+        """
 
         #x = df.convert_objects()._get_numeric_data()
         try:
@@ -380,7 +443,9 @@ class PlotViewer(Frame):
             return False
 
     def _initFigure(self):
-        """Clear figure or add a new axis to existing layout"""
+        """
+        Initialize the figure, clearing it or managing subplots based on layout options.
+        """
 
         from matplotlib.gridspec import GridSpec
         layout = self.globalopts['grid layout']
@@ -428,7 +493,9 @@ class PlotViewer(Frame):
         return
 
     def removeSubplot(self):
-        """Remove a specific axis from the grid layout"""
+        """
+        Remove a specific subplot axis from the grid layout.
+        """
 
         axname = self.layoutopts.axeslistvar.get()
         ax = self.gridaxes[axname]
@@ -441,7 +508,9 @@ class PlotViewer(Frame):
         return
 
     def setSubplotTitle(self):
-        """Set a subplot title if using grid layout"""
+        """
+        Prompt the user to set a title for a specific subplot.
+        """
 
         axname = self.layoutopts.axeslistvar.get()
         if not axname in self.gridaxes:
@@ -456,7 +525,12 @@ class PlotViewer(Frame):
         return
 
     def plotMultiViews(self, plot_types=['bar','scatter']):
-        """Plot multiple views of the same data in a grid"""
+        """
+        Plot multiple views (different plot types) of the same data in a grid layout.
+
+        Args:
+            plot_types (list): List of plot types to include (default is overridden by listbox selection).
+        """
 
         #plot_types=['bar','scatter','histogram','boxplot']
         #self._initFigure()
@@ -486,7 +560,9 @@ class PlotViewer(Frame):
         return
 
     def plotSplitData(self):
-        """Splits selected data up into multiple plots in a grid"""
+        """
+        Split the selected data into chunks and plot each chunk in a separate grid cell.
+        """
 
         self.fig.clear()
         gs = self.gridspec
@@ -518,7 +594,15 @@ class PlotViewer(Frame):
         return
 
     def checkColumnNames(self, cols):
-        """Check length of column names"""
+        """
+        Format column names by wrapping text if too long.
+
+        Args:
+            cols (list): List of column names.
+
+        Returns:
+            list: Formatted column names.
+        """
 
         from textwrap import fill
         try:
@@ -528,9 +612,15 @@ class PlotViewer(Frame):
         return cols
 
     def plot2D(self, redraw=True):
-        """Plot method for current data. Relies on pandas plot functionality
-           if possible. There is some temporary code here to make sure only the valid
-           plot options are passed for each plot kind."""
+        """
+        Main method for 2D plotting. Handles various plot types using pandas or custom implementations.
+
+        Args:
+            redraw (bool): Whether to redraw the canvas. Default is True.
+
+        Returns:
+            The plot axes.
+        """
 
         if not hasattr(self, 'data'):
             return
@@ -745,7 +835,13 @@ class PlotViewer(Frame):
         return
 
     def setFigureOptions(self, axs, kwds):
-        """Set axis wide options such as ylabels, title"""
+        """
+        Apply figure-wide options like title and labels to axes.
+
+        Args:
+            axs: The axes object(s).
+            kwds (dict): Plot options dictionary.
+        """
 
         if type(axs) is np.ndarray:
             self.ax = axs.flat[0]
@@ -761,7 +857,13 @@ class PlotViewer(Frame):
         return
 
     def setAxisLabels(self, ax, kwds):
-        """Set a plots axis labels"""
+        """
+        Set axis labels and visibility based on options.
+
+        Args:
+            ax: The axis object.
+            kwds (dict): Plot options dictionary.
+        """
 
         if kwds['xlabel'] != '':
             ax.set_xlabel(kwds['xlabel'])
@@ -776,7 +878,12 @@ class PlotViewer(Frame):
         return
 
     def autoscale(self, axis='y'):
-        """Set all subplots to limits of largest range"""
+        """
+        Autoscale all subplots to the same range for a given axis.
+
+        Args:
+            axis (str): 'x' or 'y'. Default is 'y'.
+        """
 
         l=None
         u=None
@@ -799,7 +906,15 @@ class PlotViewer(Frame):
         return
 
     def _clearArgs(self, kwargs):
-        """Clear kwargs of formatting options so that a style can be used"""
+        """
+        Remove formatting arguments (colormap, grid) from kwargs to allow style usage.
+
+        Args:
+            kwargs (dict): The arguments dictionary.
+
+        Returns:
+            dict: The cleaned dictionary.
+        """
 
         keys = ['colormap','grid']
         for k in keys:
@@ -808,7 +923,23 @@ class PlotViewer(Frame):
         return kwargs
 
     def _doplot(self, data, ax, kind, subplots, errorbars, useindex, bw, yerr, kwargs):
-        """Core plotting method where the individual plot functions are called"""
+        """
+        Dispatch the plotting task to specific methods based on 'kind'.
+
+        Args:
+            data (pd.DataFrame): The data to plot.
+            ax: The axis to plot on.
+            kind (str): The type of plot.
+            subplots (bool): Whether to use subplots.
+            errorbars (bool): Whether to show error bars.
+            useindex (bool): Whether to use the index as x-axis.
+            bw (bool): Black and white mode.
+            yerr: Error values.
+            kwargs (dict): Additional arguments.
+
+        Returns:
+            The plot axes.
+        """
 
         kwargs = kwargs.copy()
         if self.style != None:
@@ -971,6 +1102,9 @@ class PlotViewer(Frame):
         return axs
 
     def _setAxisRanges(self):
+        """
+        Set explicit axis limits if specified in style options.
+        """
         kwds = self.styleopts.kwds
         ax = self.ax
         try:
@@ -988,7 +1122,9 @@ class PlotViewer(Frame):
         return
 
     def _setAxisTickFormat(self):
-        """Set axis tick format"""
+        """
+        Set axis tick locators and formatters based on style options.
+        """
 
         import matplotlib.ticker as mticker
         kwds = self.styleopts.kwds
@@ -1027,8 +1163,21 @@ class PlotViewer(Frame):
         return
 
     def scatter(self, df, ax, alpha=0.8, marker='o', color=None, **kwds):
-        """A custom scatter plot rather than the pandas one. By default this
-        plots the first column selected versus the others"""
+        """
+        Custom scatter plot implementation.
+        Plots the first column against subsequent columns.
+
+        Args:
+            df (pd.DataFrame): Data to plot.
+            ax: Axis to plot on.
+            alpha (float): Transparency.
+            marker (str): Marker style.
+            color: Color override.
+            **kwds: Additional keyword arguments.
+
+        Returns:
+            tuple: (ax, handles)
+        """
 
         if len(df.columns)<2:
             return
@@ -1138,7 +1287,17 @@ class PlotViewer(Frame):
         return ax, handles
 
     def violinplot(self, df, ax, kwds):
-        """violin plot"""
+        """
+        Create a violin plot.
+
+        Args:
+            df (pd.DataFrame): Data.
+            ax: Axis.
+            kwds (dict): Options.
+
+        Returns:
+            The axis.
+        """
 
         data=[]
         clrs=[]
@@ -1163,7 +1322,17 @@ class PlotViewer(Frame):
         return
 
     def dotplot(self, df, ax, kwds):
-        """Dot plot"""
+        """
+        Create a dot plot (strip plot).
+
+        Args:
+            df (pd.DataFrame): Data.
+            ax: Axis.
+            kwds (dict): Options.
+
+        Returns:
+            The axis.
+        """
 
         marker = kwds['marker']
         if marker == '':
@@ -1189,7 +1358,14 @@ class PlotViewer(Frame):
         return ax
 
     def heatmap(self, df, ax, kwds):
-        """Plot heatmap"""
+        """
+        Create a heatmap plot.
+
+        Args:
+            df (pd.DataFrame): Data.
+            ax: Axis.
+            kwds (dict): Options.
+        """
 
         X = df._get_numeric_data()
         clr='black'
@@ -1218,7 +1394,19 @@ class PlotViewer(Frame):
         return
 
     def venn(self, data, ax, colormap=None, alpha=0.8):
-        """Plot venn diagram, requires matplotlb-venn"""
+        """
+        Create a Venn diagram (2 or 3 sets).
+        Requires matplotlib-venn.
+
+        Args:
+            data (pd.DataFrame): Data (columns used as sets).
+            ax: Axis.
+            colormap: Colormap name (unused in current impl?).
+            alpha (float): Transparency (unused?).
+
+        Returns:
+            The axis.
+        """
 
         try:
             from matplotlib_venn import venn2,venn3
@@ -2522,7 +2710,15 @@ class PlotViewer(Frame):
         return ax
 
     def contourData(self, data):
-        """Get data for contour plot"""
+        """
+        Prepare data for contour plotting (interpolates to a grid).
+
+        Args:
+            data (pd.DataFrame): DataFrame with 3 columns (x, y, z).
+
+        Returns:
+            tuple: (xi, yi, zi) arrays.
+        """
 
         #from matplotlib.mlab import griddata
         from scipy.interpolate import griddata
@@ -2535,7 +2731,15 @@ class PlotViewer(Frame):
         return xi,yi,zi
 
     def meshData(self, x,y,z):
-        """Prepare 1D data for plotting in the form (x,y)->Z"""
+        """
+        Prepare 1D data arrays for 3D surface/wireframe plotting.
+
+        Args:
+            x, y, z: 1D arrays of coordinates.
+
+        Returns:
+            tuple: (X, Y, zi) mesh grids.
+        """
 
         from scipy.interpolate import griddata
         xi = np.linspace(x.min(), x.max())
@@ -2546,6 +2750,12 @@ class PlotViewer(Frame):
         return X,Y,zi
 
     def getView(self):
+        """
+        Get current 3D view angles.
+
+        Returns:
+            tuple: (azim, elev, dist) or (None, None, None).
+        """
         ax = self.ax
         if hasattr(ax,'azim'):
             azm=ax.azim
@@ -2556,13 +2766,27 @@ class PlotViewer(Frame):
         return azm,ele,dst
 
     def getcmap(self, name):
+        """
+        Safely get a colormap by name.
+
+        Args:
+            name (str): Colormap name.
+
+        Returns:
+            Colormap object.
+        """
         try:
             return plt.cm.get_cmap(name)
         except:
             return plt.cm.get_cmap('Spectral')
 
     def plot3D(self, redraw=True):
-        """3D plot"""
+        """
+        Generate a 3D plot.
+
+        Args:
+            redraw (bool): Whether to draw the canvas.
+        """
 
         if not hasattr(self, 'data') or len(self.data.columns)<3:
             return
@@ -2628,7 +2852,14 @@ class PlotViewer(Frame):
         return
 
     def bar3D(self, data, ax, kwds):
-        """3D bar plot"""
+        """
+        Create a 3D bar plot.
+
+        Args:
+            data (pd.DataFrame): Data.
+            ax: 3D Axis.
+            kwds (dict): Options.
+        """
 
         i=0
         plots=len(data.columns)
@@ -2640,7 +2871,14 @@ class PlotViewer(Frame):
             i+=1
 
     def scatter3D(self, data, ax, kwds):
-        """3D scatter plot"""
+        """
+        Create a 3D scatter plot.
+
+        Args:
+            data (pd.DataFrame): Data.
+            ax: 3D Axis.
+            kwds (dict): Options.
+        """
 
         def doscatter(data, ax, color=None, pointlabels=None):
             data = data._get_numeric_data()
@@ -2707,7 +2945,9 @@ class PlotViewer(Frame):
         return
 
     def updateData(self):
-        """Update data widgets"""
+        """
+        Update data-related widgets (e.g., column selectors) in options panels.
+        """
 
         if self.table is None:
             return
@@ -2716,6 +2956,9 @@ class PlotViewer(Frame):
         return
 
     def updateStyle(self):
+        """
+        Apply the selected matplotlib style.
+        """
         if self.style == None:
             mpl.rcParams.update(mpl.rcParamsDefault)
         else:
@@ -2723,7 +2966,12 @@ class PlotViewer(Frame):
         return
 
     def savePlot(self, filename=None):
-        """Save the current plot"""
+        """
+        Save the current plot to a file.
+
+        Args:
+            filename (str): Path to save. If None, prompts user.
+        """
 
         ftypes = [('png','*.png'),('jpg','*.jpg'),('tif','*.tif'),('pdf','*.pdf'),
                     ('eps','*.eps'),('svg','*.svg')]
@@ -2738,7 +2986,13 @@ class PlotViewer(Frame):
         return
 
     def showWarning(self, text='plot error', ax=None):
-        """Show warning message in the plot window"""
+        """
+        Display a warning message on the plot canvas.
+
+        Args:
+            text (str): The warning message.
+            ax: The axis to display text on.
+        """
 
         if ax==None:
             ax = self.fig.add_subplot(111)
@@ -2749,7 +3003,9 @@ class PlotViewer(Frame):
         return
 
     def toggle_options(self):
-        """Show/hide plot options"""
+        """
+        Toggle the visibility of the options panel.
+        """
 
         if self.nb.winfo_ismapped() == 1:
             self.nb.pack_forget()
@@ -2758,7 +3014,9 @@ class PlotViewer(Frame):
         return
 
     def close(self):
-        """Close the window"""
+        """
+        Close the PlotViewer window and clean up.
+        """
 
         self.table.pf = None
         self.animateopts.stop()
@@ -2766,7 +3024,12 @@ class PlotViewer(Frame):
         return
 
 class TkOptions(object):
-    """Class to generate tkinter widget dialog for dict of options"""
+    """
+    Base class to generate a tkinter widget dialog for a dictionary of options.
+
+    Args:
+        parent: The parent object (usually PlotViewer).
+    """
     def __init__(self, parent=None):
         """Setup variables"""
 
@@ -2775,7 +3038,9 @@ class TkOptions(object):
         return
 
     def applyOptions(self):
-        """Set the plot kwd arguments from the tk variables"""
+        """
+        Collect values from tkinter variables and update the kwds dictionary.
+        """
 
         kwds = {}
         for i in self.opts:
@@ -2795,6 +3060,9 @@ class TkOptions(object):
         return
 
     def setWidgetStyles(self):
+        """
+        Set background colors for widgets to match theme.
+        """
 
         style = Style()
         bg = style.lookup('TLabel.label', 'background')
@@ -2806,14 +3074,25 @@ class TkOptions(object):
         return
 
     def apply(self):
+        """
+        Apply options and trigger callback if present.
+        """
         self.applyOptions()
         if self.callback != None:
             self.callback()
         return
 
     def showDialog(self, parent, layout='horizontal'):
-        """Auto create tk vars, widgets for corresponding options and
-           and return the frame"""
+        """
+        Create and return the dialog frame with auto-generated widgets.
+
+        Args:
+            parent: Parent widget.
+            layout (str): Layout direction.
+
+        Returns:
+            Frame: The dialog frame.
+        """
 
         dialog, self.tkvars, self.widgets = dialogFromOptions(parent,
                                                               self.opts, self.groups,
@@ -2822,7 +3101,12 @@ class TkOptions(object):
         return dialog
 
     def updateFromDict(self, kwds=None):
-        """Update all widget tk vars using plot kwds dict"""
+        """
+        Update the tkinter variables from a dictionary of values.
+
+        Args:
+            kwds (dict): Dictionary of values to set.
+        """
 
         if kwds != None:
             self.kwds = kwds
@@ -2838,15 +3122,22 @@ class TkOptions(object):
         return
 
     def increment(self, key, inc):
-        """Increase the value of a widget"""
+        """
+        Increment the value of a numeric option.
+
+        Args:
+            key (str): Option key.
+            inc (float/int): Amount to increment.
+        """
 
         new = self.kwds[key]+inc
         self.tkvars[key].set(new)
         return
 
 class MPLBaseOptions(TkOptions):
-    """Class to provide a dialog for matplotlib options and returning
-        the selected prefs"""
+    """
+    Class to provide a dialog for basic matplotlib options (2D plots).
+    """
 
     kinds = ['line', 'scatter', 'bar', 'barh', 'pie', 'histogram', 'boxplot', 'violinplot', 'dotplot',
              'heatmap', 'area', 'hexbin', 'contour', 'imshow', 'scatter_matrix', 'density', 'radviz', 'venn', 'shmoo', 'bathtub', 'sparam', 'gantt', 'eye', 'jitter']
@@ -2855,7 +3146,12 @@ class MPLBaseOptions(TkOptions):
     defaultfont = 'monospace'
 
     def __init__(self, parent=None):
-        """Setup variables"""
+        """
+        Initialize options structure.
+
+        Args:
+            parent: Parent object.
+        """
 
         self.parent = parent
         if self.parent is not None:
@@ -2990,7 +3286,9 @@ class MPLBaseOptions(TkOptions):
         return
 
     def applyOptions(self):
-        """Set the plot kwd arguments from the tk variables"""
+        """
+        Apply options and set global font settings.
+        """
 
         TkOptions.applyOptions(self)
         size = self.kwds['fontsize']
@@ -2999,7 +3297,12 @@ class MPLBaseOptions(TkOptions):
         return
 
     def update(self, df):
-        """Update data widget(s) when dataframe changes"""
+        """
+        Update dropdown menus with column names from the DataFrame.
+
+        Args:
+            df (pd.DataFrame): The current DataFrame.
+        """
 
         if util.check_multiindex(df.columns) == 1:
             cols = list(df.columns.get_level_values(0))
@@ -3021,13 +3324,20 @@ class MPLBaseOptions(TkOptions):
         return
 
 class MPL3DOptions(MPLBaseOptions):
-    """Class to provide 3D matplotlib options"""
+    """
+    Class to provide options for 3D plots.
+    """
 
     kinds = ['scatter', 'bar', 'contour', 'wireframe', 'surface']
     defaultfont = 'monospace'
 
     def __init__(self, parent=None):
-        """Setup variables"""
+        """
+        Initialize 3D options.
+
+        Args:
+            parent: Parent object.
+        """
 
         self.parent = parent
         if self.parent is not None:
@@ -3052,14 +3362,24 @@ class MPL3DOptions(MPLBaseOptions):
         return
 
     def applyOptions(self):
-        """Set the plot kwd arguments from the tk variables"""
+        """
+        Apply options.
+        """
 
         TkOptions.applyOptions(self)
         return
 
 class PlotLayoutOptions(TkOptions):
+    """
+    Class to manage grid layout options for subplots.
+    """
     def __init__(self, parent=None):
-        """Setup variables"""
+        """
+        Initialize layout variables.
+
+        Args:
+            parent: Parent object.
+        """
 
         self.parent = parent
         self.rows = 2
@@ -3069,7 +3389,16 @@ class PlotLayoutOptions(TkOptions):
         return
 
     def showDialog(self, parent, layout='horizontal'):
-        """Override because we need to add custom bits"""
+        """
+        Create the layout configuration dialog (grid selector, sliders, etc.).
+
+        Args:
+            parent: Parent widget.
+            layout: Layout direction.
+
+        Returns:
+            Frame: The dialog frame.
+        """
 
         self.tkvars = {}
         self.main = Frame(parent)
@@ -3136,6 +3465,9 @@ class PlotLayoutOptions(TkOptions):
         return self.main
 
     def setmultiviews(self, event=None):
+        """
+        Handle toggle of multi-views mode.
+        """
         val=self.multiviewsvar.get()
         if val == 1:
             self.parent.multiviews = True
@@ -3145,7 +3477,9 @@ class PlotLayoutOptions(TkOptions):
         return
 
     def resetGrid(self, event=None):
-        """update grid and redraw"""
+        """
+        Reset the grid selection widget based on slider values.
+        """
 
         pg = self.plotgrid
         self.rows = pg.rows = self.rowsvar.get()
@@ -3157,6 +3491,9 @@ class PlotLayoutOptions(TkOptions):
         return
 
     def updateFromGrid(self):
+        """
+        Update internal state from grid selection.
+        """
         pg = self.plotgrid
         r = self.selectedrows = pg.selectedrows
         c = self.selectedcols = pg.selectedcols
@@ -3165,25 +3502,40 @@ class PlotLayoutOptions(TkOptions):
         return
 
     def updateAxesList(self):
-        """Update axes list"""
+        """
+        Update the list of available axes in the dropdown.
+        """
 
         axes = list(self.parent.gridaxes.keys())
         self.axeslist['values'] = axes
         return
 
 class PlotLayoutGrid(BaseTable):
+    """
+    A simple table widget for selecting grid cells.
+    """
     def __init__(self, parent=None, width=280, height=205, rows=2, cols=2, **kwargs):
         BaseTable.__init__(self, parent, bg='white',
                          width=width, height=height )
         return
 
     def handle_left_click(self, event):
+        """
+        Handle click to select cells.
+        """
         BaseTable.handle_left_click(self, event)
 
 class AnnotationOptions(TkOptions):
-    """This class also provides custom tools for adding items to the plot"""
+    """
+    Class to provide options for plot annotations (titles, labels, text boxes).
+    """
     def __init__(self, parent=None):
-        """Setup variables"""
+        """
+        Initialize annotation options.
+
+        Args:
+            parent: Parent object.
+        """
 
         from matplotlib import colors
         import six
@@ -3225,7 +3577,16 @@ class AnnotationOptions(TkOptions):
         return
 
     def showDialog(self, parent, layout='horizontal'):
-        """Override because we need to add custom widgets"""
+        """
+        Create the annotation options dialog.
+
+        Args:
+            parent: Parent widget.
+            layout: Layout direction.
+
+        Returns:
+            Frame: The dialog frame.
+        """
 
         dialog, self.tkvars, self.widgets = dialogFromOptions(parent,
                                                               self.opts, self.groups,
@@ -3236,7 +3597,9 @@ class AnnotationOptions(TkOptions):
         return dialog
 
     def addWidgets(self):
-        """Custom dialogs for manually adding annotation items like text"""
+        """
+        Add controls for adding manual annotations (textboxes, arrows).
+        """
 
         frame = LabelFrame(self.main, text='add objects')
         v = self.objectvar = StringVar()
@@ -3260,13 +3623,17 @@ class AnnotationOptions(TkOptions):
         return
 
     def clear(self):
-        """Clear annotations"""
+        """
+        Clear all manually added annotations.
+        """
         self.textboxes = {}
         self.parent.replot()
         return
 
     def addObject(self):
-        """Add an annotation object"""
+        """
+        Add an annotation object based on the selected type.
+        """
 
         o = self.objectvar.get()
         if o == 'textbox':
@@ -3276,7 +3643,13 @@ class AnnotationOptions(TkOptions):
         return
 
     def addTextBox(self, kwds=None, key=None):
-        """Add a text annotation and store it using key"""
+        """
+        Add a text box annotation to the plot.
+
+        Args:
+            kwds (dict): Dictionary of text properties (text, xy, etc.).
+            key (str): Unique ID for the annotation.
+        """
 
         import matplotlib.patches as patches
         from matplotlib.text import OffsetFrom
@@ -3333,7 +3706,9 @@ class AnnotationOptions(TkOptions):
         return
 
     def addArrow(self, kwds=None, key=None):
-        """Add line/arrow"""
+        """
+        Add an arrow annotation (not fully implemented).
+        """
 
         fig = self.parent.fig
         canvas = self.parent.canvas
@@ -3345,8 +3720,9 @@ class AnnotationOptions(TkOptions):
         return
 
     def redraw(self):
-        """Redraw all stored annotations in the right places
-           after a plot update"""
+        """
+        Redraw all stored annotations after a plot update.
+        """
 
         #print (self.textboxes)
         for key in self.textboxes:
@@ -3354,9 +3730,16 @@ class AnnotationOptions(TkOptions):
         return
 
 class ExtraOptions(TkOptions):
-    """Class for additional formatting options like styles"""
+    """
+    Class for additional options like axis ranges and ticks.
+    """
     def __init__(self, parent=None):
-        """Setup variables"""
+        """
+        Initialize extra options.
+
+        Args:
+            parent: Parent object.
+        """
 
         self.parent = parent
         self.styles = sorted(plt.style.available)
@@ -3387,7 +3770,16 @@ class ExtraOptions(TkOptions):
         return
 
     def showDialog(self, parent, layout='horizontal'):
-        """Create dialog widgets"""
+        """
+        Create the dialog.
+
+        Args:
+            parent: Parent widget.
+            layout: Layout direction.
+
+        Returns:
+            Frame: The dialog frame.
+        """
 
         dialog, self.tkvars, self.widgets = dialogFromOptions(parent,
                                                               self.opts, self.groups,
@@ -3398,7 +3790,9 @@ class ExtraOptions(TkOptions):
         return dialog
 
     def addWidgets(self):
-        """Custom dialogs for manually adding annotation items like text"""
+        """
+        Add style selection widgets.
+        """
 
         main = self.main
         frame = LabelFrame(main, text='styles')
@@ -3415,21 +3809,34 @@ class ExtraOptions(TkOptions):
         return main
 
     def apply(self):
+        """
+        Apply the selected matplotlib style.
+        """
         mpl.rcParams.update(mpl.rcParamsDefault)
         self.parent.style = self.stylevar.get()
         self.parent.replot()
         return
 
     def reset(self):
+        """
+        Reset to default matplotlib style.
+        """
         mpl.rcParams.update(mpl.rcParamsDefault)
         self.parent.style = None
         self.parent.replot()
         return
 
 class AnimateOptions(TkOptions):
-    """Class for live update/animation of plots."""
+    """
+    Class for handling live updates or animation of plots.
+    """
     def __init__(self, parent=None):
-        """Setup variables"""
+        """
+        Initialize animation options.
+
+        Args:
+            parent: Parent object.
+        """
 
         self.parent = parent
         df = self.parent.table.model.df
@@ -3464,7 +3871,16 @@ class AnimateOptions(TkOptions):
         return
 
     def showDialog(self, parent, layout='horizontal'):
-        """Create dialog widgets"""
+        """
+        Create the animation options dialog.
+
+        Args:
+            parent: Parent widget.
+            layout: Layout direction.
+
+        Returns:
+            Frame: The dialog frame.
+        """
 
         dialog, self.tkvars, self.widgets = dialogFromOptions(parent,
                                                               self.opts, self.groups,
@@ -3474,7 +3890,9 @@ class AnimateOptions(TkOptions):
         return dialog
 
     def addWidgets(self):
-        """Custom dialogs for manually adding annotation items like text"""
+        """
+        Add Start/Stop buttons for animation.
+        """
 
         main = self.main
         frame = LabelFrame(main, text='Run')
@@ -3486,6 +3904,12 @@ class AnimateOptions(TkOptions):
         return main
 
     def getWriter(self):
+        """
+        Get a FFMpegWriter instance for saving video.
+
+        Returns:
+            matplotlib.animation.FFMpegWriter
+        """
         fps = self.kwds['fps']
         import matplotlib.animation as manimation
         FFMpegWriter = manimation.writers['ffmpeg']
@@ -3495,7 +3919,9 @@ class AnimateOptions(TkOptions):
         return writer
 
     def update(self):
-        """do live updating"""
+        """
+        Main loop for live updating/recording.
+        """
 
         self.applyOptions()
         savevid = self.kwds['savevideo']
@@ -3512,7 +3938,12 @@ class AnimateOptions(TkOptions):
         return
 
     def updateCurrent(self, writer=None):
-        """Iterate over current table and update plot"""
+        """
+        Iterate through rows of the table and update the plot (frame by frame).
+
+        Args:
+            writer: Optional FFMpegWriter to save frames.
+        """
 
         kwds = self.kwds
         table = self.parent.table
@@ -3572,7 +4003,9 @@ class AnimateOptions(TkOptions):
         return
 
     def stream(self):
-        """Stream data into table and plot - not implemented yet"""
+        """
+        Stream data from a URL (placeholder/not fully implemented).
+        """
 
         import requests, io
         kwds = self.kwds
@@ -3594,7 +4027,9 @@ class AnimateOptions(TkOptions):
         return
 
     def start(self):
-        """start animation using a thread"""
+        """
+        Start the animation loop in a separate thread.
+        """
 
         if self.running == True:
             return
@@ -3607,7 +4042,9 @@ class AnimateOptions(TkOptions):
         return
 
     def stop(self):
-        """Stop animation loop"""
+        """
+        Stop the animation loop.
+        """
 
         self.stopthread = True
         self.running = False
@@ -3619,7 +4056,17 @@ class AnimateOptions(TkOptions):
         return
 
 def addFigure(parent, figure=None, resize_callback=None):
-    """Create a tk figure and canvas in the parent frame"""
+    """
+    Create a matplotlib Figure and a FigureCanvasTkAgg in the parent frame.
+
+    Args:
+        parent: The parent tkinter widget.
+        figure (Figure): Optional existing figure.
+        resize_callback: Unused.
+
+    Returns:
+        tuple: (figure, canvas)
+    """
 
     from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg#, NavigationToolbar2TkAgg
     from matplotlib.figure import Figure

@@ -80,7 +80,12 @@ time_formats = [
 ]
 
 def write_default_config():
-    """Write a default config to users .config folder. Used to add global settings."""
+    """
+    Write a default config to users .config folder. Used to add global settings.
+
+    Returns:
+        str: Path to the created config file.
+    """
 
     fname = os.path.join(config_path, 'default.conf')
     if not os.path.exists(fname):
@@ -93,7 +98,16 @@ def write_default_config():
     return fname
 
 def write_config(conffile='default.conf', defaults={}):
-    """Write a default config file"""
+    """
+    Write a default config file.
+
+    Args:
+        conffile (str): Path to the config file.
+        defaults (dict): Default configuration dictionary.
+
+    Returns:
+        str: Path to the config file.
+    """
 
     if not os.path.exists(conffile):
         cp = create_config_parser_from_dict(defaults)
@@ -102,8 +116,17 @@ def write_config(conffile='default.conf', defaults={}):
     return conffile
 
 def create_config_parser_from_dict(data=None, sections=baseoptions.keys(), **kwargs):
-    """Helper method to create a ConfigParser from a dict of the form shown in
-       baseoptions"""
+    """
+    Helper method to create a ConfigParser from a dict of the form shown in baseoptions.
+
+    Args:
+        data (dict): Dictionary containing configuration data.
+        sections (list): List of sections to include.
+        **kwargs: Additional options to add to all sections.
+
+    Returns:
+        ConfigParser: The configured parser object.
+    """
 
     if data is None:
         data = baseoptions
@@ -129,6 +152,15 @@ def create_config_parser_from_dict(data=None, sections=baseoptions.keys(), **kwa
     return cp
 
 def update_config(options):
+    """
+    Update the configuration parser with new options.
+
+    Args:
+        options (dict): Dictionary of new option values.
+
+    Returns:
+        ConfigParser: The updated parser object.
+    """
 
     cp = create_config_parser_from_dict()
     for section in cp.sections():
@@ -138,7 +170,15 @@ def update_config(options):
     return cp
 
 def parse_config(conffile=None):
-    """Parse a configparser file"""
+    """
+    Parse a configparser file.
+
+    Args:
+        conffile (str): Path to the config file.
+
+    Returns:
+        ConfigParser: The parsed configuration, or None on error.
+    """
 
     f = open(conffile,'r')
     cp = configparser.ConfigParser(interpolation=None)
@@ -152,7 +192,15 @@ def parse_config(conffile=None):
     return cp
 
 def get_options(cp):
-    """Makes sure boolean opts are parsed"""
+    """
+    Extract options from a ConfigParser, ensuring booleans and ints are parsed correctly.
+
+    Args:
+        cp (ConfigParser): The configuration parser.
+
+    Returns:
+        OrderedDict: A dictionary of options.
+    """
 
     from collections import OrderedDict
     options = OrderedDict()
@@ -172,15 +220,27 @@ def get_options(cp):
     return options
 
 def print_options(options):
-    """Print option key/value pairs"""
+    """
+    Print option key/value pairs.
+
+    Args:
+        options (dict): The options dictionary.
+    """
 
     for key in options:
         print (key, ':', options[key])
     print ()
 
 def check_options(opts):
-    """Check for missing default options in dict. Meant to handle
-       incomplete config files"""
+    """
+    Check for missing default options in dict. Meant to handle incomplete config files.
+
+    Args:
+        opts (dict): The options dictionary to check.
+
+    Returns:
+        dict: The dictionary with missing defaults filled in.
+    """
 
     sections = list(baseoptions.keys())
     for s in sections:
@@ -191,6 +251,12 @@ def check_options(opts):
     return opts
 
 def load_options():
+    """
+    Load options from the default configuration file. Creates it if missing.
+
+    Returns:
+        dict: The loaded options.
+    """
     if not os.path.exists(default_conf):
         write_config(default_conf, defaults=baseoptions)
     cp = parse_config(default_conf)
@@ -199,7 +265,13 @@ def load_options():
     return options
 
 def apply_options(options, table):
-    """Apply options to a table"""
+    """
+    Apply options to a table instance.
+
+    Args:
+        options (dict): The options dictionary.
+        table (Table): The table instance to apply options to.
+    """
 
     for i in options:
         table.__dict__[i] = options[i]
@@ -210,7 +282,14 @@ def apply_options(options, table):
     return
 
 class preferencesDialog(Frame):
-    """Preferences dialog from config parser options"""
+    """
+    Preferences dialog generated from config parser options.
+
+    Args:
+        parent: Parent widget.
+        options (dict): Current options.
+        table (Table): The table instance to apply preferences to.
+    """
 
     def __init__(self, parent, options, table=None):
 
@@ -231,7 +310,9 @@ class preferencesDialog(Frame):
         return
 
     def createWidgets(self):
-        """create widgets"""
+        """
+        Create the dialog widgets based on the options structure.
+        """
 
         fonts = util.getFonts()
 
@@ -278,7 +359,12 @@ class preferencesDialog(Frame):
         return
 
     def updateFromOptions(self, options):
-        """Update all widget tk vars using dict"""
+        """
+        Update all widget variables using an options dictionary.
+
+        Args:
+            options (dict): Dictionary of option values.
+        """
 
         if self.tkvars == None:
             return
@@ -293,7 +379,9 @@ class preferencesDialog(Frame):
         return
 
     def apply(self):
-        """Apply options to current table"""
+        """
+        Apply the currently selected options to the table.
+        """
 
         table = self.table
         options = dialogs.getDictfromTkVars(self.opts, self.tkvars, self.widgets)
@@ -301,7 +389,9 @@ class preferencesDialog(Frame):
         return
 
     def save(self):
-        """Save from current dialog settings"""
+        """
+        Save current dialog settings as default configuration.
+        """
 
         options = dialogs.getDictfromTkVars(self.opts, self.tkvars, self.widgets)
         #print (options)
@@ -311,5 +401,8 @@ class preferencesDialog(Frame):
         return
 
     def quit(self):
+        """
+        Close the dialog.
+        """
         self.main.destroy()
         return

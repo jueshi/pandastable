@@ -24,6 +24,12 @@ except:
      import Tkinter as tk
 
 def tableapp_logo():
+     """
+     Get the application logo image.
+
+     Returns:
+        tk.PhotoImage: The logo image.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhAAEAAcZxAAAAAAcABxQAKxUALRsFAyUAJCQAJycAJiQIACYKACgO'
             +'ACgUAEUAfCoVAEYAhEgBgkgBg0wAjE8AklAAk1EAlFQAm1UAnFsEn2QA1GcG'
@@ -131,6 +137,12 @@ def tableapp_logo():
      return img
 
 def add_row():
+     """
+     Get the 'add row' icon.
+
+     Returns:
+        tk.PhotoImage: The icon image.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAIcAAAAAACFfHSZlIixtJzN1Ljd6MTl9Mzp+NEJ3uzyBNj2C'
             +'N0GHOkKIO0iPQEqSQkuTQ0yVRE2WRVGbSFijT12gVV6rVGOlWmOxWXy+dn7B'
@@ -158,6 +170,12 @@ def add_row():
      return img
 
 def add_col():
+     """
+     Get the 'add column' icon.
+
+     Returns:
+        tk.PhotoImage: The icon image.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAIcAAAAAADdrGT5wIkx7MUR3a09/e1OMKFePLV+JSWCJSWaO'
             +'T3GXX3y+dlKEw1WGxlaHx1mKyFuKyV6Oy1+Py2OSzmSTzmiW0WqX0W6Z02+b'
@@ -185,6 +203,12 @@ def add_col():
      return img
 
 def del_row():
+     """
+     Get the 'delete row' icon.
+
+     Returns:
+        tk.PhotoImage: The icon image.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAIcAAAAAAEJ3u3y+dlKEw1aHx12KxVmKyFuKyV6Oy1+Py2OS'
             +'zmSTzmiW0WqX0W6Z02+b1HKe1nSg13Wh13qj2nqk2X2l3H6o3eoRHOwaI+4m'
@@ -212,6 +236,12 @@ def del_row():
      return img
 
 def del_col():
+     """
+     Get the 'delete column' icon.
+
+     Returns:
+        tk.PhotoImage: The icon image.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAIcAAAAAAHy+dlKEw1WGxlaHx1mKyFuKyV6Oy1+Py2OSzmST'
             +'zmiW0WqX0W6Z02+b1HKe1nSg13Wh13qj2nqk2X2l3H6o3bpDBLhFA7lEA7lF'
@@ -239,6 +269,12 @@ def del_col():
      return img
 
 def delete():
+     """
+     Get the 'delete' icon.
+
+     Returns:
+        tk.PhotoImage: The icon image.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPZvALdKK7hKKrpLLrhOLrxLML5PNrxQMr1RNb5TOMFNM9BP'
             +'PsRQNMBTOsxSPMZVQsdXRctZScxbTNtWS9FeU9ddUeZWTOZYTOZZTulZTelb'
@@ -257,6 +293,12 @@ def delete():
      return img
 
 def new_proj():
+     """
+     Get the 'new project' icon.
+
+     Returns:
+        tk.PhotoImage: The icon image.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAIcAAAAAAEJ3u3y+dlKEw1SGxFWGxlaHx12KxVyKxl+MxlmK'
             +'yFuKyV+NyF6Oy1+Py2OSzmSTzmiW0WqX0W6Z02+b1HKe1nSg13Wh13qj2nqk'
@@ -284,6 +326,12 @@ def new_proj():
      return img
 
 def open_proj():
+     """
+     Get the 'open project' icon.
+
+     Returns:
+        tk.PhotoImage: The icon image.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAIcAAAAAABV5ABt5AB57AyF9ACV/ACZ+ECR8FUJ3uy2DAS2D'
             +'CTWHCTCHFzyLEESPFkaQGUqRHFKXIleYKFubKV6fOlygPGKdMGOfMWWfMWih'
@@ -311,6 +359,12 @@ def open_proj():
      return img
 
 def save_proj():
+     """
+     Get the 'save project' icon.
+
+     Returns:
+        tk.PhotoImage: The icon image.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAIcAAAAAACBarS5fpjppqj5qqzNoukRtq0RwsFd+u1F/w1N/'
             +'wXy+dl2Ev1SBxFWDxliEw1uGx1uKyV2IyF6Oy1+Py2GKx2CJyWGLyWKLyGWN'
@@ -339,6 +393,12 @@ def save_proj():
      return img
 
 def prefs():
+    """
+    Get the 'preferences' icon.
+
+    Returns:
+        tk.PhotoImage: The icon image.
+    """
     img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAIcAAAAAAElJSU5OTlFRUVJSUlNTU1hYWFpaWltbW1xcXGFh'
             +'YWJiYmRkZGdnZ2lpaWpqamtra21tbW5ubm9vb3FxcXZ2dnd3d3l5eXp6en5+'
@@ -366,6 +426,12 @@ def prefs():
     return img
 
 def plot():
+    """
+    Get the 'plot' icon.
+
+    Returns:
+        tk.PhotoImage: The icon image.
+    """
     img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAIcAAAAAAC5fpTBiqTBiqjJkrDNmrjRosTVosjZrtTdrtjxy'
             +'vz10wj51wz52xD92xT93xkZwu1prrUJ3xkB4x0F5yUF6ykJ6y0J7zEN8zEN8'
@@ -391,6 +457,12 @@ def plot():
     return img
 
 def plot_clear():
+    """
+    Get the 'clear plot' icon.
+
+    Returns:
+        tk.PhotoImage: The icon image.
+    """
     img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPedAGVCPXZsJXsueXwzfH04f2pBbWhTe6pJB6lMCblFA7tC'
             +'BLxCBLxCBbxDBbtNBa5NG7hVF61PIL9dIt1kAeFoA+52AOp5Bfh2AO9/GP93'
@@ -419,6 +491,12 @@ def plot_clear():
     return img
 
 def plot_prefs():
+    """
+    Get the 'plot preferences' icon.
+
+    Returns:
+        tk.PhotoImage: The icon image.
+    """
     img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAIcAAAAAAFU9ETxyvz10wj51wz52xD92xT93xltujUJ3xkB4'
             +'x0F5yUF6ykJ6y0J7zEN8zEN8zUR9zkV+0EV/0XCfvYdfKJxpHYNlK6pkHL56'
@@ -445,6 +523,12 @@ def plot_prefs():
     return img
 
 def fit():
+    """
+    Get the 'fit' icon.
+
+    Returns:
+        tk.PhotoImage: The icon image.
+    """
     img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPYAADd1LTh1K/8CBv0NEfwOEvsWGvsXG/kZHPkhJPcrLvkq'
             +'LesqOfYzNvUyOPY2OeExRfU+QfRAQ/FIS+5KUPFNUPJPUu9XWe9YWvBRUzaE'
@@ -462,6 +546,12 @@ def fit():
     return img
 
 def refresh():
+    """
+    Get the 'refresh' icon.
+
+    Returns:
+        tk.PhotoImage: The icon image.
+    """
     img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPYAACNhHyRjICVlIidmIyloJCprJixtJzJ0LDN2Ljd7Mjp+'
             +'NDyANT6DN0CGOUKIO0SLPUqLRUyNR0mRQU2WRU+ZR0+QSVGSS1SVTlGbSVOe'
@@ -479,6 +569,12 @@ def refresh():
     return img
 
 def start():
+     """
+     Get the 'start' icon.
+
+     Returns:
+        tk.PhotoImage: The icon image.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhGAAYAKUAAP///+bm/+Xl/uPj/OHh++Df+d7d993d99vb9dvb9NnZ'
             +'8tnZ5tfW8NTU7tLS69DQ6dDP6c3N58vL5cnJ48fH4MTE3sLC3MDAzL/A2b2+'
@@ -493,6 +589,12 @@ def start():
      return img
 
 def end():
+     """
+     Get the 'end' icon.
+
+     Returns:
+        tk.PhotoImage: The icon image.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhGAAYAKUAAP///+bm/+Xl/uPj/OHh++Df+d7d993d99vb9dvb9NnZ'
             +'8tnZ5tfW8NTU7tLS69DQ6dDP6c3N58vL5cnJ48fH4MTE3sLC3MDAzL/A2b2+'
@@ -507,6 +609,12 @@ def end():
      return img
 
 def next():
+     """
+     Get the 'next' icon.
+
+     Returns:
+        tk.PhotoImage: The icon image.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAIcAAAAAACBeHSRjISlpJS9wKjV4LzuANUKIO0WIP0mLREqM'
             +'RUmRQU+ZR1CRSlydVVahTV6hWVypU2KjWmKxWGi4XW2+YXy+dnHDZXTHaIDB'
@@ -531,6 +639,12 @@ def next():
      return img
 
 def prev():
+     """
+     Get the 'previous' icon.
+
+     Returns:
+        tk.PhotoImage: The icon image.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAIcAAAAAACBeHSRjISlpJS9wKjV4LzuANUKIO0mRQU+ZR1ah'
             +'TVypU2SqW2KxWGi4XXi9cnu+cXy+dnHDZXTHaH7AeIDBeoPBeoLCfYTDfobI'
@@ -555,6 +669,12 @@ def prev():
      return img
 
 def search():
+     """
+     Get the 'search' icon.
+
+     Returns:
+        tk.PhotoImage: The icon image.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAIcAAAAAAHaczXufzXug0H+l05JaEJNbEZVdFJdfGJpiG51l'
             +'H51nIp5mIqNrKKVtK6hwMKpyMq93ObF5PLV9Qbd/RLyES7yNVcWXZMeZZsyi'
@@ -581,6 +701,12 @@ def search():
      return img
 
 def transpose():
+     """
+     Get the 'transpose' icon.
+
+     Returns:
+        tk.PhotoImage: The icon image.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPYAACxsJyxtKC1uKC1uKS9xKzFzLDd7MTl9Mzt/NT6EOEGH'
             +'OkKJO0OJPESLPUWMPkaNP0mRQkqSQkqTQ0yVRE6RSU+SSlCZR1GUTFOWTVCa'
@@ -598,6 +724,12 @@ def transpose():
      return img
 
 def melt():
+     """
+     Get the 'melt' icon.
+
+     Returns:
+        tk.PhotoImage: The icon image.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAMZnACxsJy9wKi9xKzJ1LTN2LjV4LzV4MDZ5MDh8Mjp+ND6E'
             +'OEOGPUOKPEeMQUmLQ0iQQEmRQUmRQkuUQ0yRRUyTREyVRE6YRk+YR1OXTFCa'
@@ -615,6 +747,12 @@ def melt():
      return img
 
 def pivot():
+     """
+     Get the 'pivot' icon.
+
+     Returns:
+        tk.PhotoImage: The icon image.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAMZQACFfHiNiICRiICZlIidmIylpJSprJixtKC5vKTByKzJ0'
             +'LTR3LzZ5MDh8Mjp+NDyBNj6EOEGHOkmRQkuUQ06XRlGcSVOeS1mmUGOlXFyp'
@@ -632,6 +770,12 @@ def pivot():
      return img
 
 def aggregate():
+     """
+     Get the 'aggregate' icon.
+
+     Returns:
+        tk.PhotoImage: The icon image.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAMZbACFfHiNiICZlIilpJSxtKC1sKS5vKTBwLDJ0LTN1LzV4'
             +'MDh7Mjl+Mz2CNz6DN0CFOUGHOkOJPEOKPESKPUWMPk6XRk+YR1GXSlSWTlOd'
@@ -649,6 +793,12 @@ def aggregate():
      return img
 
 def merge():
+     """
+     Get the 'merge' icon.
+
+     Returns:
+        tk.PhotoImage: The icon image.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPZlADyANT6DN0CGOUKIO0eGQ0+ZR1CQSlGbSVOeS1ebUFia'
             +'UViZU1WhTV+iWmOnXGesYG2wZ3Gya3a1b3q4dHy+doG9e4C/eoDBeoTDfkJ3'
@@ -668,6 +818,12 @@ def merge():
      return img
 
 def table_multiple():
+     """
+     Get the 'multiple tables' icon.
+
+     Returns:
+        tk.PhotoImage: The icon image.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPZbAHy+doDBeoTDfkJ3u1KEw1SGxFWGxlaHx12KxVmKyF+P'
             +'y2OSzmSTzmiW0WqX0W6Z02+b1HKe1nSg13Wh13qj2n2l3H+o3InGgpPLi6HT'
@@ -687,6 +843,12 @@ def table_multiple():
      return img
 
 def filtering():
+     """
+     Get the 'filter' icon.
+
+     Returns:
+        tk.PhotoImage: The icon image.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPcAAMh/M81/OIF7c9mYP/LSOLmIScWIR9WOSMqTQMmWQ82X'
             +'Q8eaT9eiVcOsa8mvatCpYNK3Ztm0atm2eOe+Y+K7bfbWR/bZRvXZTfbbTurB'
@@ -715,6 +877,12 @@ def filtering():
      return img
 
 def importcsv():
+     """
+     Get the 'import csv' icon.
+
+     Returns:
+        tk.PhotoImage: The icon image.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAOe1ACpgtyxity5kth57AyxltC5luS9lujBluiJ7DjBmuiN6'
             +'HTFmuyV/ADNpvDhxvzWHCjt2xDx4wTuLETqMFUJ5vz98xEB8xEOPF0V+wkKA'
@@ -744,6 +912,12 @@ def importcsv():
      return img
 
 def excel():
+     """
+     Get the 'excel' icon.
+
+     Returns:
+        tk.PhotoImage: The icon image.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAOenACpgtyxity1kuS5kuS5luTN0GS9lujBlujN1GTN1GjN1'
             +'GzBmujFmuzFnuzNpvDd4HzZvvzhxv0F/LkJ/Ljt2wTt2xEWCNjx4wT9+f0iE'
@@ -772,6 +946,12 @@ def excel():
      return img
 
 def add():
+     """
+     Get the 'add' icon.
+
+     Returns:
+        tk.PhotoImage: The icon image.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPZ2ADSBLDSCLDeELzmFMDyHMj2INECJNkKNNkKLOEOPOESM'
             +'OkeOPFOWRVCZQVeeRVaYSF2cTV+eUGajVmWrVWirU2mlWGuqWGyqWmqsW261'
@@ -790,6 +970,12 @@ def add():
      return img
 
 def cross():
+     """
+     Get the 'cross' (cancel/close) icon.
+
+     Returns:
+        tk.PhotoImage: The icon image.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPYAAOQiJOYqLOktL+ovMekyNes0Nuw8Pu49P+0+QO0/QfE/'
             +'Qe5AQu5BQ+9DRu9ER+9FSPJFR/BGSPBGSfRISvZKTPJMT/RNUPVOUPNRVPdV'
@@ -807,6 +993,12 @@ def cross():
      return img
 
 def accept():
+     """
+     Get the 'accept' (check mark) icon.
+
+     Returns:
+        tk.PhotoImage: The icon image.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPeGAB1sGh5uGh5wGh5xGh9xGx5zGh94Gx56Gx96Gx5/Gx+D'
             +'GyCKGyCIHC2WHC+WHDKdHUKpH0KrH0KtH0yXPUu0JlK5K1K7LVS7LVS9MVW+'
@@ -834,6 +1026,12 @@ def accept():
      return img
 
 def calculate():
+     """
+     Get the 'calculate' icon.
+
+     Returns:
+        tk.PhotoImage: The icon image.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPZaAHJycnp6en5+fttYUuh0c01yp1Z7sGSLwWaNw2eNw2eP'
             +'xWiPxWmQxmuSyGyUym6VyoKDhIODhIaGhoaGh4aHh4eHh4eIiIiIiIiIiYiJ'
@@ -852,6 +1050,12 @@ def calculate():
      return img
 
 def table_delete():
+     """
+     Get the 'clear table' icon.
+
+     Returns:
+        tk.PhotoImage: The icon image.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPZ5ALlEA7lFA7xCBLxDBbxNBbxWHb1XHrhWIr5bKN1kAeFo'
             +'A+52AOp5Bfh2AO9/GP93Ef9/GMdlJ8prL9J2PeZ3IYRnaYttbny+dv+GIeuK'
@@ -871,6 +1075,12 @@ def table_delete():
      return img
 
 def function():
+     """
+     Get the 'function' icon.
+
+     Returns:
+        tk.PhotoImage: The icon image.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPUAACYmJikpKSoqKi0tLS4uLi8vLzExMTIyMjQ0NDU1NTc3'
             +'Nzo6OkBAQEVFRUdHR0hISElJSUxMTE5OTk9PT1FRUVJSUlVVVVZWVlhYWF1d'
@@ -883,6 +1093,12 @@ def function():
      return img
 
 def copy():
+     """
+     Get the 'copy' icon.
+
+     Returns:
+        tk.PhotoImage: The icon image.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPZtAEJzxUR0xUV1xkV1x0d5x0h9w0l5x0p5x0V1yEZ1yEt5'
             +'yE58yFN/ylCDylODylSAylKEylOFy1SFylWFy1SGy1WGy1aGy1eHy1KDzFOC'
@@ -902,6 +1118,12 @@ def copy():
      return img
 
 def paste():
+     """
+     Get the 'paste' icon.
+
+     Returns:
+        tk.PhotoImage: The icon image.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPYAAEZGRkhISElJSUpKSkxMTE9PT1JSUlNTU1VVVVZWVlhY'
             +'WFpaWl5eXmVlZWhoaGpqapVjJJhjIKFuLqR1N4FoSohzWJ+HaaCGY6GHZKGI'
@@ -921,6 +1143,12 @@ def paste():
      return img
 
 def tilevertical():
+     """
+     Get the 'tile vertical' icon.
+
+     Returns:
+        tk.PhotoImage: The icon image.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPZrAEBZl0Bal0FbmEVenUZin0pnoUhlo0tnpUtpo01tpU1q'
             +'qE1qqlJxqFFwrlBxr1N0sVV2s1d5tll8sVl9uFp+uV2CvWGGumSFu2eLv2WL'
@@ -939,6 +1167,12 @@ def tilevertical():
      return img
 
 def tilehorizontal():
+     """
+     Get the 'tile horizontal' icon.
+
+     Returns:
+        tk.PhotoImage: The icon image.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPZTAEBZl0Bal0Jbl0NdmUNemkVgnEVgnUZinUlln0pnpEtp'
             +'ok9spk5tpk5rqFJwrVFyslZ3sVR2tVt/tld8uV+EuF+DvGGEu16EwWKIwGeM'
@@ -956,6 +1190,12 @@ def tilehorizontal():
      return img
 
 def expand_col():
+    """
+    Get the 'expand columns' icon.
+
+    Returns:
+        tk.PhotoImage: The icon image.
+    """
     img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPZvADp+NESHPUWGPkKIO1SOUF6VWVyiVF6rVF+hWGGiWmSv'
             +'W2q7X2yeaWmlZG+wZ2+xaHS2a3SzbHa0b3+8d3DCZHTHaIbDflFxqVFyqVNz'
@@ -975,6 +1215,12 @@ def expand_col():
     return img
 
 def contract_col():
+    """
+    Get the 'contract columns' icon.
+
+    Returns:
+        tk.PhotoImage: The icon image.
+    """
     img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPZmACBeHSVlIixtJzp+NDx/N1SVTV2aV16XWVWhTVugU16p'
             +'VF6rVF+hWGOkW2WhX2SmXWKsWGapX2unZHG0aXS2a3G5aXW7bH68doPGe1Fx'
@@ -993,6 +1239,12 @@ def contract_col():
     return img
 
 def font():
+     """
+     Get the 'font' icon.
+
+     Returns:
+        tk.PhotoImage: The icon image.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPYAACtNwytQxDFVxjNhzDdjzDdmzDdnzTVpzzhozjlozjpq'
             +'zzptzzps0Tpz0z900z5300Jx0ER61UV61UJ+1kN+1k181VF+1kKA10CE2EGE'
@@ -1010,6 +1262,12 @@ def font():
      return img
 
 def color_swatch():
+     """
+     Get the 'color swatch' icon.
+
+     Returns:
+        tk.PhotoImage: The icon image.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPMAAP5va1DMbf+qc/DVZ1h6sP93sWCw69Drstmb3QAAAAAA'
             +'AAAAAAAAAAAAAAAAAAAAACH5BAEAAAkAIf8LSW1hZ2VNYWdpY2sKZ2FtbWE9'
@@ -1018,6 +1276,12 @@ def color_swatch():
      return img
 
 def zoom_in():
+     """
+     Get the 'zoom in' icon.
+
+     Returns:
+        tk.PhotoImage: The icon image.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPYAACprJi5vKTBxKzJ0LDN2LjV5MIdIKKVcM6tkN6tnN6tk'
             +'PT6DN0SLPU2WRVOeS1qbU1yoUl6rVF+tVmWnXmGwV2OyWWe2XGusY3a3bbmA'
@@ -1035,6 +1299,12 @@ def zoom_in():
      return img
 
 def zoom_out():
+     """
+     Get the 'zoom out' icon.
+
+     Returns:
+        tk.PhotoImage: The icon image.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPYAAOoRHOwaI+4mLvE1OodIKKVcM6tkN6tnN6tkPbd+R/RF'
             +'SPdUVvpjYvxvbf54dLmASLyFSryES7uBTLyDT7yGTL2GTL2JTL6JTb6KTb6K'
@@ -1052,6 +1322,12 @@ def zoom_out():
      return img
 
 def save():
+     """
+     Get the 'save' icon (floppy disk style).
+
+     Returns:
+        tk.PhotoImage: The icon image.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPcAAIjAYjFgpjFgpzFgqDFhqDJhqDJhqTJhqjJiqjJiqzJj'
             +'rDNjrTNkrjNkrzNlsDRlsTRmsjRmszRntDVotTVotjVotzVptzVpuDVpuTVq'
