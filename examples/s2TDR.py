@@ -6,7 +6,15 @@ import cmath
 
 def parse_s_parameter_file(file_path):
     """
-    Parse the custom S-parameter file format with 16 S-parameters per frequency point
+    Parse the custom S-parameter file format with 16 S-parameters per frequency point.
+
+    Args:
+        file_path (str): Path to the S-parameter file.
+
+    Returns:
+        tuple: A tuple containing:
+            - frequencies (np.array): Array of frequency points.
+            - s_parameters (np.array): Array of S-parameters (complex values).
     """
     frequencies = []
     s_parameters = []

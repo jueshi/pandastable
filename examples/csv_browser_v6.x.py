@@ -68,7 +68,13 @@ import types
 warnings.filterwarnings('ignore', category=FutureWarning)
 
 class CSVBrowser(tk.Tk):
+    """
+    Main application class for the CSV Browser.
+    """
     def __init__(self):
+        """
+        Initialize the CSV Browser application.
+        """
         super().__init__()
         
         self.title("CSV Browser")
@@ -179,7 +185,15 @@ class CSVBrowser(tk.Tk):
         self.create_menu()
 
     def normalize_long_path(self, path):
-        """Normalize path and add long path prefix if needed"""
+        """
+        Normalize path and add long path prefix if needed for Windows.
+
+        Args:
+            path (str): The file path to normalize.
+
+        Returns:
+            str: The normalized path, possibly with the extended length prefix.
+        """
         # Normalize the path
         normalized_path = os.path.normpath(os.path.abspath(path))
         
@@ -192,6 +206,15 @@ class CSVBrowser(tk.Tk):
         return normalized_path
         
     def format_size(self, size):
+        """
+        Convert size to human readable format.
+
+        Args:
+            size (int): The size in bytes.
+
+        Returns:
+            str: The formatted size string (e.g., "1.2 MB").
+        """
         # Convert size to human readable format
         for unit in ['B', 'KB', 'MB', 'GB']:
             if size < 1024:
@@ -200,12 +223,23 @@ class CSVBrowser(tk.Tk):
         return f"{size:.1f} TB"
 
     def format_date(self, timestamp):
+        """
+        Convert timestamp to readable format.
+
+        Args:
+            timestamp (float): The timestamp to format.
+
+        Returns:
+            str: The formatted date string (e.g., "2023-01-01 12:00").
+        """
         # Convert timestamp to readable format
         dt = datetime.fromtimestamp(timestamp)
         return dt.strftime("%Y-%m-%d %H:%M")
 
     def setup_panels(self):
-        """Setup the main panels with proper orientation"""
+        """
+        Setup the main panels (file browser and CSV viewer) with proper orientation.
+        """
         # Create main paned window with proper orientation
         orient = tk.HORIZONTAL if self.is_horizontal else tk.VERTICAL
         self.paned = ttk.PanedWindow(self.main_container, orient=orient)
@@ -237,7 +271,9 @@ class CSVBrowser(tk.Tk):
             self.paned.sashpos(0, 300)  # 300 pixels from top
 
     def setup_file_browser(self):
-        """Setup the file browser panel with pandastable"""
+        """
+        Setup the file browser panel with pandastable.
+        """
         print("\n=== Setting up file browser ===")  # Debug print
         
         # Create frame for pandastable
@@ -394,7 +430,13 @@ class CSVBrowser(tk.Tk):
             messagebox.showerror("Merge CSV Error", f"An error occurred while merging files:\n{str(e)}")
 
     def filter_files(self, *args):
-        """Filter files based on the filter text"""
+        """
+        Filter files based on the filter text.
+        Supports simple string matching, AND logic (space), and exclusion (!).
+
+        Args:
+            *args: Variable length argument list (triggered by trace).
+        """
         if hasattr(self, 'table'):
             try:
                 # Get filter text and remove any quotes
@@ -577,7 +619,9 @@ class CSVBrowser(tk.Tk):
         pass
     
     def setup_csv_viewer(self):
-        """Setup the CSV viewer panel"""
+        """
+        Setup the CSV viewer panel for displaying file contents.
+        """
         try:
             # Create frame for CSV viewer
             if hasattr(self, 'csv_frame') and self.csv_frame is not None:
@@ -709,11 +753,16 @@ class CSVBrowser(tk.Tk):
 
     def filter_csv_content(self, *args):
         """
-        Advanced CSV content filtering with support for:
-        1. Pandas query filtering
-        2. Text-based contains search
-        3. Mixing query and contains search using '@' separator
-        4. Column name filtering
+        Advanced CSV content filtering.
+
+        Supports:
+        1. Pandas query filtering.
+        2. Text-based contains search.
+        3. Mixing query and contains search using '@' separator.
+        4. Column name filtering.
+
+        Args:
+            *args: Variable length argument list (triggered by trace).
         """
         print("\n=== Advanced filter_csv_content called! ===")
         
@@ -836,7 +885,13 @@ class CSVBrowser(tk.Tk):
             print("No CSV table or original data available")
 
     def search_columns(self, *args):
-        """Search for column names matching the search text"""
+        """
+        Search for column names matching the search text.
+        Highlights matching columns or shows suggestions.
+
+        Args:
+            *args: Variable length argument list (triggered by trace).
+        """
         try:
             # First check if we have a valid dataframe to search in
             if not hasattr(self, 'original_csv_df') or self.original_csv_df is None:
@@ -1042,7 +1097,12 @@ class CSVBrowser(tk.Tk):
             messagebox.showerror("Error", f"Failed to load CSV file:\n{str(e)}")
 
     def apply_saved_filter(self, filter_config):
-        """Apply a saved filter configuration"""
+        """
+        Apply a saved filter configuration.
+
+        Args:
+            filter_config (dict): A dictionary containing filter settings (row_filter, column_filter).
+        """
         try:
             # Get the filter settings
             row_filter = filter_config.get("row_filter", "")
@@ -1074,7 +1134,12 @@ class CSVBrowser(tk.Tk):
             messagebox.showerror("Error", f"Failed to apply filter:\n{str(e)}")
             
     def restore_filter(self, filter_text):
-        """Restore the filter text and apply it"""
+        """
+        Restore the filter text and apply it.
+
+        Args:
+            filter_text (str): The filter text to restore.
+        """
         try:
             print("\n=== Restoring filter ===")  # Debug print
             print(f"Filter text to restore: '{filter_text}'")  # Debug print
@@ -1171,7 +1236,9 @@ class CSVBrowser(tk.Tk):
         return cleaned
 
     def setup_csv_filter_context_menu(self):
-        """Create a context menu for CSV filter with instructions and examples"""
+        """
+        Create a context menu for CSV filter with instructions and examples.
+        """
         # Create context menu
         self.csv_filter_context_menu = tk.Menu(self, tearoff=0)
         
@@ -1204,14 +1271,25 @@ class CSVBrowser(tk.Tk):
         self.csv_filter_entry.bind("<Button-3>", self.show_csv_filter_context_menu)
     
     def show_csv_filter_context_menu(self, event):
-        """Display the context menu for CSV filter"""
+        """
+        Display the context menu for CSV filter.
+
+        Args:
+            event: The mouse event triggering the menu.
+        """
         try:
             self.csv_filter_context_menu.tk_popup(event.x_root, event.y_root)
         finally:
             self.csv_filter_context_menu.grab_release()
     
     def show_filter_example(self, example, description):
-        """Show a detailed tooltip with filter example"""
+        """
+        Show a detailed tooltip with filter example.
+
+        Args:
+            example (str): The example title.
+            description (str): The example description.
+        """
         # Create a custom tooltip window
         tooltip = tk.Toplevel(self)
         tooltip.wm_overrideredirect(True)
@@ -1246,7 +1324,9 @@ class CSVBrowser(tk.Tk):
         self.after(5000, tooltip.destroy)
     
     def setup_toolbar(self):
-        """Setup the toolbar with necessary controls"""
+        """
+        Setup the toolbar with necessary controls and buttons.
+        """
         # Add browse folder button
         ttk.Button(self.toolbar, text="Browse Folder", 
                 command=self.browse_folder).pack(side="left", padx=5)
@@ -1344,7 +1424,10 @@ class CSVBrowser(tk.Tk):
             self.setup_csv_viewer()
 
     def update_file_list(self):
-        """Update the list of CSV and TSV files"""
+        """
+        Update the list of CSV and TSV files from the current directory.
+        Respects the 'include_subfolders' setting.
+        """
         print("\n=== Updating file list ===")  # Debug print
         print(f"Current directory: {self.current_directory}")
         print(f"Include subfolders: {self.include_subfolders.get()}")
@@ -1413,7 +1496,12 @@ class CSVBrowser(tk.Tk):
             print("WARNING: No CSV or TSV files found. Check directory path and permissions.")
         
     def get_max_fields(self):
-        """Get the maximum number of underscore-separated fields in filenames"""
+        """
+        Get the maximum number of underscore-separated fields in filenames in the current list.
+
+        Returns:
+            int: The maximum number of fields found (minimum 25).
+        """
         max_fields = 0
         for file_path in self.csv_files:
             # Get just the filename without path
@@ -1433,7 +1521,9 @@ class CSVBrowser(tk.Tk):
         return max_fields
 
     def open_in_excel(self):
-        """Open the selected CSV file in Excel"""
+        """
+        Open the selected CSV file in the system default application (usually Excel).
+        """
         selected_rows = self.table.multiplerowlist
         if not selected_rows:
             messagebox.showinfo("Info", "Please select a file to open in Excel")
@@ -1451,7 +1541,10 @@ class CSVBrowser(tk.Tk):
             messagebox.showerror("Error", f"Failed to open file in Excel:\n{str(e)}")
 
     def open_in_spotfire(self):
-        """Open the first selected CSV file in Spotfire and copy remaining paths to clipboard"""
+        """
+        Open the first selected CSV file in Spotfire and copy remaining paths to clipboard.
+        Handles long paths by creating temporary copies if necessary.
+        """
         selected_rows = self.table.multiplerowlist
         if not selected_rows:
             messagebox.showinfo("Info", "Please select file(s) to open in Spotfire")
@@ -1938,7 +2031,15 @@ class CSVBrowser(tk.Tk):
         return numeric_columns
 
     def reconstruct_filename(self, row):
-        """Reconstruct filename from columns starting with 'Field_'"""
+        """
+        Reconstruct filename from columns starting with 'Field_'.
+
+        Args:
+            row (pd.Series): A row from the DataFrame containing file info.
+
+        Returns:
+            str: The reconstructed filename.
+        """
         # Find columns starting with 'Field_'
         f_columns = [col for col in row.index if col.startswith('Field_')]
         
@@ -1951,7 +2052,16 @@ class CSVBrowser(tk.Tk):
         return new_filename
     
     def rename_csv_file(self, old_filepath, new_filename):
-        """Rename CSV file on disk"""
+        """
+        Rename CSV file on disk.
+
+        Args:
+            old_filepath (str): The current full path of the file.
+            new_filename (str): The new filename (just the name, not full path).
+
+        Returns:
+            str: The new full path if successful, or the old path if failed.
+        """
         try:
             # Convert to raw string and normalize path separators
             old_filepath = os.path.normpath(str(old_filepath).replace('/', os.sep))
@@ -1995,7 +2105,9 @@ class CSVBrowser(tk.Tk):
             return old_filepath
 
     def rename_all_files(self):
-        """Rename all files where constructed name differs from current name"""
+        """
+        Rename all files where the constructed name (from fields) differs from the current name.
+        """
         try:
             renamed_count = 0
             for idx, row in self.df.iterrows():
@@ -2025,7 +2137,9 @@ class CSVBrowser(tk.Tk):
             messagebox.showerror("Error", f"Failed to rename files: {str(e)}")
 
     def refresh_file_list(self):
-        """Refresh the file list and reload the currently selected file if any"""
+        """
+        Refresh the file list and reload the currently selected file if any.
+        """
         print("\n=== Refreshing file list ===")  # Debug print
         
         # Store the currently selected file path
@@ -2099,7 +2213,9 @@ class CSVBrowser(tk.Tk):
 
 
     def copy_selected_files(self):
-        """Copy selected files to another folder"""
+        """
+        Copy selected files to another folder chosen by the user.
+        """
         # Get selected rows from the table's multiplerowlist
         selected_rows = self.table.multiplerowlist
         if not selected_rows:
@@ -2193,7 +2309,9 @@ class CSVBrowser(tk.Tk):
             messagebox.showerror("Error", f"Failed to copy files:\n{str(e)}")
 
     def move_selected_files(self):
-        """Move selected files to a new directory"""
+        """
+        Move selected files to a new directory chosen by the user.
+        """
         try:
             # Get selected rows from the table
             selected_rows = self.table.multiplerowlist
@@ -2261,7 +2379,9 @@ class CSVBrowser(tk.Tk):
             messagebox.showerror("Error", f"An error occurred while moving files:\n{str(e)}")
 
     def delete_selected_files(self):
-        """Delete selected files"""
+        """
+        Delete selected files after confirmation.
+        """
         # Get selected rows from the table's multiplerowlist
         selected_rows = self.table.multiplerowlist
         if not selected_rows:
@@ -2349,7 +2469,9 @@ class CSVBrowser(tk.Tk):
             traceback.print_exc()
 
     def load_subfolders(self):
-        """Load all CSV and TSV files from current directory and all subdirectories"""
+        """
+        Load all CSV and TSV files from current directory and all subdirectories.
+        """
         try:
             print("\n=== Loading files from subfolders ===")  # Debug print
             
@@ -2395,7 +2517,9 @@ class CSVBrowser(tk.Tk):
             messagebox.showerror("Error", "Failed to load subfolders")
 
     def update_file_dataframe(self):
-        """Update the pandas DataFrame with file information"""
+        """
+        Update the pandas DataFrame with file information (name, path, size, date, type, fields).
+        """
         print("\n=== Updating File DataFrame ===")
         
         # Ensure csv_files is a list
@@ -2468,7 +2592,16 @@ class CSVBrowser(tk.Tk):
         self.df = self.df.reset_index(drop=True)
     
     def _extract_field(self, filename, field_index):
-        """Extract a specific field from filename split by underscore"""
+        """
+        Extract a specific field from filename split by underscore.
+
+        Args:
+            filename (str): The filename to parse.
+            field_index (int): The index of the field to extract.
+
+        Returns:
+            str: The extracted field or empty string if not found.
+        """
         try:
             # Remove extension
             name_without_ext = os.path.splitext(filename)[0]
@@ -2483,13 +2616,20 @@ class CSVBrowser(tk.Tk):
             return ''
 
     def setup_column_search_menu(self):
-        """Set up the right-click menu for column search"""
+        """
+        Set up the right-click menu for column search.
+        """
         self.column_search_menu = tk.Menu(self, tearoff=0)
         
         # The menu will be populated dynamically when shown
 
     def show_column_search_menu(self, event=None):
-        """Show the column search menu with matching columns"""
+        """
+        Show the column search menu with matching columns.
+
+        Args:
+            event: The event that triggered the menu (optional).
+        """
         try:
             # First check if we have a valid dataframe to search in
             if not hasattr(self, 'original_csv_df') or self.original_csv_df is None:
@@ -2662,7 +2802,12 @@ class CSVBrowser(tk.Tk):
             traceback.print_exc()
     
     def focus_column_search(self, event=None):
-        """Focus on the column search box"""
+        """
+        Focus on the column search box.
+
+        Args:
+            event: The event that triggered this action (optional).
+        """
         if hasattr(self, 'column_search_entry'):
             self.column_search_entry.focus_set()
             # Select all text if there's any
@@ -2670,7 +2815,9 @@ class CSVBrowser(tk.Tk):
             return "break"  # Prevent default behavior
 
     def create_menu(self):
-        """Create the application menu"""
+        """
+        Create the application main menu bar.
+        """
         menubar = tk.Menu(self)
         
         # File menu
@@ -2758,7 +2905,10 @@ Features:
         messagebox.showinfo("About CSV Browser", about_text)
     
     def browse_directory(self):
-        """Open a directory chooser dialog and update the file list"""
+        """
+        Open a directory chooser dialog and update the file list.
+        Also updates recent directories list.
+        """
         print("\n=== Browse directory called ===")  # Debug print
         directory = filedialog.askdirectory(
             initialdir=self.current_directory
@@ -2788,7 +2938,13 @@ Features:
             
 
     def add_to_recent_directories(self, directory):
-        """Add a directory to the recent directories list"""
+        """
+        Add a directory to the recent directories list.
+        Maintains the list size limit.
+
+        Args:
+            directory (str): The directory path to add.
+        """
         try:
             print(f"Adding to recent directories: {directory}")
             
@@ -2820,7 +2976,9 @@ Features:
             traceback.print_exc()
 
     def open_csv_file(self):
-        """Open a CSV file chooser dialog and load the selected file"""
+        """
+        Open a CSV file chooser dialog and load the selected file.
+        """
         print("\n=== Open CSV file called ===")  # Debug print
         file_path = filedialog.askopenfilename(
             initialdir=self.current_directory,
@@ -3201,7 +3359,9 @@ Features:
                 traceback.print_exc()
     
     def reset_column_filter(self):
-        """Reset the column filter to show all columns"""
+        """
+        Reset the column filter to show all columns.
+        """
         try:
             self.visible_columns = None
             
@@ -3226,7 +3386,9 @@ Features:
             traceback.print_exc()
     
     def setup_column_filter_context_menu(self):
-        """Create a context menu for column filter with instructions and examples"""
+        """
+        Create a context menu for column filter with instructions and examples.
+        """
         try:
             if hasattr(self, 'column_filter_entry'):
                 # Create right-click context menu
@@ -3251,7 +3413,12 @@ Features:
             traceback.print_exc()
     
     def show_column_filter_menu(self, event):
-        """Display the context menu for column filter"""
+        """
+        Display the context menu for column filter.
+
+        Args:
+            event: The mouse event triggering the menu.
+        """
         try:
             if hasattr(self, 'column_filter_menu'):
                 self.column_filter_menu.tk_popup(event.x_root, event.y_root)
@@ -3318,7 +3485,16 @@ Features:
             messagebox.showerror("Error", f"An error occurred while saving:\n{str(e)}")
 
     def _advanced_file_read(self, file_path):
-        """Advanced file reading method with comprehensive diagnostics and long path handling"""
+        """
+        Advanced file reading method with comprehensive diagnostics and long path handling.
+        Attempts various encodings and engines.
+
+        Args:
+            file_path (str): The path to the file.
+
+        Returns:
+            pd.DataFrame: The loaded DataFrame or None if failed.
+        """
         try:
             print(f"\n=== Advanced file read for: {file_path} ===")
             
@@ -3359,7 +3535,16 @@ Features:
             return None
 
     def _manual_csv_parse(self, file_path, encoding):
-        """Manual CSV parsing with error handling"""
+        """
+        Manual CSV parsing with error handling as a last resort.
+
+        Args:
+            file_path (str): The path to the file.
+            encoding (str): The encoding to use.
+
+        Returns:
+            pd.DataFrame: The parsed DataFrame or None if failed.
+        """
         try:
             with open(file_path, 'r', encoding=encoding, errors='replace') as f:
                 lines = f.readlines()
@@ -3380,7 +3565,9 @@ Features:
             return None
 
     def reveal_in_explorer(self):
-        """Reveal the selected file(s) in File Explorer"""
+        """
+        Reveal the selected file(s) in File Explorer.
+        """
         selected_rows = self.table.multiplerowlist
         if not selected_rows:
             messagebox.showinfo("Info", "Please select a file to reveal in Explorer")
@@ -3409,7 +3596,9 @@ Features:
             messagebox.showerror("Error", f"Failed to reveal file in Explorer:\n{str(e)}")
 
     def save_current_filter(self):
-        """Save the current filter configuration"""
+        """
+        Save the current filter configuration (row and column filters) to settings.
+        """
         try:
             # Get the current filter settings
             row_filter = self.csv_filter_text.get().strip()
@@ -3456,7 +3645,9 @@ Features:
             messagebox.showerror("Error", f"Failed to save filter:\n{str(e)}")
             
     def show_saved_filters(self):
-        """Show the saved filters and allow the user to select one"""
+        """
+        Show the saved filters and allow the user to select one to apply or delete.
+        """
         try:
             # Check if there are any saved filters
             if not self.saved_filters:
@@ -3566,7 +3757,9 @@ Features:
             traceback.print_exc()
             
     def reset_all_filters(self):
-        """Reset both row and column filters"""
+        """
+        Reset both row and column filters.
+        """
         try:
             # Reset the row filter
             self.csv_filter_text.set("")
@@ -3582,7 +3775,9 @@ Features:
             traceback.print_exc()
     
     def save_file_filter(self):
-        """Save the current file filter configuration"""
+        """
+        Save the current file filter configuration to settings.
+        """
         try:
             # Get the current file filter
             file_filter = self.filter_text.get().strip()
@@ -3627,7 +3822,9 @@ Features:
             messagebox.showerror("Error", f"Failed to save file filter:\n{str(e)}")
             
     def show_saved_file_filters(self):
-        """Show the saved file filters and allow the user to select one"""
+        """
+        Show the saved file filters and allow the user to select one to apply or delete.
+        """
         try:
             # Check if there are any saved filters
             if not self.saved_file_filters:
@@ -3736,7 +3933,12 @@ Features:
             traceback.print_exc()
             
     def apply_saved_file_filter(self, filter_config):
-        """Apply a saved file filter configuration"""
+        """
+        Apply a saved file filter configuration.
+
+        Args:
+            filter_config (dict): Dictionary containing the file filter setting.
+        """
         try:
             # Get the filter setting
             file_filter = filter_config.get("filter", "")
@@ -3758,7 +3960,9 @@ Features:
             traceback.print_exc()
             
     def update_recent_directories_menu(self):
-        """Update the recent directories menu with current list of directories"""
+        """
+        Update the recent directories menu with current list of directories.
+        """
         try:
             # First check if the menu attribute exists
             if not hasattr(self, 'recent_dirs_menu'):
@@ -3805,7 +4009,12 @@ Features:
             traceback.print_exc()
             
     def open_recent_directory(self, directory):
-        """Open a directory from the recent directories list"""
+        """
+        Open a directory from the recent directories list.
+
+        Args:
+            directory (str): The directory path to open.
+        """
         try:
             print(f"Opening recent directory: {directory}")
             
@@ -3842,7 +4051,9 @@ Features:
             traceback.print_exc()
 
     def load_settings(self):
-        """Load settings from file"""
+        """
+        Load application settings from the JSON settings file.
+        """
         try:
             print(f"Attempting to load settings from: {self.settings_file}")
             
@@ -4021,7 +4232,15 @@ Features:
             return False
     
     def convert_numpy_types(self, obj):
-        """Convert NumPy types to native Python types for JSON serialization"""
+        """
+        Convert NumPy types to native Python types for JSON serialization.
+
+        Args:
+            obj: The object to convert.
+
+        Returns:
+            The converted object (int, float, list, dict, etc.).
+        """
         import numpy as np
         
         if isinstance(obj, np.integer):
@@ -4041,7 +4260,9 @@ Features:
 
 
     def save_settings(self):
-        """Save settings to file"""
+        """
+        Save application settings to the JSON settings file.
+        """
         print(f"Settings file absolute path: {os.path.abspath(self.settings_file)}")
         try:
             # Create settings directory if it doesn't exist

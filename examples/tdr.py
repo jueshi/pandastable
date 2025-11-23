@@ -10,7 +10,15 @@ from pathlib import Path
 import skrf as rf
 
 def read_sparam_4port(filepath):
-    """Read 4-port S-parameter file using scikit-rf"""
+    """
+    Read 4-port S-parameter file using scikit-rf.
+
+    Args:
+        filepath (str or Path): Path to the Touchstone file.
+
+    Returns:
+        tuple: (frequency array, S-parameter matrix array).
+    """
     try:
         # Use scikit-rf to read the full 4-port network
         network = rf.Network(str(filepath))
@@ -20,7 +28,15 @@ def read_sparam_4port(filepath):
         return _read_manual_4port(filepath)
 
 def _read_manual_4port(filepath):
-    """Read 4-port S-parameter file manually"""
+    """
+    Read 4-port S-parameter file manually as a fallback.
+
+    Args:
+        filepath (str or Path): Path to the Touchstone file.
+
+    Returns:
+        tuple: (frequency array, S-parameter matrix array).
+    """
     freq = []
     s_data = []
     with open(filepath, 'r') as f:
@@ -53,7 +69,15 @@ def _read_manual_4port(filepath):
     return np.array(freq), np.array(s_data)
 
 def convert_to_mixed_mode(s_matrix):
-    """Convert 4-port single-ended S-parameters to mixed-mode S-parameters"""
+    """
+    Convert 4-port single-ended S-parameters to mixed-mode S-parameters (specifically Sdd11).
+
+    Args:
+        s_matrix (np.array): Array of 4-port S-matrices.
+
+    Returns:
+        np.array: Array of differential return loss (Sdd11).
+    """
     n_freq = s_matrix.shape[0]
     sdd11 = np.zeros(n_freq, dtype=complex)
     
@@ -65,7 +89,19 @@ def convert_to_mixed_mode(s_matrix):
     return sdd11
 
 def calculate_tdr(freq, s_param, window='kaiser', response_type='step', is_differential=True):
-    """Calculate TDR response"""
+    """
+    Calculate Time Domain Reflectometry (TDR) response.
+
+    Args:
+        freq (np.array): Frequency array.
+        s_param (np.array): S-parameter array (complex).
+        window (str): Windowing function ('kaiser' or 'hamming').
+        response_type (str): 'step' or 'impulse'.
+        is_differential (bool): Whether the input is differential.
+
+    Returns:
+        tuple: (time array, TDR response array).
+    """
     # Better DC handling - PLTS likely uses extrapolation instead of just setting to 0
     if freq[0] > 1e6:
         # Linear extrapolation from first two points
@@ -109,7 +145,16 @@ def calculate_tdr(freq, s_param, window='kaiser', response_type='step', is_diffe
         return t, np.abs(tdr_impulse)
 
 def calculate_impedance(reflection_coefficient, z0=100.0):
-    """Calculate impedance profile from reflection coefficient"""
+    """
+    Calculate impedance profile from reflection coefficient.
+
+    Args:
+        reflection_coefficient (np.array): TDR step response (reflection coefficient).
+        z0 (float): Reference impedance.
+
+    Returns:
+        np.array: Impedance profile.
+    """
     # Use a tighter limit to match PLTS sensitivity
     rc_limited = np.clip(reflection_coefficient, -0.9, 0.9)
     
@@ -125,7 +170,14 @@ def calculate_impedance(reflection_coefficient, z0=100.0):
     return impedance
 
 def plot_tdr(t, tdr, title=None):
-    """Create TDR plot"""
+    """
+    Create and display a TDR plot.
+
+    Args:
+        t (np.array): Time array.
+        tdr (np.array): TDR response array.
+        title (str, optional): Plot title.
+    """
     plt.figure(figsize=(10, 6))
     plt.plot(t, tdr, linewidth=1.5)
     plt.grid(True)
