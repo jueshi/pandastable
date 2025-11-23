@@ -22,8 +22,11 @@
 from pandastable.app import DataExplore, TestApp
 
 def main():
-    """Run the application from outside the module - used for
-       deploying as frozen app"""
+    """
+    Run the application from outside the module.
+
+    Used for deploying as frozen app.
+    """
 
     import sys, os
     from optparse import OptionParser

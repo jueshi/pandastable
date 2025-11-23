@@ -206,6 +206,9 @@ def touchstone_to_csv(touchstone_file, csv_file=None):
 
 
 if __name__ == '__main__':
+    """
+    Test the parser.
+    """
     # Test the parser
     import sys
     

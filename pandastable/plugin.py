@@ -32,17 +32,31 @@ except:
 from . import dialogs
 
 class Plugin(object):
-    """Base Plugin class, should be inherited by any plugin"""
+    """
+    Base Plugin class, should be inherited by any plugin.
+    """
 
     capabilities = []
     requires = []
     menuentry = ''
 
     def __init__(self, parent=None):
+        """
+        Initialize plugin.
+
+        Args:
+            parent: Parent application/frame.
+        """
         self.parent = parent
         return
 
     def main(self, parent):
+        """
+        Main entry point for the plugin.
+
+        Args:
+            parent: Parent application/frame.
+        """
         if parent==None:
             return
         self.parent = parent
@@ -51,8 +65,15 @@ class Plugin(object):
         return
 
     def _doFrame(self, width=600, height=600):
-        """Create main frame and add to parent. The plugin should usually
-           handle this."""
+        """
+        Create main frame and add to parent.
+
+        The plugin should usually handle this.
+
+        Args:
+            width (int): Width of window.
+            height (int): Height of window.
+        """
 
         if 'uses_sidepane' in self.capabilities:
             self.table = self.parent.getCurrentTable()
@@ -68,14 +89,21 @@ class Plugin(object):
         return
 
     def _getmethods(self):
-        """Get a list of all available public methods"""
+        """
+        Get a list of all available public methods.
+
+        Returns:
+            list: List of method names.
+        """
 
         mems = inspect.getmembers(self, inspect.ismethod)
         methods = [m for m in mems if not m[0].startswith('_')]
         return methods
 
     def _aboutWindow(self):
-        """Display an about dialog"""
+        """
+        Display an about dialog.
+        """
 
         text = self.about()
         abwin = Toplevel()
@@ -94,11 +122,26 @@ class Plugin(object):
             self.capabilities)
 
     def quit(self, evt=None):
+        """
+        Close the plugin window.
+
+        Args:
+            evt: Event (optional).
+        """
         if hasattr(self, 'mainwin'):
             self.mainwin.destroy()
         return
 
 def load_plugins(plugins):
+    """
+    Load plugins from list of names.
+
+    Args:
+        plugins (list): List of plugin module names.
+
+    Returns:
+        list: List of failed loads.
+    """
 
     failed = []
     for plugin in plugins:
@@ -111,6 +154,15 @@ def load_plugins(plugins):
     return failed
 
 def init_plugin_system(folders):
+    """
+    Initialize plugin system by scanning folders.
+
+    Args:
+        folders (list): List of folders to scan.
+
+    Returns:
+        list: List of failed loads.
+    """
     for folder in folders:
         if not os.path.exists(folder):
             continue
@@ -122,10 +174,24 @@ def init_plugin_system(folders):
     return failed
 
 def find_plugins():
+    """
+    Find all subclasses of Plugin.
+
+    Returns:
+        list: List of plugin classes.
+    """
     return Plugin.__subclasses__()
 
 def parsefolder(folder):
-    """Parse for all .py files in plugins folder or zip archive"""
+    """
+    Parse for all .py files in plugins folder or zip archive.
+
+    Args:
+        folder (str): Path to folder or zip file.
+
+    Returns:
+        list: List of plugin module names.
+    """
 
     filenms=[]
     homedir = os.path.expanduser("~")
@@ -156,7 +222,15 @@ def parsefolder(folder):
 _instances = {}
 
 def get_plugins_instances(capability):
-    """Returns instances of available plugins"""
+    """
+    Returns instances of available plugins.
+
+    Args:
+        capability (str): Capability to filter by.
+
+    Returns:
+        list: List of plugin instances.
+    """
 
     result = []
     for plugin in Plugin.__subclasses__():
@@ -168,7 +242,15 @@ def get_plugins_instances(capability):
     return result
 
 def get_plugins_classes(capability):
-    """Returns classes of available plugins"""
+    """
+    Returns classes of available plugins.
+
+    Args:
+        capability (str): Capability to filter by.
+
+    Returns:
+        list: List of plugin classes.
+    """
 
     result = []
     for plugin in Plugin.__subclasses__():
@@ -177,8 +259,16 @@ def get_plugins_classes(capability):
     return result
 
 def describe_class(obj):
-    """ Describe the class object passed as argument,
-       including its methods """
+    """
+    Describe the class object passed as argument,
+    including its methods.
+
+    Args:
+        obj: The object to describe.
+
+    Returns:
+        list: List of methods.
+    """
 
     import inspect
     methods = []
@@ -198,9 +288,15 @@ def describe_class(obj):
 
 
 def describe_func(obj, method=False):
-   """ Describe the function object passed as argument.
+   """
+   Describe the function object passed as argument.
    If this is a method object, the second argument will
-   be passed as True """
+   be passed as True.
+
+   Args:
+        obj: The function object.
+        method (bool): Whether it is a method.
+   """
 
    try:
        arginfo = inspect.getargspec(obj)

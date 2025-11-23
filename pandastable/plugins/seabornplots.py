@@ -47,6 +47,12 @@ class SeabornPlugin(Plugin):
         return
 
     def main(self, parent):
+        """
+        Main entry point.
+
+        Args:
+            parent: Parent application.
+        """
 
         if parent==None:
             return
@@ -106,7 +112,9 @@ class SeabornPlugin(Plugin):
         return
 
     def _plot(self):
-        """Do plot"""
+        """
+        Do plot.
+        """
 
         import seaborn as sns
         self.applyOptions()
@@ -185,13 +193,17 @@ class SeabornPlugin(Plugin):
         return
 
     def clear(self):
-        """Clear figure canvas"""
+        """
+        Clear figure canvas.
+        """
         self.fig.clear()
         self.canvas.draw()
         return
 
     def applyOptions(self):
-        """Set the options"""
+        """
+        Set the options.
+        """
 
         kwds = {}
         for i in self.opts:
@@ -207,6 +219,13 @@ class SeabornPlugin(Plugin):
         return
 
     def setDefaultStyle(self, fontscale=1.2, font='monospace'):
+        """
+        Set default style.
+
+        Args:
+            fontscale (float): Font scale.
+            font (str): Font name.
+        """
 
         import seaborn as sns
         sns.set(font_scale=fontscale,
@@ -219,15 +238,29 @@ class SeabornPlugin(Plugin):
         return
 
     def _plotWidgets(self, parent, callback=None):
-        """Auto create tk vars, widgets for corresponding options and
-           and return the frame"""
+        """
+        Auto create tk vars, widgets for corresponding options and
+        and return the frame.
+
+        Args:
+            parent: Parent widget.
+            callback: Callback function.
+
+        Returns:
+            Frame: The options frame.
+        """
 
         dialog, self.tkvars, self.widgets = plotting.dialogFromOptions(parent, self.opts, self.groups)
         #self.applyOptions()
         return dialog
 
     def update(self, df):
-        """Update data widget(s)"""
+        """
+        Update data widget(s).
+
+        Args:
+            df: Dataframe.
+        """
 
         cols = list(df.columns)
         cols += ''
@@ -237,6 +270,12 @@ class SeabornPlugin(Plugin):
         return
 
     def showWarning(self, s='plot error'):
+        """
+        Show warning message.
+
+        Args:
+            s (str): Warning text.
+        """
 
         self.fig.clear()
         ax=self.fig.add_subplot(111)
@@ -246,7 +285,12 @@ class SeabornPlugin(Plugin):
         return
 
     def quit(self, evt=None):
-        """Override this to handle pane closing"""
+        """
+        Override this to handle pane closing.
+
+        Args:
+            evt: Event.
+        """
 
         self.fig.clear()
         plt.close('all')
@@ -257,7 +301,12 @@ class SeabornPlugin(Plugin):
         return
 
     def about(self):
-        """About this plugin"""
+        """
+        About this plugin.
+
+        Returns:
+            str: About text.
+        """
 
         txt = "This plugin implements factor plotting using\n"+\
               "the seaborn library which provides an interface\n"+\
@@ -268,7 +317,12 @@ class SeabornPlugin(Plugin):
         return txt
 
     def _importSeaborn(self):
-        """Try to import seaborn. If not installed return false"""
+        """
+        Try to import seaborn. If not installed return false.
+
+        Returns:
+            int: 1 if successful, 0 otherwise.
+        """
         try:
             import seaborn as sns
             return 1

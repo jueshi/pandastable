@@ -36,8 +36,18 @@ SCRATCH = None
 
 
 def getTextLength(text, w, font=None):
-    """Get correct canvas text size (chars) that will fit in \
-    a given canvas width"""
+    """
+    Get correct canvas text size (chars) that will fit in
+    a given canvas width.
+
+    Args:
+        text (str): The text to measure.
+        w (int): Width available.
+        font: Font tuple.
+
+    Returns:
+        tuple: (text width in pixels, number of chars that fit).
+    """
 
     global SCRATCH
     if SCRATCH is None:
@@ -53,7 +63,15 @@ def getTextLength(text, w, font=None):
     return twidth,length
 
 def check_multiindex(index):
-    """Check if index is a multiindex"""
+    """
+    Check if index is a multiindex.
+
+    Args:
+        index: The index to check.
+
+    Returns:
+        int: 1 if multiindex, 0 otherwise.
+    """
 
     #if isinstance(index, pd.core.index.MultiIndex):
     if isinstance(index, pd.core.indexes.multi.MultiIndex):
@@ -62,7 +80,15 @@ def check_multiindex(index):
         return 0
 
 def getAttributes(obj):
-    """Get non hidden and built-in type object attributes that can be persisted"""
+    """
+    Get non hidden and built-in type object attributes that can be persisted.
+
+    Args:
+        obj: The object to inspect.
+
+    Returns:
+        dict: Dictionary of attributes.
+    """
 
     d={}
     allowed = [str,int,float,list,tuple,bool]
@@ -78,7 +104,13 @@ def getAttributes(obj):
     return d
 
 def setAttributes(obj, data):
-    """Set attributes from a dict. Used for restoring settings in tables"""
+    """
+    Set attributes from a dict. Used for restoring settings in tables.
+
+    Args:
+        obj: The object to update.
+        data (dict): Dictionary of attributes.
+    """
 
     for key in data:
         try:
@@ -88,7 +120,15 @@ def setAttributes(obj, data):
     return
 
 def checkDict(d):
-    """Check a dict recursively for non serializable types"""
+    """
+    Check a dict recursively for non serializable types.
+
+    Args:
+        d (dict): The dictionary to check.
+
+    Returns:
+        int: 1 if serializable, 0 otherwise.
+    """
 
     allowed = [str,int,float,list,tuple,bool]
     for k, v in d.items():
@@ -100,7 +140,12 @@ def checkDict(d):
     return 1
 
 def getFonts():
-     """Get the current list of system fonts"""
+     """
+     Get the current list of system fonts.
+
+     Returns:
+        list: List of font names.
+     """
 
      import matplotlib.font_manager
      #l = matplotlib.font_manager.get_fontconfig_fonts()
@@ -116,7 +161,18 @@ def getFonts():
      return fonts
 
 def adjustColorMap(cmap, minval=0.0, maxval=1.0, n=100):
-    """Adjust colormap to avoid using white in plots"""
+    """
+    Adjust colormap to avoid using white in plots.
+
+    Args:
+        cmap: The colormap object.
+        minval (float): Minimum value (0-1).
+        maxval (float): Maximum value (0-1).
+        n (int): Number of levels.
+
+    Returns:
+        The new colormap.
+    """
 
     from matplotlib import colors
     new_cmap = colors.LinearSegmentedColormap.from_list(
@@ -125,9 +181,15 @@ def adjustColorMap(cmap, minval=0.0, maxval=1.0, n=100):
     return new_cmap
 
 def colorScale(hex_color, brightness_offset=1):
-    """Takes a hex color and produces a lighter or darker variant.
+    """
+    Takes a hex color and produces a lighter or darker variant.
+
+    Args:
+        hex_color (str): Hex color string.
+        brightness_offset (int): Offset value.
+
     Returns:
-        new color in hex format
+        str: new color in hex format.
     """
 
     #if not hex_color.startswith('#'):
@@ -142,7 +204,12 @@ def colorScale(hex_color, brightness_offset=1):
     return "#{0:02x}{1:02x}{2:02x}".format(r, g, b)
 
 def checkOS():
-    """Check the OS we are in"""
+    """
+    Check the OS we are in.
+
+    Returns:
+        str: 'linux', 'darwin', or 'windows'.
+    """
 
     from sys import platform as _platform
     if _platform == "linux" or _platform == "linux2":

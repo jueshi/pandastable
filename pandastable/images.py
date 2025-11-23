@@ -24,6 +24,9 @@ except:
      import Tkinter as tk
 
 def tableapp_logo():
+     """
+     Returns the tableapp logo as a PhotoImage.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhAAEAAcZxAAAAAAcABxQAKxUALRsFAyUAJCQAJycAJiQIACYKACgO'
             +'ACgUAEUAfCoVAEYAhEgBgkgBg0wAjE8AklAAk1EAlFQAm1UAnFsEn2QA1GcG'
@@ -131,6 +134,9 @@ def tableapp_logo():
      return img
 
 def add_row():
+     """
+     Returns the add_row icon as a PhotoImage.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAIcAAAAAACFfHSZlIixtJzN1Ljd6MTl9Mzp+NEJ3uzyBNj2C'
             +'N0GHOkKIO0iPQEqSQkuTQ0yVRE2WRVGbSFijT12gVV6rVGOlWmOxWXy+dn7B'
@@ -158,6 +164,9 @@ def add_row():
      return img
 
 def add_col():
+     """
+     Returns the add_col icon as a PhotoImage.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAIcAAAAAADdrGT5wIkx7MUR3a09/e1OMKFePLV+JSWCJSWaO'
             +'T3GXX3y+dlKEw1WGxlaHx1mKyFuKyV6Oy1+Py2OSzmSTzmiW0WqX0W6Z02+b'
@@ -185,6 +194,9 @@ def add_col():
      return img
 
 def del_row():
+     """
+     Returns the del_row icon as a PhotoImage.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAIcAAAAAAEJ3u3y+dlKEw1aHx12KxVmKyFuKyV6Oy1+Py2OS'
             +'zmSTzmiW0WqX0W6Z02+b1HKe1nSg13Wh13qj2nqk2X2l3H6o3eoRHOwaI+4m'
@@ -212,6 +224,9 @@ def del_row():
      return img
 
 def del_col():
+     """
+     Returns the del_col icon as a PhotoImage.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAIcAAAAAAHy+dlKEw1WGxlaHx1mKyFuKyV6Oy1+Py2OSzmST'
             +'zmiW0WqX0W6Z02+b1HKe1nSg13Wh13qj2nqk2X2l3H6o3bpDBLhFA7lEA7lF'
@@ -239,6 +254,9 @@ def del_col():
      return img
 
 def delete():
+     """
+     Returns the delete icon as a PhotoImage.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPZvALdKK7hKKrpLLrhOLrxLML5PNrxQMr1RNb5TOMFNM9BP'
             +'PsRQNMBTOsxSPMZVQsdXRctZScxbTNtWS9FeU9ddUeZWTOZYTOZZTulZTelb'
@@ -257,6 +275,9 @@ def delete():
      return img
 
 def new_proj():
+     """
+     Returns the new_proj icon as a PhotoImage.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAIcAAAAAAEJ3u3y+dlKEw1SGxFWGxlaHx12KxVyKxl+MxlmK'
             +'yFuKyV+NyF6Oy1+Py2OSzmSTzmiW0WqX0W6Z02+b1HKe1nSg13Wh13qj2nqk'
@@ -284,6 +305,9 @@ def new_proj():
      return img
 
 def open_proj():
+     """
+     Returns the open_proj icon as a PhotoImage.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAIcAAAAAABV5ABt5AB57AyF9ACV/ACZ+ECR8FUJ3uy2DAS2D'
             +'CTWHCTCHFzyLEESPFkaQGUqRHFKXIleYKFubKV6fOlygPGKdMGOfMWWfMWih'
@@ -311,6 +335,9 @@ def open_proj():
      return img
 
 def save_proj():
+     """
+     Returns the save_proj icon as a PhotoImage.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAIcAAAAAACBarS5fpjppqj5qqzNoukRtq0RwsFd+u1F/w1N/'
             +'wXy+dl2Ev1SBxFWDxliEw1uGx1uKyV2IyF6Oy1+Py2GKx2CJyWGLyWKLyGWN'
@@ -339,6 +366,9 @@ def save_proj():
      return img
 
 def prefs():
+    """
+    Returns the prefs icon as a PhotoImage.
+    """
     img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAIcAAAAAAElJSU5OTlFRUVJSUlNTU1hYWFpaWltbW1xcXGFh'
             +'YWJiYmRkZGdnZ2lpaWpqamtra21tbW5ubm9vb3FxcXZ2dnd3d3l5eXp6en5+'
@@ -366,6 +396,9 @@ def prefs():
     return img
 
 def plot():
+    """
+    Returns the plot icon as a PhotoImage.
+    """
     img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAIcAAAAAAC5fpTBiqTBiqjJkrDNmrjRosTVosjZrtTdrtjxy'
             +'vz10wj51wz52xD92xT93xkZwu1prrUJ3xkB4x0F5yUF6ykJ6y0J7zEN8zEN8'
@@ -391,6 +424,9 @@ def plot():
     return img
 
 def plot_clear():
+    """
+    Returns the plot_clear icon as a PhotoImage.
+    """
     img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPedAGVCPXZsJXsueXwzfH04f2pBbWhTe6pJB6lMCblFA7tC'
             +'BLxCBLxCBbxDBbtNBa5NG7hVF61PIL9dIt1kAeFoA+52AOp5Bfh2AO9/GP93'
@@ -419,6 +455,9 @@ def plot_clear():
     return img
 
 def plot_prefs():
+    """
+    Returns the plot_prefs icon as a PhotoImage.
+    """
     img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAIcAAAAAAFU9ETxyvz10wj51wz52xD92xT93xltujUJ3xkB4'
             +'x0F5yUF6ykJ6y0J7zEN8zEN8zUR9zkV+0EV/0XCfvYdfKJxpHYNlK6pkHL56'
@@ -445,6 +484,9 @@ def plot_prefs():
     return img
 
 def fit():
+    """
+    Returns the fit icon as a PhotoImage.
+    """
     img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPYAADd1LTh1K/8CBv0NEfwOEvsWGvsXG/kZHPkhJPcrLvkq'
             +'LesqOfYzNvUyOPY2OeExRfU+QfRAQ/FIS+5KUPFNUPJPUu9XWe9YWvBRUzaE'
@@ -462,6 +504,9 @@ def fit():
     return img
 
 def refresh():
+    """
+    Returns the refresh icon as a PhotoImage.
+    """
     img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPYAACNhHyRjICVlIidmIyloJCprJixtJzJ0LDN2Ljd7Mjp+'
             +'NDyANT6DN0CGOUKIO0SLPUqLRUyNR0mRQU2WRU+ZR0+QSVGSS1SVTlGbSVOe'
@@ -479,6 +524,9 @@ def refresh():
     return img
 
 def start():
+     """
+     Returns the start icon as a PhotoImage.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhGAAYAKUAAP///+bm/+Xl/uPj/OHh++Df+d7d993d99vb9dvb9NnZ'
             +'8tnZ5tfW8NTU7tLS69DQ6dDP6c3N58vL5cnJ48fH4MTE3sLC3MDAzL/A2b2+'
@@ -493,6 +541,9 @@ def start():
      return img
 
 def end():
+     """
+     Returns the end icon as a PhotoImage.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhGAAYAKUAAP///+bm/+Xl/uPj/OHh++Df+d7d993d99vb9dvb9NnZ'
             +'8tnZ5tfW8NTU7tLS69DQ6dDP6c3N58vL5cnJ48fH4MTE3sLC3MDAzL/A2b2+'
@@ -507,6 +558,9 @@ def end():
      return img
 
 def next():
+     """
+     Returns the next icon as a PhotoImage.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAIcAAAAAACBeHSRjISlpJS9wKjV4LzuANUKIO0WIP0mLREqM'
             +'RUmRQU+ZR1CRSlydVVahTV6hWVypU2KjWmKxWGi4XW2+YXy+dnHDZXTHaIDB'
@@ -531,6 +585,9 @@ def next():
      return img
 
 def prev():
+     """
+     Returns the prev icon as a PhotoImage.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAIcAAAAAACBeHSRjISlpJS9wKjV4LzuANUKIO0mRQU+ZR1ah'
             +'TVypU2SqW2KxWGi4XXi9cnu+cXy+dnHDZXTHaH7AeIDBeoPBeoLCfYTDfobI'
@@ -555,6 +612,9 @@ def prev():
      return img
 
 def search():
+     """
+     Returns the search icon as a PhotoImage.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAIcAAAAAAHaczXufzXug0H+l05JaEJNbEZVdFJdfGJpiG51l'
             +'H51nIp5mIqNrKKVtK6hwMKpyMq93ObF5PLV9Qbd/RLyES7yNVcWXZMeZZsyi'
@@ -581,6 +641,9 @@ def search():
      return img
 
 def transpose():
+     """
+     Returns the transpose icon as a PhotoImage.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPYAACxsJyxtKC1uKC1uKS9xKzFzLDd7MTl9Mzt/NT6EOEGH'
             +'OkKJO0OJPESLPUWMPkaNP0mRQkqSQkqTQ0yVRE6RSU+SSlCZR1GUTFOWTVCa'
@@ -598,6 +661,9 @@ def transpose():
      return img
 
 def melt():
+     """
+     Returns the melt icon as a PhotoImage.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAMZnACxsJy9wKi9xKzJ1LTN2LjV4LzV4MDZ5MDh8Mjp+ND6E'
             +'OEOGPUOKPEeMQUmLQ0iQQEmRQUmRQkuUQ0yRRUyTREyVRE6YRk+YR1OXTFCa'
@@ -615,6 +681,9 @@ def melt():
      return img
 
 def pivot():
+     """
+     Returns the pivot icon as a PhotoImage.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAMZQACFfHiNiICRiICZlIidmIylpJSprJixtKC5vKTByKzJ0'
             +'LTR3LzZ5MDh8Mjp+NDyBNj6EOEGHOkmRQkuUQ06XRlGcSVOeS1mmUGOlXFyp'
@@ -632,6 +701,9 @@ def pivot():
      return img
 
 def aggregate():
+     """
+     Returns the aggregate icon as a PhotoImage.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAMZbACFfHiNiICZlIilpJSxtKC1sKS5vKTBwLDJ0LTN1LzV4'
             +'MDh7Mjl+Mz2CNz6DN0CFOUGHOkOJPEOKPESKPUWMPk6XRk+YR1GXSlSWTlOd'
@@ -649,6 +721,9 @@ def aggregate():
      return img
 
 def merge():
+     """
+     Returns the merge icon as a PhotoImage.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPZlADyANT6DN0CGOUKIO0eGQ0+ZR1CQSlGbSVOeS1ebUFia'
             +'UViZU1WhTV+iWmOnXGesYG2wZ3Gya3a1b3q4dHy+doG9e4C/eoDBeoTDfkJ3'
@@ -668,6 +743,9 @@ def merge():
      return img
 
 def table_multiple():
+     """
+     Returns the table_multiple icon as a PhotoImage.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPZbAHy+doDBeoTDfkJ3u1KEw1SGxFWGxlaHx12KxVmKyF+P'
             +'y2OSzmSTzmiW0WqX0W6Z02+b1HKe1nSg13Wh13qj2n2l3H+o3InGgpPLi6HT'
@@ -687,6 +765,9 @@ def table_multiple():
      return img
 
 def filtering():
+     """
+     Returns the filtering icon as a PhotoImage.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPcAAMh/M81/OIF7c9mYP/LSOLmIScWIR9WOSMqTQMmWQ82X'
             +'Q8eaT9eiVcOsa8mvatCpYNK3Ztm0atm2eOe+Y+K7bfbWR/bZRvXZTfbbTurB'
@@ -715,6 +796,9 @@ def filtering():
      return img
 
 def importcsv():
+     """
+     Returns the importcsv icon as a PhotoImage.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAOe1ACpgtyxity5kth57AyxltC5luS9lujBluiJ7DjBmuiN6'
             +'HTFmuyV/ADNpvDhxvzWHCjt2xDx4wTuLETqMFUJ5vz98xEB8xEOPF0V+wkKA'
@@ -744,6 +828,9 @@ def importcsv():
      return img
 
 def excel():
+     """
+     Returns the excel icon as a PhotoImage.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAOenACpgtyxity1kuS5kuS5luTN0GS9lujBlujN1GTN1GjN1'
             +'GzBmujFmuzFnuzNpvDd4HzZvvzhxv0F/LkJ/Ljt2wTt2xEWCNjx4wT9+f0iE'
@@ -772,6 +859,9 @@ def excel():
      return img
 
 def add():
+     """
+     Returns the add icon as a PhotoImage.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPZ2ADSBLDSCLDeELzmFMDyHMj2INECJNkKNNkKLOEOPOESM'
             +'OkeOPFOWRVCZQVeeRVaYSF2cTV+eUGajVmWrVWirU2mlWGuqWGyqWmqsW261'
@@ -790,6 +880,9 @@ def add():
      return img
 
 def cross():
+     """
+     Returns the cross icon as a PhotoImage.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPYAAOQiJOYqLOktL+ovMekyNes0Nuw8Pu49P+0+QO0/QfE/'
             +'Qe5AQu5BQ+9DRu9ER+9FSPJFR/BGSPBGSfRISvZKTPJMT/RNUPVOUPNRVPdV'
@@ -807,6 +900,9 @@ def cross():
      return img
 
 def accept():
+     """
+     Returns the accept icon as a PhotoImage.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPeGAB1sGh5uGh5wGh5xGh9xGx5zGh94Gx56Gx96Gx5/Gx+D'
             +'GyCKGyCIHC2WHC+WHDKdHUKpH0KrH0KtH0yXPUu0JlK5K1K7LVS7LVS9MVW+'
@@ -834,6 +930,9 @@ def accept():
      return img
 
 def calculate():
+     """
+     Returns the calculate icon as a PhotoImage.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPZaAHJycnp6en5+fttYUuh0c01yp1Z7sGSLwWaNw2eNw2eP'
             +'xWiPxWmQxmuSyGyUym6VyoKDhIODhIaGhoaGh4aHh4eHh4eIiIiIiIiIiYiJ'
@@ -852,6 +951,9 @@ def calculate():
      return img
 
 def table_delete():
+     """
+     Returns the table_delete icon as a PhotoImage.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPZ5ALlEA7lFA7xCBLxDBbxNBbxWHb1XHrhWIr5bKN1kAeFo'
             +'A+52AOp5Bfh2AO9/GP93Ef9/GMdlJ8prL9J2PeZ3IYRnaYttbny+dv+GIeuK'
@@ -871,6 +973,9 @@ def table_delete():
      return img
 
 def function():
+     """
+     Returns the function icon as a PhotoImage.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPUAACYmJikpKSoqKi0tLS4uLi8vLzExMTIyMjQ0NDU1NTc3'
             +'Nzo6OkBAQEVFRUdHR0hISElJSUxMTE5OTk9PT1FRUVJSUlVVVVZWVlhYWF1d'
@@ -883,6 +988,9 @@ def function():
      return img
 
 def copy():
+     """
+     Returns the copy icon as a PhotoImage.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPZtAEJzxUR0xUV1xkV1x0d5x0h9w0l5x0p5x0V1yEZ1yEt5'
             +'yE58yFN/ylCDylODylSAylKEylOFy1SFylWFy1SGy1WGy1aGy1eHy1KDzFOC'
@@ -902,6 +1010,9 @@ def copy():
      return img
 
 def paste():
+     """
+     Returns the paste icon as a PhotoImage.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPYAAEZGRkhISElJSUpKSkxMTE9PT1JSUlNTU1VVVVZWVlhY'
             +'WFpaWl5eXmVlZWhoaGpqapVjJJhjIKFuLqR1N4FoSohzWJ+HaaCGY6GHZKGI'
@@ -921,6 +1032,9 @@ def paste():
      return img
 
 def tilevertical():
+     """
+     Returns the tilevertical icon as a PhotoImage.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPZrAEBZl0Bal0FbmEVenUZin0pnoUhlo0tnpUtpo01tpU1q'
             +'qE1qqlJxqFFwrlBxr1N0sVV2s1d5tll8sVl9uFp+uV2CvWGGumSFu2eLv2WL'
@@ -939,6 +1053,9 @@ def tilevertical():
      return img
 
 def tilehorizontal():
+     """
+     Returns the tilehorizontal icon as a PhotoImage.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPZTAEBZl0Bal0Jbl0NdmUNemkVgnEVgnUZinUlln0pnpEtp'
             +'ok9spk5tpk5rqFJwrVFyslZ3sVR2tVt/tld8uV+EuF+DvGGEu16EwWKIwGeM'
@@ -956,6 +1073,9 @@ def tilehorizontal():
      return img
 
 def expand_col():
+    """
+    Returns the expand_col icon as a PhotoImage.
+    """
     img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPZvADp+NESHPUWGPkKIO1SOUF6VWVyiVF6rVF+hWGGiWmSv'
             +'W2q7X2yeaWmlZG+wZ2+xaHS2a3SzbHa0b3+8d3DCZHTHaIbDflFxqVFyqVNz'
@@ -975,6 +1095,9 @@ def expand_col():
     return img
 
 def contract_col():
+    """
+    Returns the contract_col icon as a PhotoImage.
+    """
     img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPZmACBeHSVlIixtJzp+NDx/N1SVTV2aV16XWVWhTVugU16p'
             +'VF6rVF+hWGOkW2WhX2SmXWKsWGapX2unZHG0aXS2a3G5aXW7bH68doPGe1Fx'
@@ -993,6 +1116,9 @@ def contract_col():
     return img
 
 def font():
+     """
+     Returns the font icon as a PhotoImage.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPYAACtNwytQxDFVxjNhzDdjzDdmzDdnzTVpzzhozjlozjpq'
             +'zzptzzps0Tpz0z900z5300Jx0ER61UV61UJ+1kN+1k181VF+1kKA10CE2EGE'
@@ -1010,6 +1136,9 @@ def font():
      return img
 
 def color_swatch():
+     """
+     Returns the color_swatch icon as a PhotoImage.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPMAAP5va1DMbf+qc/DVZ1h6sP93sWCw69Drstmb3QAAAAAA'
             +'AAAAAAAAAAAAAAAAAAAAACH5BAEAAAkAIf8LSW1hZ2VNYWdpY2sKZ2FtbWE9'
@@ -1018,6 +1147,9 @@ def color_swatch():
      return img
 
 def zoom_in():
+     """
+     Returns the zoom_in icon as a PhotoImage.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPYAACprJi5vKTBxKzJ0LDN2LjV5MIdIKKVcM6tkN6tnN6tk'
             +'PT6DN0SLPU2WRVOeS1qbU1yoUl6rVF+tVmWnXmGwV2OyWWe2XGusY3a3bbmA'
@@ -1035,6 +1167,9 @@ def zoom_in():
      return img
 
 def zoom_out():
+     """
+     Returns the zoom_out icon as a PhotoImage.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPYAAOoRHOwaI+4mLvE1OodIKKVcM6tkN6tnN6tkPbd+R/RF'
             +'SPdUVvpjYvxvbf54dLmASLyFSryES7uBTLyDT7yGTL2GTL2JTL6JTb6KTb6K'
@@ -1052,6 +1187,9 @@ def zoom_out():
      return img
 
 def save():
+     """
+     Returns the save icon as a PhotoImage.
+     """
      img = tk.PhotoImage(format='gif',data=
              'R0lGODlhEAAQAPcAAIjAYjFgpjFgpzFgqDFhqDJhqDJhqTJhqjJiqjJiqzJj'
             +'rDNjrTNkrjNkrzNlsDRlsTRmsjRmszRntDVotTVotjVotzVptzVpuDVpuTVq'

@@ -1,7 +1,10 @@
 import platform
 if platform.system() == 'Darwin':
     import matplotlib
-    matplotlib.use('TkAgg')
+    try:
+        matplotlib.use('TkAgg')
+    except ImportError:
+        pass
 from .core import *
 from .data import *
 __version__ = '0.14.0'

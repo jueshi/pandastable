@@ -36,6 +36,17 @@ from .dialogs import *
 import textwrap
 
 def createSubMenu(parent, label, commands):
+    """
+    Create a submenu.
+
+    Args:
+        parent: Parent menu.
+        label (str): Label for submenu.
+        commands (dict): Dictionary of commands {label: function}.
+
+    Returns:
+        Menu: The created submenu.
+    """
     menu = Menu(parent, tearoff = 0)
     parent.add_cascade(label=label,menu=menu)
     for action in commands:
@@ -44,10 +55,21 @@ def createSubMenu(parent, label, commands):
     return menu
 
 class ColumnHeader(Canvas):
-    """Class that takes it's size and rendering from a parent table
-        and column names from the table model."""
+    """
+    Class that takes its size and rendering from a parent table
+    and column names from the table model.
+    """
 
     def __init__(self, parent=None, table=None, fgcolor='white', bgcolor='gray25'):
+        """
+        Initialize ColumnHeader.
+
+        Args:
+            parent: Parent widget.
+            table: The parent table.
+            fgcolor (str): Foreground color.
+            bgcolor (str): Background color.
+        """
         Canvas.__init__(self, parent, bg=bgcolor, width=500, height=25)
         self.thefont = 'Arial 14'
         self.bgcolor = bgcolor
@@ -82,12 +104,20 @@ class ColumnHeader(Canvas):
         return
 
     def setDefaults(self):
+        """
+        Set default values.
+        """
         self.colselectedcolor = '#0099CC'
         self.sort_ascending = 1
         return
 
     def redraw(self, align='w'):
-        """Redraw column header"""
+        """
+        Redraw column header.
+
+        Args:
+            align (str): Text alignment.
+        """
 
         df = self.model.df
         multiindex = util.check_multiindex(df.columns)
@@ -202,7 +232,12 @@ class ColumnHeader(Canvas):
         return
 
     def handle_left_click(self,event):
-        """Does cell selection when left mouse button is clicked"""
+        """
+        Handle left mouse click (column selection).
+
+        Args:
+            event: Mouse event.
+        """
 
         self.delete('rect')
         self.table.delete('entry')
@@ -232,7 +267,12 @@ class ColumnHeader(Canvas):
         return
 
     def handle_left_release(self,event):
-        """When mouse released implement resize or col move"""
+        """
+        Handle left mouse release (resize or move column).
+
+        Args:
+            event: Mouse event.
+        """
 
         self.delete('dragrect')
         #if ctrl selection return
@@ -263,7 +303,12 @@ class ColumnHeader(Canvas):
         return
 
     def handle_right_click(self, event):
-        """respond to a right click"""
+        """
+        Respond to a right click.
+
+        Args:
+            event: Mouse event.
+        """
 
         if self.table.enable_menus == False:
             return
@@ -277,7 +322,12 @@ class ColumnHeader(Canvas):
         return
 
     def handle_mouse_drag(self, event):
-        """Handle column drag, will be either to move cols or resize"""
+        """
+        Handle column drag (move or resize).
+
+        Args:
+            event: Mouse event.
+        """
 
         x=int(self.canvasx(event.x))
         if self.atdivider == 1:
@@ -302,8 +352,17 @@ class ColumnHeader(Canvas):
         return
 
     def within(self, val, l, d):
-        """Utility funtion to see if val is within d of any
-            items in the list l"""
+        """
+        Utility function to see if val is within d of any items in list l.
+
+        Args:
+            val (int): Value to check.
+            l (list): List of values.
+            d (int): Distance/tolerance.
+
+        Returns:
+            The item if found, else None.
+        """
 
         for v in l:
             if abs(val-v) <= d:
@@ -311,12 +370,21 @@ class ColumnHeader(Canvas):
         return None
 
     def leave(self, event):
-        """Mouse left canvas event"""
+        """
+        Mouse left canvas event.
+        """
         self.delete('resizesymbol')
         return
 
     def handle_mouse_move(self, event):
-        """Handle mouse moved in header, if near divider draw resize symbol"""
+        """
+        Handle mouse moved in header.
+
+        If near divider, draw resize symbol.
+
+        Args:
+            event: Mouse event.
+        """
 
         if len(self.model.df.columns) == 0:
             return
@@ -347,11 +415,19 @@ class ColumnHeader(Canvas):
         return
 
     def handle_right_release(self, event):
+        """
+        Handle right mouse release.
+        """
         self.rightmenu.destroy()
         return
 
     def handle_left_shift_click(self, event):
-        """Handle shift click, for selecting multiple cols"""
+        """
+        Handle shift click (select multiple columns).
+
+        Args:
+            event: Mouse event.
+        """
 
         self.table.delete('colrect')
         self.delete('rect')
@@ -370,7 +446,12 @@ class ColumnHeader(Canvas):
         return
 
     def handle_left_ctrl_click(self, event):
-        """Handle ctrl clicks - for multiple column selections"""
+        """
+        Handle ctrl clicks (select multiple columns).
+
+        Args:
+            event: Mouse event.
+        """
 
         currcol = self.table.currentcol
         colclicked = self.table.get_col_clicked(event)
@@ -389,7 +470,12 @@ class ColumnHeader(Canvas):
         return
 
     def handle_double_click(self, event):
-        """Double click sorts by this column. """
+        """
+        Double click sorts by this column.
+
+        Args:
+            event: Mouse event.
+        """
 
         colclicked = self.table.get_col_clicked(event)
         if self.sort_ascending == 1:
@@ -400,7 +486,15 @@ class ColumnHeader(Canvas):
         return
 
     def popupMenu(self, event):
-        """Add left and right click behaviour for column header"""
+        """
+        Show popup menu.
+
+        Args:
+            event: Mouse event.
+
+        Returns:
+            Menu: The popup menu.
+        """
 
         df = self.table.model.df
         if len(df.columns)==0:
@@ -456,7 +550,9 @@ class ColumnHeader(Canvas):
         return popupmenu
 
     def renameColumn(self):
-        """Rename column"""
+        """
+        Rename the selected column.
+        """
 
         col = self.table.currentcol
         df = self.model.df
@@ -474,7 +570,12 @@ class ColumnHeader(Canvas):
         return
 
     def draw_resize_symbol(self, col):
-        """Draw a symbol to show that col can be resized when mouse here"""
+        """
+        Draw a symbol to show that col can be resized.
+
+        Args:
+            col (int): Column index.
+        """
 
         self.delete('resizesymbol')
         w=self.table.cellwidth
@@ -491,7 +592,16 @@ class ColumnHeader(Canvas):
         return
 
     def drawRect(self,col, tag=None, color=None, outline=None, delete=1):
-        """User has clicked to select a col"""
+        """
+        Draw rectangle for column selection.
+
+        Args:
+            col (int): Column index.
+            tag (str): Tag for rectangle.
+            color (str): Fill color.
+            outline (str): Outline color.
+            delete (int): Whether to delete existing (1=yes).
+        """
 
         if tag == None:
             tag = 'rect'
@@ -512,12 +622,23 @@ class ColumnHeader(Canvas):
         return
 
 class RowHeader(Canvas):
-    """Class that displays the row headings (or DataFrame index).
-       Takes it's size and rendering from the parent table.
-       This also handles row/record selection as opposed to cell
-       selection"""
+    """
+    Class that displays the row headings (or DataFrame index).
+    Takes its size and rendering from the parent table.
+    This also handles row/record selection as opposed to cell selection.
+    """
 
     def __init__(self, parent=None, table=None, width=50, fgcolor='black', bgcolor='gray75'):
+        """
+        Initialize RowHeader.
+
+        Args:
+            parent: Parent widget.
+            table: Parent table.
+            width (int): Width.
+            fgcolor (str): Foreground color.
+            bgcolor (str): Background color.
+        """
         Canvas.__init__(self, parent, bg=bgcolor, width=width, height=None)
         if table != None:
             self.table = table
@@ -545,7 +666,13 @@ class RowHeader(Canvas):
         return
 
     def redraw(self, align='w', showkeys=False):
-        """Redraw row header"""
+        """
+        Redraw row header.
+
+        Args:
+            align (str): Text alignment.
+            showkeys (bool): Unused.
+        """
 
         self.height = self.table.rowheight * self.table.rows+10
         self.configure(scrollregion=(0,0, self.width, self.height))
@@ -624,18 +751,30 @@ class RowHeader(Canvas):
         return
 
     def setWidth(self, w):
-        """Set width"""
+        """
+        Set width.
+
+        Args:
+            w (int): New width.
+        """
         self.width = w
         self.redraw()
         return
 
     def clearSelected(self):
-        """Clear selected rows"""
+        """
+        Clear selected rows.
+        """
         self.delete('rect')
         return
 
     def handle_left_click(self, event):
-        """Handle left click"""
+        """
+        Handle left click (row selection).
+
+        Args:
+            event: Mouse event.
+        """
 
         rowclicked = self.table.get_row_clicked(event)
         self.startrow = rowclicked
@@ -651,10 +790,18 @@ class RowHeader(Canvas):
         return
 
     def handle_left_release(self,event):
+        """
+        Handle left release.
+        """
         return
 
     def handle_left_ctrl_click(self, event):
-        """Handle ctrl clicks - for multiple row selections"""
+        """
+        Handle ctrl clicks (select multiple rows).
+
+        Args:
+            event: Mouse event.
+        """
 
         rowclicked = self.table.get_row_clicked(event)
         multirowlist = self.table.multiplerowlist
@@ -668,7 +815,12 @@ class RowHeader(Canvas):
         return
 
     def handle_left_shift_click(self, event):
-        """Handle shift click"""
+        """
+        Handle shift click.
+
+        Args:
+            event: Mouse event.
+        """
 
         if self.startrow == None:
             self.startrow = self.table.currentrow
@@ -676,7 +828,12 @@ class RowHeader(Canvas):
         return
 
     def handle_right_click(self, event):
-        """respond to a right click"""
+        """
+        Respond to a right click.
+
+        Args:
+            event: Mouse event.
+        """
 
         if self.table.enable_menus == False:
             return
@@ -687,7 +844,12 @@ class RowHeader(Canvas):
         return
 
     def handle_mouse_drag(self, event):
-        """Handle mouse moved with button held down, multiple selections"""
+        """
+        Handle mouse drag (multiple selections).
+
+        Args:
+            event: Mouse event.
+        """
 
         if hasattr(self, 'cellentry'):
             self.cellentry.destroy()
@@ -718,7 +880,9 @@ class RowHeader(Canvas):
         return
 
     def toggleIndex(self):
-        """Toggle index display"""
+        """
+        Toggle index display.
+        """
 
         if self.table.showindex == True:
             self.table.showindex = False
@@ -729,8 +893,18 @@ class RowHeader(Canvas):
         return
 
     def popupMenu(self, event, rows=None, cols=None, outside=None):
-        """Add left and right click behaviour for canvas, should not have to override
-            this function, it will take its values from defined dicts in constructor"""
+        """
+        Create popup menu.
+
+        Args:
+            event: Mouse event.
+            rows: Rows.
+            cols: Cols.
+            outside: Clicked outside.
+
+        Returns:
+            Menu: The popup menu.
+        """
 
         defaultactions = {"Sort by index" : lambda: self.table.sortTable(index=True),
                          "Reset index" : lambda: self.table.resetIndex(),
@@ -760,7 +934,12 @@ class RowHeader(Canvas):
         return popupmenu
 
     def drawSelectedRows(self, rows=None):
-        """Draw selected rows, accepts a list or integer"""
+        """
+        Draw selected rows.
+
+        Args:
+            rows (list or int): List of row indices or single index.
+        """
 
         self.delete('rect')
         if type(rows) is not list:
@@ -775,7 +954,16 @@ class RowHeader(Canvas):
         return
 
     def drawRect(self, row=None, tag=None, color=None, outline=None, delete=1):
-        """Draw a rect representing row selection"""
+        """
+        Draw a rect representing row selection.
+
+        Args:
+            row (int): Row index.
+            tag (str): Tag.
+            color (str): Fill color.
+            outline (str): Outline color.
+            delete (int): Whether to delete existing.
+        """
 
         if tag==None:
             tag='rect'
@@ -797,9 +985,21 @@ class RowHeader(Canvas):
         return
 
 class IndexHeader(Canvas):
-    """Class that displays the row index headings."""
+    """
+    Class that displays the row index headings.
+    """
 
     def __init__(self, parent=None, table=None, width=40, height=25, bg='gray50'):
+        """
+        Initialize.
+
+        Args:
+            parent: Parent widget.
+            table: Parent table.
+            width (int): Width.
+            height (int): Height.
+            bg (str): Background color.
+        """
         Canvas.__init__(self, parent, bg=bg, width=width, height=height)
         if table != None:
             self.table = table
@@ -814,7 +1014,12 @@ class IndexHeader(Canvas):
         return
 
     def redraw(self, align='w'):
-        """Redraw row index header"""
+        """
+        Redraw row index header.
+
+        Args:
+            align (str): Text alignment.
+        """
 
         df = self.model.df
         rowheader = self.table.rowheader
@@ -854,7 +1059,12 @@ class IndexHeader(Canvas):
         return
 
     def handle_left_click(self, event):
-        """Handle mouse left mouse click"""
+        """
+        Handle mouse left mouse click (select all).
+
+        Args:
+            event: Mouse event.
+        """
         self.table.selectAll()
         self.table.setLeftClickSrc("")
         return

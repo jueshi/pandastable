@@ -9,15 +9,14 @@
 <img align="right" src=https://raw.githubusercontent.com/dmnfarrell/pandastable/master/img/logo.png width=150px>
 
 The pandastable library provides a table widget for Tkinter with plotting and data manipulation functionality.
-It uses the pandas DataFrame class to store table data. Pandas is an open source Python library providing high-performance data structures and data analysis tools. Tkinter is the standard GUI toolkit for python. It is intended for the following uses:
+It uses the pandas DataFrame class to store table data. Pandas is an open source Python library providing high-performance data structures and data analysis tools. Tkinter is the standard GUI toolkit for python.
 
-* for python/tkinter GUI developers who want to include a table in their application that can store and process
-large amounts of data
-* for non-programmers who are not familiar with Python or the pandas API and want to use
-the included DataExplore application to manipulate/view their data
-* it may also be useful for data analysts and programmers who want to get an initial interactive look at their tabular data without coding
+**Purpose:**
+* For Python/Tkinter GUI developers who want to include a table in their application that can store and process large amounts of data.
+* For non-programmers who are not familiar with Python or the pandas API and want to use the included DataExplore application to manipulate/view their data.
+* For data analysts and programmers who want to get an initial interactive look at their tabular data without coding.
 
-The DataExplore application using these classes is included in the distribution and is a self-contained application for educational and research use. Currently this focuses on providing a spreadsheet like interface for table manipulation withconfigurable 2D/3D plotting. A windows standalone installer is available that does not require Python installation.
+The DataExplore application using these classes is included in the distribution and is a self-contained application for educational and research use. Currently this focuses on providing a spreadsheet-like interface for table manipulation with configurable 2D/3D plotting.
 
 **Documentation** is at http://pandastable.readthedocs.io/
 
@@ -27,19 +26,67 @@ The DataExplore application using these classes is included in the distribution 
 
 ## Installation
 
-Requires python>=3.6 or 2.7 and numpy, matplotlib and pandas. These requirements should be satisfied automatically when using: (You may need to use pip3 to specify python version 3).
+Requires python>=3.6 or 2.7 and numpy, matplotlib and pandas.
 
-```pip install pandastable```
+### Using pip
 
-Install latest from github:
+```bash
+pip install pandastable
+```
 
-```pip install -e git+https://github.com/dmnfarrell/pandastable.git#egg=pandastable```
+### From Source
+
+```bash
+pip install -e git+https://github.com/dmnfarrell/pandastable.git#egg=pandastable
+```
+
+### Snap Package (Linux)
 
 You can also install the dataexplore snap package on any linux distribution that supports snaps. This installs everything you need as one app:
 
-```sudo snap install dataexplore```
+```bash
+sudo snap install dataexplore
+```
 
-see the [docs](https://pandastable.readthedocs.io/en/latest/description.html#installation) for more details on installing.
+See the [docs](https://pandastable.readthedocs.io/en/latest/description.html#installation) for more details on installing.
+
+## Usage
+
+### Basic Usage
+
+To use the table in your own application:
+
+```python
+from tkinter import *
+from pandastable import Table, TableModel
+
+class TestApp(Frame):
+    def __init__(self, parent=None):
+        self.parent = parent
+        Frame.__init__(self)
+        self.main = self.master
+        self.main.geometry('600x400+200+100')
+        self.main.title('Table app')
+        f = Frame(self.main)
+        f.pack(fill=BOTH,expand=1)
+        df = TableModel.getSampleData()
+        self.table = pt = Table(f, dataframe=df,
+                                showtoolbar=True, showstatusbar=True)
+        pt.show()
+        return
+
+app = TestApp()
+app.mainloop()
+```
+
+### DataExplore Application
+
+Installing the package creates a command `dataexplore` in your path. Just run this to open the program.
+This is a standalone application for data manipulation and plotting meant for education and basic data analysis.
+
+```bash
+dataexplore
+```
 
 ## Current features
 * add, remove rows and columns
@@ -58,43 +105,17 @@ see the [docs](https://pandastable.readthedocs.io/en/latest/description.html#ins
 
 ## FAQ
 
-*What version of Python?*
+* **What version of Python?**
+  Python versions >=2.7 and >=3.6 are compatible. Python 3 is recommended if possible.
 
-Python versions >=2.7 and >=3.6 are compatible. Python 3 is recommended if possible. For a similar table widget that works without pandas dataframes and has minimal dependencies see the previous incarnation, tkintertable.
+* **Why use Tkinter?**
+  Tkinter is the standard GUI toolkit for python. It is lightweight and included with most Python installations.
 
-*Why use Tkinter?*
+* **Is this just a half-baked spreadsheet?**
+  Hopefully not. Some of the basic functions are naturally present since it's a table. But there is no point in trying to mimic a proper spreadsheet app. Pandas can do lots of stuff that would be nice for a non-programmer to utilize and that might not be available in a spreadsheet application.
 
-Tkinter is still the standard GUI toolkit for python though it is sometimes disliked
-for its outdated appearance (especially on linux) and somewhat limited widget set. However largely
-because this library is based on an older one called tkintertable for drawing the table,
-I have stuck with tkinter rather than start from scratch using another toolkit.
-
-*Is this just a half-baked spreadsheet?*
-
-Hopefully not. Some of the basic functions are naturally present since it's a table.
-But there is no point in trying to mimic a proper spreadsheet app. pandas can do
-lots of stuff that would be nice for a non-programmer to utilize and that might
-not be available in a spreadsheet application.
-
-*Are there other better tools for dataframe visualization?*
-
-This depends as always on what is required. The ipython notebook is good for interactive use.
-bokeh is an advanced interactive plotting tool using modern generation web technologies for in browser
-rendering. This can handle dataframes. The goal of this project is to use DataFrames as the back end
-for a table widget that can be used in a desktop appplication.
-
-## The DataExplore application
-
-Installing the package creates a command *dataexplore* in your path. Just run this to open the program.
-This is a standalone application for data manipulation and plotting meant for education and basic data analysis.
-See the home page for this application at http://dmnfarrell.github.io/pandastable/
-
-<img src=https://raw.githubusercontent.com/dmnfarrell/pandastable/master/img/viewerapp.png width=600px>
-
-## For programmers
-
-* Check the [Code examples](https://pandastable.readthedocs.io/en/latest/examples.html) section in the documentation.
-* See https://pandastable.readthedocs.io/en/latest/modules.html for API docs.
+* **Are there other better tools for dataframe visualization?**
+  This depends as always on what is required. The ipython notebook is good for interactive use. Bokeh is an advanced interactive plotting tool using modern generation web technologies for in browser rendering. The goal of this project is to use DataFrames as the back end for a table widget that can be used in a desktop application.
 
 ## Links
 

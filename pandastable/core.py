@@ -151,6 +151,13 @@ class Table(Canvas):
         return
 
     def close(self, evt=None):
+        """
+        Close the table and its associated widgets.
+
+        Args:
+            evt: The event that triggered the close action (default is None).
+        """
+
         if hasattr(self, 'parenttable'):
             return
         if hasattr(self, 'pf') and self.pf is not None:
@@ -162,7 +169,9 @@ class Table(Canvas):
         return
 
     def set_defaults(self):
-        """Set default settings"""
+        """
+        Set default settings for the table.
+        """
 
         self.cellwidth = 60
         self.maxcellwidth = 300
@@ -206,7 +215,9 @@ class Table(Canvas):
         return
 
     def setFont(self):
-        """Set font tuple"""
+        """
+        Set the font for the table based on current settings.
+        """
 
         if type(self.fontsize) is str:
             self.fontsize = int(float(self.fontsize))
@@ -216,7 +227,12 @@ class Table(Canvas):
         return
 
     def setTheme(self, name='light'):
-        """Set theme"""
+        """
+        Set the theme for the table.
+
+        Args:
+            name (str): The name of the theme to apply. Defaults to 'light'.
+        """
 
         style = themes[name]
         for s in style:
@@ -226,7 +242,12 @@ class Table(Canvas):
         return
 
     def mouse_wheel(self, event):
-        """Handle mouse wheel scroll for windows and mac (darwin)"""
+        """
+        Handle mouse wheel scroll events for different platforms.
+
+        Args:
+            event: The mouse wheel event.
+        """
 
         if event.num == 5 or event.delta == -120 or (self.ostyp == "darwin" and event.delta == -1):
             event.widget.yview_scroll(1, UNITS)
@@ -240,7 +261,9 @@ class Table(Canvas):
         return
 
     def doBindings(self):
-        """Bind keys and mouse clicks, this can be overriden"""
+        """
+        Bind keys and mouse clicks to their respective handlers.
+        """
 
         self.bind("<Button-1>",self.handle_left_click)
         self.bind("<Double-Button-1>",self.handle_double_click)
@@ -285,9 +308,12 @@ class Table(Canvas):
         return
 
     def show(self, callback=None):
-        """Adds column header and scrollbars and combines them with
-           the current table adding all to the master frame provided in constructor.
-           Table is then redrawn."""
+        """
+        Add column header and scrollbars, combine with table, and redraw.
+
+        Args:
+            callback: Function to be called after redraw (default is None).
+        """
 
         #Add the table and header to the frame
         self.rowheader = RowHeader(self.parentframe, self,
@@ -330,7 +356,9 @@ class Table(Canvas):
         return
 
     def hideRowHeader(self):
-        """Hide the row header, must have run show() first"""
+        """
+        Hide the row header. The show() method must have been called first.
+        """
 
         if not hasattr(self, 'rowheader'):
             return
@@ -339,7 +367,9 @@ class Table(Canvas):
         return
 
     def showRowHeader(self):
-        """Show the row header if hidden, must have run show() first"""
+        """
+        Show the row header if it was hidden. The show() method must have been called first.
+        """
 
         if not hasattr(self, 'rowheader'):
             return
@@ -348,7 +378,12 @@ class Table(Canvas):
         return
 
     def resized(self, event):
-        """Check if size changed when event triggered to avoid unnecessary redraws"""
+        """
+        Handle resize events to avoid unnecessary redraws.
+
+        Args:
+            event: The resize event.
+        """
 
         if not hasattr(self, 'currwidth'):
             return
@@ -359,7 +394,9 @@ class Table(Canvas):
         self.currheight = self.parentframe.winfo_height()
 
     def remove(self):
-        """Close table frame"""
+        """
+        Close the table frame and destroy the widget.
+        """
 
         if hasattr(self, 'parenttable'):
             self.parenttable.child.destroy()
@@ -369,7 +406,12 @@ class Table(Canvas):
         return
 
     def getVisibleRegion(self):
-        """Get visible region of canvas"""
+        """
+        Get the coordinates of the visible region of the canvas.
+
+        Returns:
+            tuple: (x1, y1, x2, y2) coordinates of the visible region.
+        """
 
         x1, y1 = self.canvasx(0), self.canvasy(0)
         #w, h = self.winfo_width(), self.winfo_height()
@@ -379,7 +421,15 @@ class Table(Canvas):
         return x1, y1, x2, y2
 
     def getRowPosition(self, y):
-        """Set row position"""
+        """
+        Get the row index corresponding to a y-coordinate.
+
+        Args:
+            y (int): The y-coordinate.
+
+        Returns:
+            int: The row index.
+        """
 
         h = self.rowheight
         y_start = self.y_start
@@ -391,7 +441,15 @@ class Table(Canvas):
         return int(row)
 
     def getColPosition(self, x):
-        """Get column position at coord"""
+        """
+        Get the column index corresponding to an x-coordinate.
+
+        Args:
+            x (int): The x-coordinate.
+
+        Returns:
+            int: The column index.
+        """
 
         x_start = self.x_start
         w = self.cellwidth
@@ -405,7 +463,16 @@ class Table(Canvas):
         return int(col)
 
     def getVisibleRows(self, y1, y2):
-        """Get the visible row range"""
+        """
+        Get the range of visible rows.
+
+        Args:
+            y1 (int): The starting y-coordinate.
+            y2 (int): The ending y-coordinate.
+
+        Returns:
+            tuple: (start_row, end_row) indices.
+        """
 
         start = self.getRowPosition(y1)
         end = self.getRowPosition(y2)+1
@@ -414,7 +481,16 @@ class Table(Canvas):
         return start, end
 
     def getVisibleCols(self, x1, x2):
-        """Get the visible column range"""
+        """
+        Get the range of visible columns.
+
+        Args:
+            x1 (int): The starting x-coordinate.
+            x2 (int): The ending x-coordinate.
+
+        Returns:
+            tuple: (start_col, end_col) indices.
+        """
 
         start = self.getColPosition(x1)
         end = self.getColPosition(x2)+1
@@ -520,7 +596,16 @@ class Table(Canvas):
         return
 
     def setPrecision(self, x, p):
-        """Set precision of a float value"""
+        """
+        Set precision of a float value.
+
+        Args:
+            x (float): The value to format.
+            p (int): The precision (number of decimal places).
+
+        Returns:
+            str: The formatted string.
+        """
 
         if not pd.isnull(x):
             if x<1 and x>-1:
@@ -532,7 +617,13 @@ class Table(Canvas):
         return x
 
     def redraw(self, event=None, callback=None):
-        """Redraw table"""
+        """
+        Redraw the table.
+
+        Args:
+            event: The event that triggered the redraw (default is None).
+            callback: Function to be called after redraw (default is None).
+        """
 
         self.redrawVisible(event, callback)
         if hasattr(self, 'statusbar'):
@@ -540,8 +631,11 @@ class Table(Canvas):
         return
 
     def drawHighlighted(self):
-        """Color an arbitrary selection of cells. Set the 'highlighted'
-        attribute which is a masked dataframe of the table."""
+        """
+        Color an arbitrary selection of cells.
+
+        Set the 'highlighted' attribute which is a masked dataframe of the table.
+        """
 
         rows = self.visiblerows
         self.delete('temprect')
@@ -557,7 +651,15 @@ class Table(Canvas):
         return
 
     def redrawCell(self, row=None, col=None, recname=None, colname=None):
-        """Redraw a specific cell only"""
+        """
+        Redraw a specific cell only.
+
+        Args:
+            row (int): The row index.
+            col (int): The column index.
+            recname: Record name (unused).
+            colname: Column name (unused).
+        """
 
         text = self.model.getValueAt(row,col)
         self.delete('celltext'+str(col)+'_'+str(row))
@@ -565,7 +667,13 @@ class Table(Canvas):
         return
 
     def setColumnColors(self, cols=None, clr=None):
-        """Set a column color and store it"""
+        """
+        Set a column color and store it.
+
+        Args:
+            cols (list): List of column indices to color.
+            clr (str): The color code (e.g., '#RRGGBB' or color name).
+        """
 
         if clr is None:
             clr = pickColor(self,'#dcf1fc')
@@ -580,7 +688,13 @@ class Table(Canvas):
         return
 
     def colorColumns(self, cols=None, color='gray'):
-        """Color visible columns"""
+        """
+        Color visible columns.
+
+        Args:
+            cols (list): List of column indices to color.
+            color (str): Default color (unused, defaults from storage).
+        """
 
         if cols is None:
             cols = self.visiblecols
@@ -593,13 +707,23 @@ class Table(Canvas):
         return
 
     def resetColors(self):
+        """
+        Reset all row colors to default.
+        """
         df = self.model.df
         #self.rowcolors = pd.DataFrame(index=range(len(df)))
         self.rowcolors = pd.DataFrame(index=df.index)
         return
 
     def setColorByMask(self, col, mask, clr):
-        """Color individual cells in a column using a mask."""
+        """
+        Color individual cells in a column using a mask.
+
+        Args:
+            col: The column name or index.
+            mask: A boolean mask indicating which cells to color.
+            clr (str): The color code.
+        """
 
         df = self.model.df
         if len(self.rowcolors) == 0:
@@ -612,8 +736,11 @@ class Table(Canvas):
         return
 
     def colorRows(self):
-        """Color individual cells in column(s). Requires that the rowcolors
-         dataframe has been set. This needs to be updated if the index is reset"""
+        """
+        Color individual cells in column(s).
+
+        Requires that the rowcolors dataframe has been set. This needs to be updated if the index is reset.
+        """
 
         #print (self.rowcolors)
         df = self.model.df
@@ -635,11 +762,13 @@ class Table(Canvas):
         return
 
     def setRowColors(self, rows=None, clr=None, cols=None):
-        """Set rows color from menu.
+        """
+        Set rows color from menu.
+
         Args:
-            rows: row numbers to be colored
-            clr: color in hex
-            cols: column numbers, can also use 'all'
+            rows (list): row numbers to be colored
+            clr (str): color in hex
+            cols (list or str): column numbers, can also use 'all'
         """
 
         if clr is None:
@@ -665,7 +794,9 @@ class Table(Canvas):
         return
 
     def setColorbyValue(self):
-        """Set row colors in a column by values"""
+        """
+        Set row colors in a column by values using a colormap.
+        """
 
         import pylab as plt
         cmaps = sorted(m for m in plt.cm.datad if not m.endswith("_r"))
@@ -691,7 +822,17 @@ class Table(Canvas):
         return
 
     def values_to_colors(self, x, cmap='jet', alpha=1):
-        """Convert columnn values to colors"""
+        """
+        Convert column values to colors.
+
+        Args:
+            x (pd.Series): The data values.
+            cmap (str): The colormap name.
+            alpha (float): The alpha (transparency) value.
+
+        Returns:
+            list: List of hex color strings.
+        """
 
         import pylab as plt
         import matplotlib as mpl
@@ -705,7 +846,12 @@ class Table(Canvas):
         return clrs
 
     def setAlignment(self, colnames=None):
-        """Set column alignments, overrides global value"""
+        """
+        Set column alignments, overrides global value.
+
+        Args:
+            colnames: Unused. Uses selected columns.
+        """
 
         cols = self.multiplecollist
         df = self.model.df
@@ -727,6 +873,12 @@ class Table(Canvas):
         return
 
     def getScale(self):
+        """
+        Get the scaling factor based on font size.
+
+        Returns:
+            float: The scaling factor.
+        """
         try:
             fontsize = self.thefont[1]
         except:
@@ -735,7 +887,9 @@ class Table(Canvas):
         return scale
 
     def setWrap(self):
-        """Toogle column header wrap"""
+        """
+        Toggle column header wrap.
+        """
 
         ch=self.colheader
         if ch.wrap is False:
@@ -746,7 +900,12 @@ class Table(Canvas):
         return
 
     def zoomIn(self, event=None):
-        """Zoom in, increases font and row heights."""
+        """
+        Zoom in, increases font and row heights.
+
+        Args:
+            event: The event that triggered this (optional).
+        """
 
         self.fontsize = self.fontsize+1
         self.rowheight += 2
@@ -757,7 +916,12 @@ class Table(Canvas):
         return
 
     def zoomOut(self, event=None):
-        """Zoom out, decreases font and row heights."""
+        """
+        Zoom out, decreases font and row heights.
+
+        Args:
+            event: The event that triggered this (optional).
+        """
 
         self.fontsize = self.fontsize-1
         self.rowheight -= 2
@@ -768,7 +932,12 @@ class Table(Canvas):
         return
 
     def expandColumns(self, factor=10):
-        """Reduce column widths"""
+        """
+        Increase column widths.
+
+        Args:
+            factor (int): Amount to increase width by.
+        """
 
         self.cellwidth += factor
         widths = self.columnwidths
@@ -778,7 +947,12 @@ class Table(Canvas):
         return
 
     def contractColumns(self, factor=10):
-        """Reduce column widths"""
+        """
+        Reduce column widths.
+
+        Args:
+            factor (int): Amount to decrease width by.
+        """
 
         self.cellwidth -= factor
         widths = self.columnwidths
@@ -788,10 +962,12 @@ class Table(Canvas):
         return
 
     def adjustColumnWidths(self, limit=30):
-        """Optimally adjust col widths to accomodate the longest entry \
-            in each column - usually only called on first redraw.
+        """
+        Optimally adjust col widths to accomodate the longest entry
+        in each column - usually only called on first redraw.
+
         Args:
-            limit: max number of columns to resize
+            limit (int): max number of columns to resize
         """
 
         fontsize = self.fontsize
@@ -821,14 +997,18 @@ class Table(Canvas):
         return
 
     def autoResizeColumns(self):
-        """Automatically set nice column widths and draw"""
+        """
+        Automatically set nice column widths and draw.
+        """
 
         self.adjustColumnWidths()
         self.redraw()
         return
 
     def setColPositions(self):
-        """Determine current column grid positions"""
+        """
+        Determine current column grid positions.
+        """
 
         df = self.model.df
         self.col_positions=[]
@@ -849,7 +1029,14 @@ class Table(Canvas):
         return
 
     def sortTable(self, columnIndex=None, ascending=1, index=False):
-        """Sort rows based on currently selected columns"""
+        """
+        Sort rows based on currently selected columns.
+
+        Args:
+            columnIndex: The index or list of indices of columns to sort by.
+            ascending (int): 1 for ascending, 0 for descending.
+            index (bool): Whether to sort by index.
+        """
 
         df = self.model.df
         if columnIndex == None:
@@ -870,7 +1057,9 @@ class Table(Canvas):
         return
 
     def sortColumnIndex(self):
-        """Sort the column header by the current rows values"""
+        """
+        Sort the column header by the current rows values.
+        """
 
         cols = self.model.df.columns
         #get only sortable cols
@@ -887,13 +1076,20 @@ class Table(Canvas):
         return
 
     def groupby(self, colindex):
-        """Group by"""
+        """
+        Group by a column.
+
+        Args:
+            colindex: The column index to group by.
+        """
 
         grps = self.model.groupby(colindex)
         return
 
     def setindex(self):
-        """Set indexes"""
+        """
+        Set selected columns as the index.
+        """
 
         cols = self.multiplecollist
         self.model.setindex(cols)
@@ -908,7 +1104,13 @@ class Table(Canvas):
         return
 
     def resetIndex(self, ask=True, drop=False):
-        """Reset index and redraw row header"""
+        """
+        Reset index and redraw row header.
+
+        Args:
+            ask (bool): Whether to ask for confirmation/dropping.
+            drop (bool): Whether to drop the current index.
+        """
 
         self.storeCurrent()
         df = self.model.df
@@ -927,7 +1129,9 @@ class Table(Canvas):
         return
 
     def flattenIndex(self):
-        """Flatten multiindex"""
+        """
+        Flatten multi-level index.
+        """
 
         df = self.model.df
         levels = len(df.columns.levels)
@@ -950,14 +1154,18 @@ class Table(Canvas):
         return
 
     def copyIndex(self):
-        """Copy index to a column"""
+        """
+        Copy index to a column.
+        """
 
         self.model.copyIndex()
         self.redraw()
         return
 
     def renameIndex(self, ):
-        """Rename the row index"""
+        """
+        Rename the row index.
+        """
 
         n = self.model.df.index.name
         name = simpledialog.askstring("New index name",
@@ -969,18 +1177,25 @@ class Table(Canvas):
         return
 
     def showIndex(self):
-        """Show the row index"""
+        """
+        Show the row index.
+        """
 
         self.showindex = True
         return
 
     def set_rowcolors_index(self):
+        """
+        Align row colors index with dataframe index.
+        """
 
         df = self.model.df
         self.rowcolors.set_index(df.index, inplace=True)
 
     def update_rowcolors(self):
-        """Update row colors if present so that it syncs with current dataframe."""
+        """
+        Update row colors if present so that it syncs with current dataframe.
+        """
 
         df = self.model.df
         rc = self.rowcolors
@@ -1007,7 +1222,12 @@ class Table(Canvas):
         return
 
     def set_xviews(self,*args):
-        """Set the xview of table and col header"""
+        """
+        Set the xview of table and col header.
+
+        Args:
+            *args: Arguments for xview.
+        """
 
         self.xview(*args)
         self.colheader.xview(*args)
@@ -1015,7 +1235,12 @@ class Table(Canvas):
         return
 
     def set_yviews(self,*args):
-        """Set the xview of table and row header"""
+        """
+        Set the yview of table and row header.
+
+        Args:
+            *args: Arguments for yview.
+        """
 
         self.yview(*args)
         self.rowheader.yview(*args)
@@ -1023,7 +1248,9 @@ class Table(Canvas):
         return
 
     def insertRow(self):
-        """Insert a new row"""
+        """
+        Insert a new row at the selected position.
+        """
 
         row = self.getSelectedRow()
         key = self.model.insertRow(row)
@@ -1034,7 +1261,12 @@ class Table(Canvas):
         return
 
     def addRows(self, num=None):
-        """Add new rows"""
+        """
+        Add new rows to the end of the table.
+
+        Args:
+            num (int): Number of rows to add. If None, prompts the user.
+        """
 
         if num == None:
             num = simpledialog.askinteger("Now many rows?",
@@ -1050,7 +1282,12 @@ class Table(Canvas):
         return
 
     def addColumn(self, newname=None):
-        """Add a new column"""
+        """
+        Add a new column.
+
+        Args:
+            newname (str): Name of the new column. If None, prompts the user.
+        """
 
         if newname == None:
             coltypes = ['object','float32','float64']
@@ -1081,7 +1318,12 @@ class Table(Canvas):
         return
 
     def deleteRow(self, ask=False):
-        """Delete a selected row"""
+        """
+        Delete a selected row or rows.
+
+        Args:
+            ask (bool): Whether to ask for confirmation.
+        """
 
         n = True
         if ask == True:
@@ -1110,7 +1352,9 @@ class Table(Canvas):
         return
 
     def duplicateRows(self):
-        """Make copy of rows"""
+        """
+        Make copy of selected rows and append to the table.
+        """
 
         rows = self.multiplerowlist
         df = self.model.df
@@ -1120,7 +1364,12 @@ class Table(Canvas):
         return
 
     def deleteColumn(self, ask=True):
-        """Delete currently selected column(s)"""
+        """
+        Delete currently selected column(s).
+
+        Args:
+            ask (bool): Whether to ask for confirmation.
+        """
 
         n = True
         if ask == True:
@@ -1140,7 +1389,9 @@ class Table(Canvas):
         return
 
     def copyColumn(self):
-        """Copy a column"""
+        """
+        Copy the current column to a new one.
+        """
 
         col = self.currentcol
         df = self.model.df
@@ -1158,7 +1409,13 @@ class Table(Canvas):
         return
 
     def moveColumns(self, names=None, pos='start'):
-        """Move column(s) to start/end, used for large tables"""
+        """
+        Move column(s) to start/end, used for large tables.
+
+        Args:
+            names (list): List of column names to move.
+            pos (str): 'start' or 'end'.
+        """
 
         df = self.model.df
         if names is None:
@@ -1175,8 +1432,10 @@ class Table(Canvas):
         return
 
     def tableChanged(self):
-        """Callback to be used when dataframe changes so that other
-            widgets and data can be updated"""
+        """
+        Callback to be used when dataframe changes so that other
+        widgets and data can be updated.
+        """
 
         self.updateFunctions()
         self.updateWidgets()
@@ -1185,13 +1444,20 @@ class Table(Canvas):
         return
 
     def storeCurrent(self):
-        """Store current version of the table before a major change is made"""
+        """
+        Store current version of the table before a major change is made (for undo).
+        """
 
         self.prevdf = self.model.df.copy()
         return
 
     def undo(self, event=None):
-        """Undo last major table change"""
+        """
+        Undo last major table change.
+
+        Args:
+            event: The event that triggered this (optional).
+        """
 
         if self.prevdf is None:
             return
@@ -1202,7 +1468,14 @@ class Table(Canvas):
         return
 
     def deleteCells(self, rows, cols, answer=None):
-        """Clear the cell contents"""
+        """
+        Clear the cell contents.
+
+        Args:
+            rows (list): List of row indices.
+            cols (list): List of column indices.
+            answer (bool): Pre-approved confirmation (default None).
+        """
 
         if self.editable == False:
             return
@@ -1218,7 +1491,12 @@ class Table(Canvas):
         return
 
     def clearData(self, evt=None):
-        """Delete cells from gui event"""
+        """
+        Delete cells based on current selection.
+
+        Args:
+            evt: The event that triggered this (optional).
+        """
 
         if self.allrows == True:
             self.deleteColumn()
@@ -1229,7 +1507,9 @@ class Table(Canvas):
         return
 
     def clearTable(self):
-        """Make an empty table"""
+        """
+        Make an empty table.
+        """
         n =  messagebox.askyesno("Clear Confirm",
                                    "This will clear the entire table.\nAre you sure?",
                                    parent=self.parentframe)
@@ -1242,7 +1522,9 @@ class Table(Canvas):
         return
 
     def fillColumn(self):
-        """Fill a column with a data range"""
+        """
+        Fill a column with a data range or random values.
+        """
 
         dists = ['normal','gamma','uniform','random integer','logistic']
         d = MultipleValDialog(title='New Column',
@@ -1295,7 +1577,12 @@ class Table(Canvas):
         return
 
     def autoAddColumns(self, numcols=None):
-        """Automatically add x number of cols"""
+        """
+        Automatically add x number of cols.
+
+        Args:
+            numcols (int): Number of columns to add.
+        """
 
         if numcols == None:
             numcols = simpledialog.askinteger("Auto add rows.",
@@ -1307,7 +1594,9 @@ class Table(Canvas):
         return
 
     def setColumnType(self):
-        """Change the column dtype"""
+        """
+        Change the column data type via a dialog.
+        """
 
         df = self.model.df
         col = df.columns[self.currentcol]
@@ -1331,7 +1620,9 @@ class Table(Canvas):
         return
 
     def findDuplicates(self):
-        """Find duplicate rows"""
+        """
+        Find duplicate rows.
+        """
 
         df = self.model.df
         keep = ['first','last']
@@ -1357,7 +1648,9 @@ class Table(Canvas):
         return
 
     def cleanData(self):
-        """Deal with missing data"""
+        """
+        Deal with missing data, filling gaps, or dropping rows/cols.
+        """
 
         df = self.model.df
         cols = ['']+list(df.columns)
@@ -1426,7 +1719,9 @@ class Table(Canvas):
         return
 
     def createCategorical(self):
-        """Get a categorical column from selected"""
+        """
+        Convert selected column to categorical or create dummy variables.
+        """
 
         df = self.model.df
         col = df.columns[self.currentcol]
@@ -1494,8 +1789,13 @@ class Table(Canvas):
         return func
 
     def applyColumnFunction(self, evt=None):
-        """Apply column wise functions, applies a calculation per row and
-        ceates a new column."""
+        """
+        Apply column wise functions, applies a calculation per row and
+        creates a new column.
+
+        Args:
+            evt: The event that triggered this (optional).
+        """
 
         df = self.model.df
         cols = list(df.columns[self.multiplecollist])
@@ -1548,7 +1848,12 @@ class Table(Canvas):
         return
 
     def applyTransformFunction(self, evt=None):
-        """Apply resampling and transform functions on a single column."""
+        """
+        Apply resampling and transform functions on a single column.
+
+        Args:
+            evt: The event that triggered this (optional).
+        """
 
         df = self.model.df
         cols = list(df.columns[self.multiplecollist])
@@ -1601,7 +1906,9 @@ class Table(Canvas):
         return
 
     def resample(self):
-        """Table time series resampling dialog. Should set a datetime index first."""
+        """
+        Table time series resampling dialog. Should set a datetime index first.
+        """
 
         df = self.model.df
         if not isinstance(df.index, pd.DatetimeIndex):
@@ -1633,7 +1940,9 @@ class Table(Canvas):
         return
 
     def valueCounts(self):
-        """Value counts for column(s)"""
+        """
+        Calculate value counts for column(s).
+        """
 
         df = self.model.df
         cols = list(df.columns[self.multiplecollist])
@@ -1648,7 +1957,9 @@ class Table(Canvas):
         return
 
     def applyStringMethod(self):
-        """Apply string operation to column(s)"""
+        """
+        Apply string operation to column(s).
+        """
 
         df = self.model.df
         cols = list(df.columns[self.multiplecollist])
@@ -1720,7 +2031,9 @@ class Table(Canvas):
         return
 
     def convertDates(self):
-        """Convert single or multiple columns into datetime"""
+        """
+        Convert single or multiple columns into datetime.
+        """
 
         df = self.model.df
         cols = list(df.columns[self.multiplecollist])
@@ -1785,7 +2098,9 @@ class Table(Canvas):
         return
 
     def showAll(self):
-        """Re-show unfiltered"""
+        """
+        Re-show unfiltered data (clears filtering).
+        """
 
         if hasattr(self, 'dataframe'):
             self.model.df = self.dataframe
@@ -1794,7 +2109,12 @@ class Table(Canvas):
         return
 
     def statsViewer(self):
-        """Show model fitting dialog"""
+        """
+        Show model fitting dialog.
+
+        Returns:
+            StatsViewer: The stats viewer instance.
+        """
 
         from .stats import StatsViewer
         self.showPlotViewer()
@@ -1811,7 +2131,15 @@ class Table(Canvas):
         return self.sv
 
     def getRowsFromIndex(self, idx=None):
-        """Get row positions from index values"""
+        """
+        Get row positions from index values.
+
+        Args:
+            idx: The index values to search for.
+
+        Returns:
+            list: List of integer row positions.
+        """
 
         df = self.model.df
         if idx is not None:
@@ -1819,13 +2147,27 @@ class Table(Canvas):
         return []
 
     def getRowsFromMask(self, mask):
+        """
+        Get row positions from a boolean mask.
+
+        Args:
+            mask: Boolean mask.
+
+        Returns:
+            list: List of integer row positions.
+        """
         df = self.model.df
         if mask is not None:
             idx = df.ix[mask].index
         return self.getRowsFromIndex(idx)
 
     def findText(self, evt=None):
-        """Simple text search in whole table"""
+        """
+        Simple text search in whole table.
+
+        Args:
+            evt: The event that triggered this (optional).
+        """
 
         if hasattr(self, 'searchframe') and self.searchframe != None:
             return
@@ -1834,13 +2176,23 @@ class Table(Canvas):
         return
 
     def query(self, evt=None):
-        """Do query"""
+        """
+        Execute the current query.
+
+        Args:
+            evt: The event that triggered this (optional).
+        """
 
         self.qframe.query()
         return
 
     def queryBar(self, evt=None):
-        """Query/filtering dialog"""
+        """
+        Show query/filtering dialog.
+
+        Args:
+            evt: The event that triggered this (optional).
+        """
 
         if hasattr(self, 'qframe') and self.qframe != None:
             return
@@ -1849,14 +2201,25 @@ class Table(Canvas):
         return
 
     def updateWidgets(self):
-        """Update some dialogs when table changed"""
+        """
+        Update some dialogs when table changed.
+        """
 
         if hasattr(self, 'qframe') and self.qframe != None:
             self.qframe.update()
         return
 
     def _eval(self, df, ex):
-        """Evaluate an expression using numexpr"""
+        """
+        Evaluate an expression using numexpr.
+
+        Args:
+            df: The dataframe.
+            ex: The expression string.
+
+        Returns:
+            The result of the evaluation.
+        """
 
         #uses assignments to globals() - check this is ok
         import numexpr as ne
@@ -1866,7 +2229,12 @@ class Table(Canvas):
         return a
 
     def evalFunction(self, evt=None):
-        """Apply a function to create new columns"""
+        """
+        Apply a function to create new columns.
+
+        Args:
+            evt: The event that triggered this (optional).
+        """
 
         s = self.evalvar.get()
 
@@ -1909,8 +2277,13 @@ class Table(Canvas):
         return
 
     def recalculateFunctions(self, omit=None):
-        """Re evaluate any columns that were derived from functions
-        and dependent on other columns (except self derived?)"""
+        """
+        Re-evaluate any columns that were derived from functions
+        and dependent on other columns (except self derived?).
+
+        Args:
+            omit (str): Column name to omit from recalculation.
+        """
 
         df = self.model.df
         for n in self.formulae:
@@ -1926,7 +2299,9 @@ class Table(Canvas):
         return
 
     def updateFunctions(self):
-        """Remove functions if a column has been deleted"""
+        """
+        Remove functions if a column has been deleted.
+        """
 
         if not hasattr(self, 'formulae'):
             return
@@ -1938,8 +2313,14 @@ class Table(Canvas):
         return
 
     def functionsBar(self, evt=None):
-        """Apply python functions from a pre-defined set, this is
-        for stuff that can't be done with eval strings"""
+        """
+        Apply python functions from a pre-defined set.
+
+        This is for stuff that can't be done with eval strings.
+
+        Args:
+            evt: The event that triggered this (optional).
+        """
 
         def reset():
             self.evalframe.destroy()
@@ -1975,7 +2356,12 @@ class Table(Canvas):
         return
 
     def evalBar(self, evt=None):
-        """Use pd.eval to apply a function colwise or preset funcs."""
+        """
+        Use pd.eval to apply a function colwise or preset funcs.
+
+        Args:
+            evt: The event that triggered this (optional).
+        """
 
         if self.filtered == 1:
             messagebox.showwarning("Not available",
@@ -2044,7 +2430,13 @@ class Table(Canvas):
         return
 
     def resizeColumn(self, col, width):
-        """Resize a column by dragging"""
+        """
+        Resize a column by dragging.
+
+        Args:
+            col (int): The column index.
+            width (int): The new width.
+        """
 
         colname = self.model.getColumnName(col)
         if self.colheader.wrap == True:
@@ -2058,7 +2450,15 @@ class Table(Canvas):
         return
 
     def get_row_clicked(self, event):
-        """Get row where event on canvas occurs"""
+        """
+        Get row where event on canvas occurs.
+
+        Args:
+            event: The event containing the y-coordinate.
+
+        Returns:
+            int: The row index.
+        """
 
         h=self.rowheight
         #get coord on canvas, not window, need this if scrolling
@@ -2068,7 +2468,15 @@ class Table(Canvas):
         return rowc
 
     def get_col_clicked(self,event):
-        """Get column where event on the canvas occurs"""
+        """
+        Get column where event on the canvas occurs.
+
+        Args:
+            event: The event containing the x-coordinate.
+
+        Returns:
+            int: The column index.
+        """
 
         w = self.cellwidth
         x = int(self.canvasx(event.x))
@@ -2084,7 +2492,12 @@ class Table(Canvas):
         return
 
     def setSelectedRow(self, row=None):
-        """Set currently selected row and reset multiple row list"""
+        """
+        Set currently selected row and reset multiple row list.
+
+        Args:
+            row (int): The row index.
+        """
 
         self.currentrow = row
         self.startrow = row
@@ -2094,7 +2507,12 @@ class Table(Canvas):
         return
 
     def setSelectedCol(self, col):
-        """Set currently selected column"""
+        """
+        Set currently selected column.
+
+        Args:
+            col (int): The column index.
+        """
 
         self.currentcol = col
         self.multiplecollist = []
@@ -2102,6 +2520,12 @@ class Table(Canvas):
         return
 
     def setSelectedRows(self, rows):
+        """
+        Set multiple selected rows.
+
+        Args:
+            rows (list): List of row indices.
+        """
 
         self.startrow = rows[0]
         self.endrow = rows[-1]
@@ -2110,7 +2534,15 @@ class Table(Canvas):
             self.multiplerowlist.append(r)
 
     def setSelectedCells(self, startrow, endrow, startcol, endcol):
-        """Set a block of cells selected"""
+        """
+        Set a block of cells selected.
+
+        Args:
+            startrow (int): Start row index.
+            endrow (int): End row index.
+            startcol (int): Start column index.
+            endcol (int): End column index.
+        """
 
         self.currentrow = startrow
         self.currentcol = startcol
@@ -2125,15 +2557,30 @@ class Table(Canvas):
         return
 
     def getSelectedRow(self):
-        """Get currently selected row"""
+        """
+        Get currently selected row.
+
+        Returns:
+            int: The selected row index.
+        """
         return self.currentrow
 
     def getSelectedColumn(self):
-        """Get currently selected column"""
+        """
+        Get currently selected column.
+
+        Returns:
+            int: The selected column index.
+        """
         return self.currentcol
 
     def selectAll(self, evt=None):
-        """Select all rows and cells"""
+        """
+        Select all rows and cells.
+
+        Args:
+            evt: The event that triggered this (optional).
+        """
 
         self.startrow = 0
         self.endrow = self.rows
@@ -2146,8 +2593,12 @@ class Table(Canvas):
         return
 
     def selectNone(self):
-        """Deselect current, called when table is redrawn with
-        completely new cols and rows e.g. after model is updated."""
+        """
+        Deselect current selection.
+
+        Called when table is redrawn with completely new cols and rows
+        e.g. after model is updated.
+        """
 
         self.multiplecollist = []
         self.multiplerowlist = []
@@ -2156,7 +2607,16 @@ class Table(Canvas):
         return
 
     def getCellCoords(self, row, col):
-        """Get x-y coordinates to drawing a cell in a given row/col"""
+        """
+        Get x-y coordinates to drawing a cell in a given row/col.
+
+        Args:
+            row (int): The row index.
+            col (int): The column index.
+
+        Returns:
+            tuple: (x1, y1, x2, y2) coordinates.
+        """
 
         colname=self.model.getColumnName(col)
         if colname in self.columnwidths:
@@ -2175,7 +2635,16 @@ class Table(Canvas):
         return x1,y1,x2,y2
 
     def getCanvasPos(self, row, col):
-        """Get the cell x-y coords as a fraction of canvas size"""
+        """
+        Get the cell x-y coords as a fraction of canvas size.
+
+        Args:
+            row (int): The row index.
+            col (int): The column index.
+
+        Returns:
+            tuple: (cx, cy) fractional coordinates.
+        """
 
         if self.rows==0:
             return None, None
@@ -2185,7 +2654,16 @@ class Table(Canvas):
         return cx, cy
 
     def isInsideTable(self,x,y):
-        """Returns true if x-y coord is inside table bounds"""
+        """
+        Returns true if x-y coord is inside table bounds.
+
+        Args:
+            x (int): The x-coordinate.
+            y (int): The y-coordinate.
+
+        Returns:
+            bool: True if inside, False otherwise.
+        """
 
         if self.x_start < x < self.tablewidth and self.y_start < y < self.rows*self.rowheight:
             return 1
@@ -2194,12 +2672,19 @@ class Table(Canvas):
         return answer
 
     def setRowHeight(self, h):
-        """Set the row height"""
+        """
+        Set the row height.
+
+        Args:
+            h (int): The new row height.
+        """
         self.rowheight = h
         return
 
     def clearSelected(self):
-        """Clear selections"""
+        """
+        Clear selections.
+        """
 
         self.delete('rect')
         self.delete('entry')
@@ -2210,7 +2695,9 @@ class Table(Canvas):
         return
 
     def gotoprevRow(self):
-        """Programmatically set previous row - eg. for button events"""
+        """
+        Programmatically set previous row - eg. for button events.
+        """
 
         self.clearSelected()
         current = self.getSelectedRow()
@@ -2228,7 +2715,9 @@ class Table(Canvas):
         return
 
     def gotonextRow(self):
-        """Programmatically set next row - eg. for button events"""
+        """
+        Programmatically set next row - eg. for button events.
+        """
 
         self.clearSelected()
         current = self.getSelectedRow()
@@ -2246,7 +2735,12 @@ class Table(Canvas):
         return
 
     def handle_left_click(self, event):
-        """Respond to a single press"""
+        """
+        Respond to a single press.
+
+        Args:
+            event: The mouse event.
+        """
 
         self.clearSelected()
         self.allrows = False
@@ -2284,7 +2778,12 @@ class Table(Canvas):
         return
 
     def handle_left_release(self,event):
-        """Handle left mouse button release event"""
+        """
+        Handle left mouse button release event.
+
+        Args:
+            event: The mouse event.
+        """
 
         self.endrow = self.get_row_clicked(event)
         df = self.model.df
@@ -2309,7 +2808,12 @@ class Table(Canvas):
         return
 
     def handle_left_ctrl_click(self, event):
-        """Handle ctrl clicks for multiple row selections"""
+        """
+        Handle ctrl clicks for multiple row selections.
+
+        Args:
+            event: The mouse event.
+        """
 
         rowclicked = self.get_row_clicked(event)
         colclicked = self.get_col_clicked(event)
@@ -2325,13 +2829,23 @@ class Table(Canvas):
         return
 
     def handle_left_shift_click(self, event):
-        """Handle shift click, for selecting multiple rows"""
+        """
+        Handle shift click, for selecting multiple rows.
+
+        Args:
+            event: The mouse event.
+        """
 
         self.handle_mouse_drag(event)
         return
 
     def handle_mouse_drag(self, event):
-        """Handle mouse moved with button held down, multiple selections"""
+        """
+        Handle mouse moved with button held down, multiple selections.
+
+        Args:
+            event: The mouse event.
+        """
 
         if hasattr(self, 'cellentry'):
             self.cellentry.destroy()
@@ -2373,7 +2887,12 @@ class Table(Canvas):
         return
 
     def handle_arrow_keys(self, event):
-        """Handle arrow keys press"""
+        """
+        Handle arrow keys press.
+
+        Args:
+            event: The key event.
+        """
 
         row = self.get_row_clicked(event)
         col = self.get_col_clicked(event)
@@ -2431,13 +2950,27 @@ class Table(Canvas):
         return
 
     def handle_page_up(self, event=None):
+        """
+        Handle Page Up key press.
+
+        Args:
+            event: The key event (optional).
+        """
         self.page_up()
 
     def handle_page_down(self, event=None):
+        """
+        Handle Page Down key press.
+
+        Args:
+            event: The key event (optional).
+        """
         self.page_down()
 
     def page_up(self):
-        """Scroll up by one page"""
+        """
+        Scroll up by one page.
+        """
 
         first_visible_row = int(self.rows * self.yview()[0])
         visible_rows = int(self.rows * (self.yview()[1] - self.yview()[0]))
@@ -2446,7 +2979,9 @@ class Table(Canvas):
         return
 
     def page_down(self):
-        """Scroll down by one page"""
+        """
+        Scroll down by one page.
+        """
 
         first_visible_row = int(self.rows * self.yview()[0])
         visible_rows = int(self.rows * (self.yview()[1] - self.yview()[0]))
@@ -2455,8 +2990,14 @@ class Table(Canvas):
         return
 
     def handle_double_click(self, event):
-        """Do double click stuff. Selected row/cols will already have
-           been set with single click binding"""
+        """
+        Do double click stuff.
+
+        Selected row/cols will already have been set with single click binding.
+
+        Args:
+            event: The mouse event.
+        """
 
         row = self.get_row_clicked(event)
         col = self.get_col_clicked(event)
@@ -2464,7 +3005,12 @@ class Table(Canvas):
         return
 
     def handle_right_click(self, event):
-        """respond to a right click"""
+        """
+        Respond to a right click.
+
+        Args:
+            event: The mouse event.
+        """
 
         self.delete('tooltip')
         self.rowheader.clearSelected()
@@ -2495,8 +3041,15 @@ class Table(Canvas):
         return
 
     def placeColumn(self, col1, col2):
-        """Move col1 next to col2, useful for placing a new column
-        made from the first one next to it so user can see it easily"""
+        """
+        Move col1 next to col2.
+
+        Useful for placing a new column made from the first one next to it so user can see it easily.
+
+        Args:
+            col1: Name of the column to move.
+            col2: Name of the reference column.
+        """
 
         ind1 = self.model.df.columns.get_loc(col1)
         ind2 = self.model.df.columns.get_loc(col2)
@@ -2505,7 +3058,9 @@ class Table(Canvas):
         return
 
     def gotonextCell(self):
-        """Move highlighted cell to next cell in row or a new col"""
+        """
+        Move highlighted cell to next cell in row or a new col.
+        """
 
         if hasattr(self, 'cellentry'):
             self.cellentry.destroy()
@@ -2514,7 +3069,15 @@ class Table(Canvas):
         return
 
     def movetoSelection(self, row=None, col=0, idx=None, offset=0):
-        """Move to a specific row/col, updating table"""
+        """
+        Move to a specific row/col, updating table.
+
+        Args:
+            row (int): Row index.
+            col (int): Column index.
+            idx: Index value (if row is None).
+            offset (int): Row offset.
+        """
 
         if row is None:
             if idx is None:
@@ -2533,7 +3096,12 @@ class Table(Canvas):
         return
 
     def copyTable(self, event=None):
-        """Copy from the clipboard"""
+        """
+        Copy table to the clipboard.
+
+        Args:
+            event: The event that triggered this (optional).
+        """
 
         df = self.model.df.copy()
         #flatten multi-index
@@ -2542,7 +3110,12 @@ class Table(Canvas):
         return
 
     def paste(self, event=None):
-        """Paste a new table from the clipboard"""
+        """
+        Paste a new table from the clipboard.
+
+        Args:
+            event: The event that triggered this (optional).
+        """
 
         self.storeCurrent()
         try:
@@ -2561,7 +3134,13 @@ class Table(Canvas):
         return
 
     def copy(self, rows, cols=None):
-        """Copy cell contents from clipboard - overwrites table."""
+        """
+        Copy selected cell contents to clipboard.
+
+        Args:
+            rows: Selected rows.
+            cols: Selected columns.
+        """
 
         data = self.getSelectedDataFrame()
         try:
@@ -2576,7 +3155,9 @@ class Table(Canvas):
         return
 
     def transpose(self):
-        """Transpose table"""
+        """
+        Transpose table.
+        """
 
         self.storeCurrent()
         self.model.transpose()
@@ -2587,7 +3168,9 @@ class Table(Canvas):
         return
 
     def transform(self):
-        """Apply element-wise transform"""
+        """
+        Apply element-wise transform.
+        """
 
         df = self.model.df
         cols = list(df.columns[self.multiplecollist])
@@ -2632,7 +3215,9 @@ class Table(Canvas):
         return
 
     def aggregate(self):
-        """Show aggregate dialog"""
+        """
+        Show aggregate dialog.
+        """
 
         df = self.model.df
         from .dialogs import AggregateDialog
@@ -2640,7 +3225,9 @@ class Table(Canvas):
         return
 
     def melt(self):
-        """Melt table"""
+        """
+        Melt table.
+        """
 
         df = self.model.df
         cols = list(df.columns)
@@ -2669,7 +3256,9 @@ class Table(Canvas):
         return
 
     def crosstab(self):
-        """Cross tabulation"""
+        """
+        Cross tabulation.
+        """
 
         df = self.model.df
         from .dialogs import CrosstabDialog
@@ -2677,7 +3266,9 @@ class Table(Canvas):
         return
 
     def pivot(self):
-        """Pivot table"""
+        """
+        Pivot table.
+        """
 
         df = self.model.df
         cols = list(df.columns)
@@ -2709,7 +3300,9 @@ class Table(Canvas):
         return
 
     def doCombine(self):
-        """Do combine/merge operation"""
+        """
+        Do combine/merge operation.
+        """
 
         if self.child == None:
             messagebox.showwarning("No data", 'You need a sub-table to merge with.',
@@ -2727,7 +3320,12 @@ class Table(Canvas):
         return
 
     def merge(self, table):
-        """Merge with another table."""
+        """
+        Merge with another table.
+
+        Args:
+            table: The other table to merge with.
+        """
 
         df1 = self.model.df
         df2 = table.model.df
@@ -2738,14 +3336,21 @@ class Table(Canvas):
         return
 
     def describe(self):
-        """Create table summary"""
+        """
+        Create table summary (statistics).
+        """
 
         g = self.model.df.describe()
         self.createChildTable(g)
         return
 
     def convertColumnNames(self, s='_'):
-        """Convert col names so we can use numexpr"""
+        """
+        Convert col names so we can use numexpr.
+
+        Args:
+            s (str): Separator/replacement string (default '_').
+        """
 
         d = MultipleValDialog(title='Convert col names',
                                 initialvalues=['','','',0,0],
@@ -2776,7 +3381,9 @@ class Table(Canvas):
         return
 
     def convertNumeric(self):
-        """Convert cols to numeric if possible"""
+        """
+        Convert cols to numeric if possible.
+        """
 
         types = ['float','int']
         d = MultipleValDialog(title='Convert to numeric',
@@ -2811,9 +3418,9 @@ class Table(Canvas):
             if fillempty == 1:
                 x = x.fillna(0)
             if currency == 1:
-                x = x.replace( '[\$\£\€,)]','', regex=True ).replace( '[(]','-', regex=True )
+                x = x.replace( r'[\$\£\€,)]','', regex=True ).replace( '[(]','-', regex=True )
             if removetext == 1:
-                x = x.replace( '[^\d.]+', '', regex=True)
+                x = x.replace( r'[^\d.]+', '', regex=True)
             self.model.df[c] = pd.to_numeric(x, errors='coerce').astype(convtype)
 
         self.redraw()
@@ -2821,7 +3428,9 @@ class Table(Canvas):
         return
 
     def corrMatrix(self):
-        """Correlation matrix"""
+        """
+        Calculate correlation matrix.
+        """
 
         df = self.model.df
         corr = df.corr()
@@ -2829,7 +3438,15 @@ class Table(Canvas):
         return
 
     def createChildTable(self, df, title=None, index=False, out=False):
-        """Add the child table"""
+        """
+        Create and display a child table.
+
+        Args:
+            df: The dataframe for the child table.
+            title (str): Title for the window (if out=True).
+            index (bool): Whether to show the index.
+            out (bool): Whether to open in a new window (Toplevel).
+        """
 
         self.closeChildTable()
         if out == True:
@@ -2856,7 +3473,9 @@ class Table(Canvas):
         return
 
     def closeChildTable(self):
-        """Close the child table"""
+        """
+        Close the child table.
+        """
 
         if self.child != None:
             self.child.destroy()
@@ -2865,7 +3484,9 @@ class Table(Canvas):
         return
 
     def tableFromSelection(self):
-        """Create a new table from the selected cells"""
+        """
+        Create a new table from the selected cells.
+        """
 
         df = self.getSelectedDataFrame()
         if len(df) <=1:
@@ -2900,7 +3521,9 @@ class Table(Canvas):
         return'''
 
     def showInfo(self):
-        """Show dataframe info"""
+        """
+        Show dataframe info.
+        """
 
         df = self.model.df
         import io
@@ -2916,13 +3539,20 @@ class Table(Canvas):
         return
 
     def get_memory(self, ):
-        """memory usage of current table"""
+        """
+        Get memory usage of current table.
+
+        Returns:
+            pd.Series: Memory usage per column.
+        """
 
         df = self.model.df
         return df.memory_usage()
 
     def showasText(self):
-        """Get table as formatted text - for printing"""
+        """
+        Show table as formatted text (for printing/export).
+        """
 
         d = MultipleValDialog(title='Table to Text',
                                 initialvalues=(['left','right'],1,1,0,'',0,0),
@@ -2962,8 +3592,18 @@ class Table(Canvas):
     # --- Some cell specific actions here ---
 
     def popupMenu(self, event, rows=None, cols=None, outside=None):
-        """Add left and right click behaviour for canvas, should not have to override
-            this function, it will take its values from defined dicts in constructor"""
+        """
+        Create and display the right-click popup menu.
+
+        Args:
+            event: The mouse event.
+            rows: Selected rows.
+            cols: Selected columns.
+            outside: Whether the click was outside the table.
+
+        Returns:
+            Menu: The popup menu instance.
+        """
 
         defaultactions = {
                         "Copy" : lambda: self.copy(rows, cols),
@@ -3069,7 +3709,13 @@ class Table(Canvas):
     # --- spreadsheet type functions ---
 
     def fillDown(self, rowlist, collist):
-        """Fill down a column, or multiple columns"""
+        """
+        Fill down a column, or multiple columns.
+
+        Args:
+            rowlist: List of row indices.
+            collist: List of column indices.
+        """
 
         self.storeCurrent()
         df = self.model.df
@@ -3081,7 +3727,13 @@ class Table(Canvas):
         return
 
     def fillAcross(self, collist, rowlist):
-        """Fill across a row, or multiple rows"""
+        """
+        Fill across a row, or multiple rows.
+
+        Args:
+            collist: List of column indices.
+            rowlist: List of row indices.
+        """
 
         self.storeCurrent()
         model = self.model
@@ -3091,7 +3743,12 @@ class Table(Canvas):
         return
 
     def getSelectionValues(self):
-        """Get values for current multiple cell selection"""
+        """
+        Get values for current multiple cell selection.
+
+        Returns:
+            list: List of lists of cell values.
+        """
 
         if len(self.multiplerowlist) == 0 or len(self.multiplecollist) == 0:
             return None
@@ -3117,7 +3774,15 @@ class Table(Canvas):
         return lists
 
     def showPlotViewer(self, parent=None):
-        """Create plot frame"""
+        """
+        Create plot frame.
+
+        Args:
+            parent: Parent widget (optional).
+
+        Returns:
+            PlotViewer: The plot viewer instance.
+        """
 
         if not hasattr(self, 'pf'):
             self.pf = PlotViewer(table=self, parent=parent)
@@ -3126,7 +3791,9 @@ class Table(Canvas):
         return self.pf
 
     def hidePlot(self):
-        """Hide plot frame"""
+        """
+        Hide plot frame.
+        """
 
         if hasattr(self, 'pf'):
             self.pf.hide()
@@ -3134,13 +3801,22 @@ class Table(Canvas):
         return
 
     def showPlot(self):
+        """
+        Show the plot frame.
+        """
         if hasattr(self, 'pf'):
             self.pf.show()
         return
 
     def getSelectedDataFrame(self):
-        """Return a sub-dataframe of the selected cells. Will try to convert object
-        types to float so that plotting works."""
+        """
+        Return a sub-dataframe of the selected cells.
+
+        Will try to convert object types to float so that plotting works.
+
+        Returns:
+            pd.DataFrame: The selected data.
+        """
 
         df = self.model.df
         cols, rows = self.multiplecollist, self.multiplerowlist
@@ -3174,7 +3850,12 @@ class Table(Canvas):
         return data
 
     def getSelectedRowData(self):
-        """Return a sub-dataframe of the selected rows"""
+        """
+        Return a sub-dataframe of the selected rows.
+
+        Returns:
+            pd.DataFrame: The selected rows data.
+        """
 
         df = self.model.df
         if len(self.multiplerowlist) > 0:
@@ -3184,7 +3865,12 @@ class Table(Canvas):
         return data
 
     def getPlotData(self):
-        """Plot data from selection"""
+        """
+        Get data for plotting from selection.
+
+        Returns:
+            pd.DataFrame: Data for plotting.
+        """
 
         data = self.getSelectedDataFrame()
         #data = data.convert_objects(convert_numeric='force')
@@ -3192,7 +3878,9 @@ class Table(Canvas):
         return data
 
     def plotSelected(self):
-        """Plot the selected data in the associated plotviewer"""
+        """
+        Plot the selected data in the associated plotviewer.
+        """
 
         if not hasattr(self, 'pf') or self.pf == None:
             self.pf = PlotViewer(table=self)
@@ -3212,6 +3900,9 @@ class Table(Canvas):
         return
 
     def plot3D(self):
+        """
+        Plot selected data in 3D.
+        """
 
         if not hasattr(self, 'pf'):
             self.pf = PlotViewer(table=self)
@@ -3224,7 +3915,13 @@ class Table(Canvas):
     #--- Drawing stuff ---
 
     def drawGrid(self, startrow, endrow):
-        """Draw the table grid lines"""
+        """
+        Draw the table grid lines.
+
+        Args:
+            startrow (int): Start row index.
+            endrow (int): End row index.
+        """
 
         self.delete('gridline','text')
         rows=len(self.rowrange)
@@ -3248,7 +3945,9 @@ class Table(Canvas):
         return
 
     def drawRowHeader(self):
-        """User has clicked to select a cell"""
+        """
+        Draw the row header (row numbers).
+        """
 
         self.delete('rowheader')
         x_start=self.x_start
@@ -3271,7 +3970,15 @@ class Table(Canvas):
         return
 
     def drawSelectedRect(self, row, col, color=None, fillcolor=None):
-        """User has clicked to select a cell"""
+        """
+        Draw a rectangle indicating the current selection.
+
+        Args:
+            row (int): Row index.
+            col (int): Column index.
+            color (str): Outline color.
+            fillcolor (str): Fill color.
+        """
 
         if col >= self.cols:
             return
@@ -3292,7 +3999,16 @@ class Table(Canvas):
         return
 
     def drawRect(self, row, col, color=None, tag=None, delete=1):
-        """Cell is colored"""
+        """
+        Draw a colored rectangle in a cell.
+
+        Args:
+            row (int): Row index.
+            col (int): Column index.
+            color (str): Fill color.
+            tag (str): Tag for the rectangle.
+            delete (int): Whether to delete existing rectangle (1=yes).
+        """
 
         if delete==1:
             self.delete('cellbg'+str(row)+str(col))
@@ -3315,7 +4031,13 @@ class Table(Canvas):
         return
 
     def handleCellEntry(self, row, col):
-        """Callback for cell entry"""
+        """
+        Callback for cell entry (editing).
+
+        Args:
+            row (int): Row index.
+            col (int): Column index.
+        """
 
         value = self.cellentryvar.get()
         if self.filtered == 1:
@@ -3336,7 +4058,9 @@ class Table(Canvas):
         return
 
     def handleEntryMenu(self, *args):
-        """Callback for option menu in categorical columns entry"""
+        """
+        Callback for option menu in categorical columns entry.
+        """
 
         value = self.dropvar.get()
         self.delete('entry')
@@ -3350,8 +4074,15 @@ class Table(Canvas):
         return
 
     def drawCellEntry(self, row, col, text=None):
-        """When the user single/double clicks on a text/number cell,
-          bring up entry window and allow edits."""
+        """
+        When the user single/double clicks on a text/number cell,
+        bring up entry window and allow edits.
+
+        Args:
+            row (int): Row index.
+            col (int): Column index.
+            text (str): Initial text (unused, gets from model).
+        """
 
         if self.editable == False:
             return
@@ -3379,7 +4110,15 @@ class Table(Canvas):
         return
 
     def checkDataEntry(self,event=None):
-        """do validation checks on data entry in a widget"""
+        """
+        Do validation checks on data entry in a widget.
+
+        Args:
+            event: The event containing the widget.
+
+        Returns:
+            int: 1 if valid, 0 if invalid.
+        """
 
         value=event.widget.get()
         if value!='':
@@ -3394,7 +4133,16 @@ class Table(Canvas):
         return 1
 
     def drawText(self, row, col, celltxt, align=None, single_line=True):
-        """Draw the text inside a cell area"""
+        """
+        Draw the text inside a cell area.
+
+        Args:
+            row (int): Row index.
+            col (int): Column index.
+            celltxt (str): The text to draw.
+            align (str): Alignment ('w', 'e', 'center').
+            single_line (bool): Whether to force single line.
+        """
 
         self.delete('celltext'+str(col)+'_'+str(row))
         h = self.rowheight
@@ -3441,7 +4189,9 @@ class Table(Canvas):
         return
 
     def drawSelectedRow(self):
-        """Draw a highlight rect for the currently selected rows"""
+        """
+        Draw a highlight rect for the currently selected rows.
+        """
 
         self.delete('rowrect')
         row = self.currentrow
@@ -3461,7 +4211,15 @@ class Table(Canvas):
         return
 
     def drawSelectedCol(self, col=None, delete=1, color=None, tag='colrect'):
-        """Draw a highlight rect for the current column selection"""
+        """
+        Draw a highlight rect for the current column selection.
+
+        Args:
+            col (int): Column index.
+            delete (int): Whether to delete previous selection.
+            color (str): Highlight color.
+            tag (str): Tag for the rectangle.
+        """
 
         if color == None:
             color = self.colselectedcolor
@@ -3482,7 +4240,12 @@ class Table(Canvas):
         return
 
     def drawMultipleRows(self, rowlist):
-        """Draw more than one row selection"""
+        """
+        Draw more than one row selection.
+
+        Args:
+            rowlist: List of row indices.
+        """
 
         self.delete('multiplesel')
         #self.delete('rowrect')
@@ -3510,14 +4273,18 @@ class Table(Canvas):
         return
 
     def drawMultipleCols(self):
-        """Draw multiple column selections"""
+        """
+        Draw multiple column selections.
+        """
 
         for c in self.multiplecollist:
             self.drawSelectedCol(c, delete=False)
         return
 
     def drawMultipleCells(self):
-        """Draw an outline box for multiple cell selection"""
+        """
+        Draw an outline box for multiple cell selection.
+        """
 
         self.delete('currentrect')
         self.delete('multicellrect')
@@ -3534,19 +4301,27 @@ class Table(Canvas):
         return
 
     def setcellbackgr(self):
+        """
+        Set cell background color via picker.
+        """
         clr = pickColor(self,self.cellbackgr)
         if clr != None:
             self.cellbackgr = clr
         return
 
     def setgrid_color(self):
+        """
+        Set grid color via picker.
+        """
         clr = pickColor(self,self.grid_color)
         if clr != None:
             self.grid_color = clr
         return
 
     def setrowselectedcolor(self):
-        """Set selected row color"""
+        """
+        Set selected row color via picker.
+        """
 
         clr = pickColor(self,self.rowselectedcolor)
         if clr != None:
@@ -3554,27 +4329,48 @@ class Table(Canvas):
         return
 
     def showPreferences(self):
-        """Preferences dialog"""
+        """
+        Show preferences dialog.
+        """
 
         options = config.load_options()
         f = config.preferencesDialog(self, options, table=self)
         return
 
     def loadPrefs(self, prefs=None):
-        """Load preferences from defaults"""
+        """
+        Load preferences from defaults.
+
+        Args:
+            prefs: Preferences dict (unused, loads from config).
+        """
 
         options = config.load_options()
         config.apply_options(options, self)
         return
 
     def getFonts(self):
+        """
+        Get available fonts.
+
+        Returns:
+            list: Sorted list of font families.
+        """
 
         fonts = set(list(font.families()))
         fonts = sorted(list(fonts))
         return fonts
 
     def show_progress_window(self, message=None):
-        """Show progress bar window for loading of data"""
+        """
+        Show progress bar window for loading of data.
+
+        Args:
+            message (str): Message to display.
+
+        Returns:
+            Toplevel: The progress window.
+        """
 
         progress_win=Toplevel() # Open a new window
         progress_win.title("Please Wait")
@@ -3595,8 +4391,13 @@ class Table(Canvas):
         return progress_win
 
     def updateModel(self, model=None):
-        """Should call this method when a new table model is loaded.
-           Recreates widgets and redraws the table."""
+        """
+        Should call this method when a new table model is loaded.
+        Recreates widgets and redraws the table.
+
+        Args:
+            model: The new TableModel.
+        """
 
         if model is not None:
             self.model = model
@@ -3611,7 +4412,9 @@ class Table(Canvas):
         return
 
     def new(self):
-        """Clears all the data and makes a new table"""
+        """
+        Clears all the data and makes a new table.
+        """
 
         mpDlg = MultipleValDialog(title='Create new table',
                                     initialvalues=(50, 10),
@@ -3627,7 +4430,12 @@ class Table(Canvas):
         return
 
     def load(self, filename=None):
-        """load from a file"""
+        """
+        Load from a file.
+
+        Args:
+            filename (str): File path. If None, prompts user.
+        """
         if filename == None:
             filename = filedialog.askopenfilename(parent=self.master,
                                                       defaultextension='.mpk',
@@ -3650,7 +4458,12 @@ class Table(Canvas):
         return
 
     def saveAs(self, filename=None):
-        """Save dataframe to file"""
+        """
+        Save dataframe to file (Save As).
+
+        Args:
+            filename (str): File path. If None, prompts user.
+        """
 
         if filename == None:
             filename = filedialog.asksaveasfilename(parent=self.master,
@@ -3664,13 +4477,22 @@ class Table(Canvas):
         return
 
     def save(self):
-        """Save current file"""
+        """
+        Save current file.
+        """
 
         self.saveAs(self.filename)
         return
 
     def importCSV(self, filename=None, dialog=False, **kwargs):
-        """Import from csv file"""
+        """
+        Import from csv file.
+
+        Args:
+            filename (str): File path.
+            dialog (bool): Whether to show import dialog options.
+            **kwargs: Arguments for pd.read_csv.
+        """
 
         if self.importpath == None:
             self.importpath = os.getcwd()
@@ -3698,6 +4520,14 @@ class Table(Canvas):
         return
 
     def importHDF(self, filename=None, dialog=False, **kwargs):
+        """
+        Import from HDF5 file.
+
+        Args:
+            filename (str): File path.
+            dialog (bool): Whether to show dialog.
+            **kwargs: Arguments for pd.read_hdf.
+        """
 
         if self.importpath == None:
             self.importpath = os.getcwd()
@@ -3717,7 +4547,12 @@ class Table(Canvas):
         return
 
     def loadExcel(self, filename=None):
-        """Load excel file"""
+        """
+        Load excel file.
+
+        Args:
+            filename (str): File path.
+        """
 
         if filename == None:
             filename = filedialog.askopenfilename(parent=self.master,
@@ -3746,7 +4581,12 @@ class Table(Canvas):
         return
 
     def doExport(self, filename=None):
-        """Do a simple export of the cell contents to csv"""
+        """
+        Do a simple export of the cell contents to csv.
+
+        Args:
+            filename (str): File path.
+        """
 
         if filename == None:
             filename = filedialog.asksaveasfilename(parent=self.master,
@@ -3761,10 +4601,21 @@ class Table(Canvas):
         return
 
     def getGeometry(self, frame):
-        """Get frame geometry"""
+        """
+        Get frame geometry.
+
+        Args:
+            frame: The widget frame.
+
+        Returns:
+            tuple: (x, y, width, height).
+        """
         return frame.winfo_rootx(), frame.winfo_rooty(), frame.winfo_width(), frame.winfo_height()
 
     def clearFormatting(self):
+        """
+        Clear all formatting (colors, etc.) and reset to defaults.
+        """
         self.set_defaults()
         self.columncolors = {}
         self.rowcolors = pd.DataFrame()
@@ -3773,10 +4624,18 @@ class Table(Canvas):
         return
 
     def setLeftClickSrc(self, src):
+        """
+        Set source of left click (row or column).
+
+        Args:
+            src (str): "row" or "column".
+        """
         self.__last_left_click_src = src
 
 class ToolBar(Frame):
-    """Uses the parent instance to provide the functions"""
+    """
+    Uses the parent instance to provide the functions.
+    """
     def __init__(self, parent=None, parentapp=None):
 
         Frame.__init__(self, parent, width=600, height=40)
@@ -3824,7 +4683,9 @@ class ToolBar(Frame):
         return
 
 class ChildToolBar(ToolBar):
-    """Smaller toolbar for child table"""
+    """
+    Smaller toolbar for child table.
+    """
     def __init__(self, parent=None, parentapp=None):
         Frame.__init__(self, parent, width=600, height=40)
         self.parentframe = parent
@@ -3849,7 +4710,9 @@ class ChildToolBar(ToolBar):
         return
 
 class statusBar(Frame):
-    """Status bar class"""
+    """
+    Status bar class.
+    """
     def __init__(self, parent=None, parentapp=None):
 
         Frame.__init__(self, parent)
@@ -3885,7 +4748,9 @@ class statusBar(Frame):
         return
 
     def update(self):
-        """Update status bar"""
+        """
+        Update status bar with current model info.
+        """
 
         model = self.parentapp.model
         self.rowsvar.set(len(model.df))

@@ -38,7 +38,12 @@ class ExamplePlugin(Plugin):
 
 
     def main(self, parent):
-        """Customise this or _doFrame for your widgets"""
+        """
+        Customise this or _doFrame for your widgets.
+
+        Args:
+            parent: Parent application/frame.
+        """
 
         if parent==None:
             return
@@ -48,6 +53,9 @@ class ExamplePlugin(Plugin):
         return
 
     def _doFrame(self):
+        """
+        Create frame and widgets.
+        """
 
         if 'uses_sidepane' in self.capabilities:
             self.table = self.parent.getCurrentTable()
@@ -68,7 +76,9 @@ class ExamplePlugin(Plugin):
         return
 
     def _createMenuBar(self):
-        """Create the menu bar for the application. """
+        """
+        Create the menu bar for the application.
+        """
 
         self.menu=Menu(self.mainwin)
         self.file_menu={ '01Quit':{'cmd':self.quit}}
@@ -78,13 +88,23 @@ class ExamplePlugin(Plugin):
         return
 
     def quit(self, evt=None):
-        """Override this to handle pane closing"""
+        """
+        Override this to handle pane closing.
+
+        Args:
+            evt: Event.
+        """
 
         self.mainwin.destroy()
         return
 
     def about(self):
-        """About this plugin"""
+        """
+        About this plugin.
+
+        Returns:
+            str: About text.
+        """
 
         txt = "This plugin implements ...\n"+\
                "version: %s" %self.version

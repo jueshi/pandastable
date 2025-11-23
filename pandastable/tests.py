@@ -35,21 +35,44 @@ import unittest
 import threading
 
 class clickThread(threading.Thread):
+    """
+    Thread for simulating clicks.
+    """
     def __init__(self, root):
+        """
+        Initialize.
+
+        Args:
+            root: Root widget.
+        """
         threading.Thread.__init__(self)
         self.root = root
 
     def getButton(self, root):
+        """
+        Print children.
+        """
         print(self.root.children)
 
     def run(self):
+        """
+        Run thread.
+        """
         button = lambda a: isinstance(a, Button)
         self.getButton(self.root)
         print ("clicked")
 
 class App(Frame):
-    """Test frame for table"""
+    """
+    Test frame for table.
+    """
     def __init__(self, parent=None):
+        """
+        Initialize.
+
+        Args:
+            parent: Parent widget.
+        """
         self.parent = parent
         Frame.__init__(self)
         self.main = self.master
@@ -62,16 +85,23 @@ class App(Frame):
         return
 
 class TableTests(unittest.TestCase):
-    """Pandastable tests - test anything involving table manipulation
-       but avoid actions that trigger dialogs"""
+    """
+    Pandastable tests - test anything involving table manipulation
+    but avoid actions that trigger dialogs.
+    """
     def setUp(self):
+        """
+        Set up tests.
+        """
         self.app = app = App()
         #thread = clickThread(self.table.parentframe)
         #thread.start()
         return
 
     def testA(self):
-        """Simple table tests"""
+        """
+        Simple table tests.
+        """
 
         #app.mainloop()
         table = self.app.table
@@ -87,7 +117,9 @@ class TableTests(unittest.TestCase):
         return
 
     def testB(self):
-        """Sorting and adding"""
+        """
+        Sorting and adding.
+        """
 
         table = self.app.table
         table.sortTable(0, ascending=1)
@@ -101,7 +133,9 @@ class TableTests(unittest.TestCase):
         return
 
     def testC(self):
-        """Table manipulation"""
+        """
+        Table manipulation.
+        """
 
         table = self.app.table
         table.groupby(0)
@@ -114,7 +148,9 @@ class TableTests(unittest.TestCase):
         return
 
     def testD(self):
-        """Load/save test"""
+        """
+        Load/save test.
+        """
 
         df = TableModel.getSampleData(rows=10000)
         model = TableModel(df)
@@ -125,10 +161,19 @@ class TableTests(unittest.TestCase):
         return
 
     def quit(self):
+        """
+        Quit app.
+        """
         self.app.quit()
 
 class DataExploreTests(unittest.TestCase):
+    """
+    DataExplore application tests.
+    """
     def setUp(self):
+        """
+        Set up.
+        """
         return
 
     '''def testApp(self):

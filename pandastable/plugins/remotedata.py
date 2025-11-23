@@ -47,6 +47,12 @@ class DataReaderPlugin(Plugin):
         return
 
     def main(self, parent):
+        """
+        Main entry point.
+
+        Args:
+            parent: Parent application.
+        """
 
         if parent==None:
             return
@@ -86,6 +92,9 @@ class DataReaderPlugin(Plugin):
         return
 
     def fetch(self):
+        """
+        Fetch data from source.
+        """
 
         import pandas_datareader as pdr
         import pandas_datareader.data as web
@@ -136,7 +145,15 @@ class DataReaderPlugin(Plugin):
         return
 
     def fetch_url(self, url):
-        """Fetch data from an url"""
+        """
+        Fetch data from an url.
+
+        Args:
+            url (str): The URL to fetch.
+
+        Returns:
+            pd.DataFrame: Fetched data.
+        """
 
         ext = os.path.splitext(url)[1]
         if ext == '.zip':
@@ -158,7 +175,12 @@ class DataReaderPlugin(Plugin):
         return df
 
     def update(self, evt=None):
-        """Update data widget(s)"""
+        """
+        Update data widget(s) when source changes.
+
+        Args:
+            evt: Event.
+        """
 
         datasets = []
         self.applyOptions()
@@ -176,7 +198,9 @@ class DataReaderPlugin(Plugin):
         return
 
     def applyOptions(self):
-        """Set the options"""
+        """
+        Set the options.
+        """
 
         kwds = {}
         for i in self.opts:
@@ -190,21 +214,40 @@ class DataReaderPlugin(Plugin):
         return
 
     def _createWidgets(self, parent, callback=None):
-        """Auto create tk vars, widgets for corresponding options and
-           and return the frame"""
+        """
+        Auto create tk vars, widgets for corresponding options and
+        and return the frame.
+
+        Args:
+            parent: Parent widget.
+            callback: Callback function.
+
+        Returns:
+            Frame: The options frame.
+        """
 
         dialog, self.tkvars, self.widgets = plotting.dialogFromOptions(parent, self.opts, self.groups)
         self.widgets['source'].bind("<<ComboboxSelected>>", self.update)
         return dialog
 
     def quit(self, evt=None):
-        """Override this to handle pane closing"""
+        """
+        Override this to handle pane closing.
+
+        Args:
+            evt: Event.
+        """
 
         self.mainwin.destroy()
         return
 
     def about(self):
-        """About this plugin"""
+        """
+        About this plugin.
+
+        Returns:
+            str: About text.
+        """
 
         txt = "This plugin allows fetching of remote data from\n"+\
               "multiple sources of public data using the pandas\n"+\

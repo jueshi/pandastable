@@ -40,7 +40,9 @@ import re, glob
 from pandastable.plugin import Plugin
 
 class BatchRenamePlugin(Plugin):
-    """Batch renaming plugin for DataExplore"""
+    """
+    Batch renaming plugin for DataExplore.
+    """
 
     capabilities = ['gui']
     requires = ['']
@@ -52,6 +54,12 @@ class BatchRenamePlugin(Plugin):
         return
 
     def main(self, parent):
+        """
+        Main entry point.
+
+        Args:
+            parent: Parent application.
+        """
         self.parent=parent
         if not self.parent:
             Frame.__init__(self)
@@ -70,7 +78,9 @@ class BatchRenamePlugin(Plugin):
         return
 
     def doGUI(self):
-        """Create GUI"""
+        """
+        Create GUI.
+        """
 
         self.m = PanedWindow(self.main,
                            orient=HORIZONTAL)
@@ -115,7 +125,12 @@ class BatchRenamePlugin(Plugin):
         return
 
     def addFolder(self,path=None):
-        """Get a folder"""
+        """
+        Get a folder.
+
+        Args:
+            path (str): Initial path.
+        """
 
         if path==None:
             path = filedialog.askdirectory(parent=self.main,
@@ -129,7 +144,9 @@ class BatchRenamePlugin(Plugin):
         return
 
     def refresh(self):
-        """Load files list"""
+        """
+        Load files list.
+        """
 
         self.fileslist.delete('1.0',END)
         fp = self.patternvar.get()
@@ -139,7 +156,9 @@ class BatchRenamePlugin(Plugin):
         return
 
     def dopreview(self):
-        """Preview update"""
+        """
+        Preview update.
+        """
 
         self.refresh()
         self.preview.delete('1.0',END)
@@ -155,14 +174,18 @@ class BatchRenamePlugin(Plugin):
         return
 
     def clear(self):
-
+        """
+        Clear text fields.
+        """
         self.fileslist.delete('1.0',END)
         self.preview.delete('1.0',END)
         self.path = None
         return
 
     def execute(self):
-        """Do rename"""
+        """
+        Do rename.
+        """
 
         n = messagebox.askyesno("Rename",
                                   "Rename the files?",
@@ -179,7 +202,20 @@ class BatchRenamePlugin(Plugin):
         return
 
 def doFindReplace(files=None, wildcard=None, find='', replace='', rename=False, occ=None):
-    """Find replace method"""
+    """
+    Find replace method.
+
+    Args:
+        files (list): List of files.
+        wildcard (str): Wildcard pattern.
+        find (str): String to find.
+        replace (str): Replacement string.
+        rename (bool): Perform rename if True.
+        occ (int): Number of occurrences.
+
+    Returns:
+        list: New filenames.
+    """
 
     newfiles = []
     if files==None:
@@ -200,9 +236,15 @@ def doFindReplace(files=None, wildcard=None, find='', replace='', rename=False, 
     return newfiles
 
 def constructRegex(inputstr):
+    """
+    Construct regex from input string.
+    """
     return
 
 def main():
+    """
+    Run the application.
+    """
     from optparse import OptionParser
     parser = OptionParser()
     parser.add_option("-d", "--dir", dest="directory",

@@ -116,7 +116,7 @@ class IterableIPShell:
 
     def __update_namespace(self):
         '''
-        Update self.IP namespace for autocompletion with sys.modules
+        Update self.IP namespace for autocompletion with sys.modules.
         '''
         for k, v in list(sys.modules.items()):
             if not '.' in k:
@@ -333,7 +333,16 @@ ansi_colors =  {'0;30': 'Black',
                 '1;37': 'White'}
 
 class TkConsoleView(Text):
+    """
+    Tkinter text widget for IPython console.
+    """
     def __init__(self,root):
+        """
+        Initialize.
+
+        Args:
+            root: Parent widget.
+        """
         Text.__init__(self, root, width=60, height=16)
 
         if 'Windows' in platform.system():
@@ -372,6 +381,13 @@ class TkConsoleView(Text):
         self._setBindings()
 
     def write(self, text, editable=False):
+        """
+        Write text to console.
+
+        Args:
+            text (str): Text to write.
+            editable (bool): Whether text is editable.
+        """
 
         segments = self.color_pat.split(text)
         # First is blank line
@@ -402,19 +418,42 @@ class TkConsoleView(Text):
         return
 
     def showBanner(self,banner):
-        """Print the supplied banner on starting the shell"""
+        """
+        Print the supplied banner on starting the shell.
+
+        Args:
+            banner (str): Banner text.
+        """
         self.write(banner)
 
     def showPrompt(self, prompt):
+        """
+        Show the prompt.
+
+        Args:
+            prompt (str): Prompt text.
+        """
         self.write(prompt)
         self.mark_set(self.line_start, INSERT)
         self.see(INSERT) #Make sure we can always see the prompt
 
     def changeLine(self, text):
+        """
+        Change the current line text.
+
+        Args:
+            text (str): New text.
+        """
         self.delete(self.line_start,"%s lineend" % self.line_start)
         self.write(text, True)
 
     def getCurrentLine(self):
+        """
+        Get the current line text.
+
+        Returns:
+            str: Current line text.
+        """
         rv = self.get(self.line_start, END)
         if self.debug:
             print ("getCurrentline: %s" % rv)
@@ -424,6 +463,12 @@ class TkConsoleView(Text):
         return rv
 
     def showReturned(self, text):
+        """
+        Show returned text.
+
+        Args:
+            text (str): Text to show.
+        """
         self.tag_add('notouch',self.line_start,"%s lineend" % self.line_start )
         self.write('\n'+text)
         if text:
@@ -431,9 +476,10 @@ class TkConsoleView(Text):
         self.showPrompt(self.prompt)
 
     def _setBindings(self):
-        """ Bind the keys we require.
-            REM: if a bound function returns "break" then no other bindings are called
-            If it returns None, then the other default bindings are called.
+        """
+        Bind the keys we require.
+        REM: if a bound function returns "break" then no other bindings are called
+        If it returns None, then the other default bindings are called.
         """
         self.bind("<Key>",self.processKeyPress)
         self.bind("<Return>",self.processEnterPress)
@@ -443,8 +489,12 @@ class TkConsoleView(Text):
         self.bind("<BackSpace>",self.processBackSpacePress)
 
     def isEditable(self):
-        """ Scan the notouch tag range in pairs and see if the INSERT index falls
-            between any of them.
+        """
+        Scan the notouch tag range in pairs and see if the INSERT index falls
+        between any of them.
+
+        Returns:
+            bool: True if editable.
         """
         ranges = self.tag_ranges('notouch')
         first=None
@@ -463,6 +513,9 @@ class TkConsoleView(Text):
         return True
 
     def processKeyPress(self,event):
+        """
+        Handle key press.
+        """
 
         if self.debug:
             print ("processKeyPress got key: %s" % event.char)
@@ -477,18 +530,30 @@ class TkConsoleView(Text):
         self.mark_set(self.mark,"%s+1c" %INSERT)
 
     def processBackSpacePress(self,event):
+        """
+        Handle backspace.
+        """
         if not self.isEditable():
             return "break"
 
     def processEnterPress(self,event):
+        """
+        Handle enter key.
+        """
         self._processLine()
         return "break" # Need break to stop the other bindings being called
 
     def processUpPress(self,event):
+        """
+        Handle up key (history).
+        """
         self.changeLine(self.historyBack())
         return "break"
 
     def processDownPress(self,event):
+        """
+        Handle down key (history).
+        """
         self.changeLine(self.historyForward())
         return "break"
 
@@ -514,6 +579,9 @@ class TkConsoleView(Text):
         return "break"
 
     def setFont(self):
+        """
+        Set console font.
+        """
 
         sizes = list(range(8,30,2))
         fonts = util.getFonts()
@@ -530,7 +598,17 @@ class TkConsoleView(Text):
         return
 
 class IPythonView(TkConsoleView, IterableIPShell):
+    """
+    IPython View widget.
+    """
     def __init__(self,root,banner=None):
+        """
+        Initialize.
+
+        Args:
+            root: Parent widget.
+            banner (str): Optional banner.
+        """
         TkConsoleView.__init__(self,root)
         self.cout = io.StringIO()
         IterableIPShell.__init__(self, cout=self.cout,cerr=self.cout,
@@ -545,12 +623,18 @@ class IPythonView(TkConsoleView, IterableIPShell):
         return
 
     def raw_input(self, prompt=''):
+        """
+        Get input.
+        """
         if self.interrupt:
           self.interrupt = False
           raise KeyboardInterrupt
         return self.getCurrentLine()
 
     def _processLine(self):
+        """
+        Process current line.
+        """
         self.history_pos = 0
         self.execute()
         rv = self.cout.getvalue()
@@ -570,7 +654,9 @@ class IPythonView(TkConsoleView, IterableIPShell):
         return ''.join(stripped)
 
 class IPythonPlugin(Plugin):
-    """Plugin for ipython console"""
+    """
+    Plugin for ipython console.
+    """
 
     capabilities = ['uses_sidepane']
     requires = ['']
@@ -581,6 +667,12 @@ class IPythonPlugin(Plugin):
         return
 
     def main(self, parent):
+        """
+        Main entry point.
+
+        Args:
+            parent: Parent application.
+        """
 
         if parent==None:
             return

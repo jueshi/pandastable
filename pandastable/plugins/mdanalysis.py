@@ -50,6 +50,12 @@ class MultivariatePlugin(Plugin):
         return
 
     def main(self, parent):
+        """
+        Main entry point.
+
+        Args:
+            parent: Parent application.
+        """
 
         if parent==None:
             return
@@ -99,7 +105,9 @@ class MultivariatePlugin(Plugin):
         return
 
     def applyOptions(self):
-        """Set the options"""
+        """
+        Set the options.
+        """
 
         kwds = {}
         for i in self.opts:
@@ -114,8 +122,17 @@ class MultivariatePlugin(Plugin):
         return
 
     def _createWidgets(self, parent, callback=None):
-        """Auto create tk vars, widgets for corresponding options and
-           and return the frame"""
+        """
+        Auto create tk vars, widgets for corresponding options and
+        and return the frame.
+
+        Args:
+            parent: Parent widget.
+            callback: Callback function.
+
+        Returns:
+            Frame: The options frame.
+        """
 
         dialog, self.tkvars, self.widgets = plotting.dialogFromOptions(parent,
                                                                        self.opts, self.groups)
@@ -123,7 +140,12 @@ class MultivariatePlugin(Plugin):
         return dialog
 
     def update(self, evt=None):
-        """Update data widget(s)"""
+        """
+        Update data widget(s).
+
+        Args:
+            evt: Event.
+        """
 
         self.table = self.parent.getCurrentTable()
         df = self.table.model.df
@@ -135,7 +157,9 @@ class MultivariatePlugin(Plugin):
         return
 
     def run(self):
-        """Run chosen method"""
+        """
+        Run chosen method.
+        """
 
         import sklearn
         method = self.tkvars['analysis'].get()
@@ -190,6 +214,9 @@ class MultivariatePlugin(Plugin):
         return
 
     def showResults(self):
+        """
+        Show results window.
+        """
 
         import sklearn
         df = self.result_mat
@@ -211,6 +238,9 @@ class MultivariatePlugin(Plugin):
         return
 
     def clustermap(self):
+        """
+        Create cluster map.
+        """
 
         data = self.data
         res = res = self.getFiltered()
@@ -219,13 +249,23 @@ class MultivariatePlugin(Plugin):
         return
 
     def quit(self, evt=None):
-        """Override this to handle pane closing"""
+        """
+        Override this to handle pane closing.
+
+        Args:
+            evt: Event.
+        """
 
         self.mainwin.destroy()
         return
 
     def online_help(self,event=None):
-        """Open the online documentation"""
+        """
+        Open the online documentation.
+
+        Args:
+            event: Event.
+        """
         import webbrowser
         link='https://github.com/dmnfarrell/pandastable/wiki'
         webbrowser.open(link,autoraise=1)
@@ -233,6 +273,16 @@ class MultivariatePlugin(Plugin):
 
 
 def pre_process(X, transform='log'):
+    """
+    Pre-process data (log transform, etc.).
+
+    Args:
+        X: Dataframe.
+        transform (str): Transformation type.
+
+    Returns:
+        pd.DataFrame: Processed data.
+    """
 
     X = X._get_numeric_data()
     if transform == 'log':
@@ -243,7 +293,16 @@ def pre_process(X, transform='log'):
     return X
 
 def do_pca(X, c=3):
-    """Do PCA"""
+    """
+    Do PCA.
+
+    Args:
+        X: Dataframe.
+        c (int): Number of components.
+
+    Returns:
+        tuple: (Transformed data, PCA object).
+    """
 
     from sklearn import preprocessing
     from sklearn.decomposition.pca import PCA, RandomizedPCA
@@ -265,7 +324,18 @@ def do_pca(X, c=3):
 
 def plot_matrix(pX, plot3d=False, palette='Spectral', labels=False, ax=None,
              colors=None, **kwargs):
-    """Plot PCA result, input should be a dataframe"""
+    """
+    Plot PCA result, input should be a dataframe.
+
+    Args:
+        pX: Transformed data.
+        plot3d (bool): 3D plot.
+        palette (str): Color palette.
+        labels (bool): Show labels.
+        ax: Axis.
+        colors: Colors list.
+        **kwargs: Other keywords.
+    """
 
     if ax==None:
         fig,ax = plt.subplots(1,1,figsize=(6,6))
@@ -298,6 +368,16 @@ def plot_matrix(pX, plot3d=False, palette='Spectral', labels=False, ax=None,
     return
 
 def do_lda(X, c=3):
+    """
+    Do Linear Discriminant Analysis.
+
+    Args:
+        X: Dataframe.
+        c (int): Components.
+
+    Returns:
+        tuple: (Transformed data, LDA object).
+    """
 
     from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
     idx = X.index
@@ -310,7 +390,16 @@ def do_lda(X, c=3):
     return pX, lda
 
 def do_mds(X, c=3):
-    """Do MDS"""
+    """
+    Do Multidimensional Scaling.
+
+    Args:
+        X: Dataframe.
+        c (int): Components.
+
+    Returns:
+        tuple: (Transformed data, MDS object).
+    """
 
     X = X._get_numeric_data()
     from sklearn import manifold
@@ -322,7 +411,16 @@ def do_mds(X, c=3):
     return pX, mds
 
 def feature_selection(X, y=None):
-    """feature selection"""
+    """
+    Feature selection.
+
+    Args:
+        X: Dataframe.
+        y: Target variable.
+
+    Returns:
+        pd.DataFrame: Selected features.
+    """
 
     if y is None:
         idx = X.index
@@ -337,6 +435,17 @@ def feature_selection(X, y=None):
     return pX
 
 def logistic_regression(X, ax, **kwargs):
+    """
+    Logistic regression.
+
+    Args:
+        X: Dataframe.
+        ax: Axis.
+        **kwargs: Keywords.
+
+    Returns:
+        Result (Z).
+    """
 
     idx = X.index
     cla = pd.Categorical(idx)
@@ -364,6 +473,13 @@ def logistic_regression(X, ax, **kwargs):
     return Z
 
 def cluster_map(data, names):
+    """
+    Create cluster map.
+
+    Args:
+        data: Dataframe.
+        names: Index names.
+    """
     import seaborn as sns
     import pylab as plt
     data = data.ix[names]

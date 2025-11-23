@@ -44,21 +44,39 @@ import pylab as plt
 
 class MyTable(Table):
     """
-      Custom table class inherits from Table.
-      You can then override required methods
-     """
+    Custom table class inherits from Table.
+    You can then override required methods.
+    """
     def __init__(self, parent=None, app=None, **kwargs):
+        """
+        Initialize custom table.
+
+        Args:
+            parent: Parent widget.
+            app: App instance.
+            **kwargs: Arguments for Table.
+        """
         Table.__init__(self, parent, **kwargs)
         self.app = app
         return
 
     def handle_right_click(self, event):
-        """respond to a right click"""
+        """
+        Respond to a right click.
+
+        Args:
+            event: Mouse event.
+        """
 
         return
 
     def handle_left_click(self, event):
-        """respond to a right click"""
+        """
+        Respond to a left click (preview table).
+
+        Args:
+            event: Mouse event.
+        """
 
         Table.handle_left_click(self, event)
         self.app.previewTable()
@@ -79,6 +97,12 @@ class BatchProcessPlugin(Plugin):
         return
 
     def main(self, parent):
+        """
+        Main entry point.
+
+        Args:
+            parent: Parent application/frame.
+        """
         self.parent=parent
         if parent==None:
             self.main=Toplevel()
@@ -102,7 +126,9 @@ class BatchProcessPlugin(Plugin):
         return
 
     def doGUI(self):
-        """Create GUI"""
+        """
+        Create GUI.
+        """
 
         frame = Frame(self.main)
         frame.pack(side=LEFT,fill=BOTH,expand=1)
@@ -161,13 +187,21 @@ class BatchProcessPlugin(Plugin):
         return
 
     def selectSaveFolder(self):
+        """
+        Select folder for saving plots.
+        """
         self.savepath = filedialog.askdirectory(parent=self.main,
                                         initialdir=self.currentdir,
                                         title='Select folder')
         return
 
     def addFolder(self, path=None):
-        """Get a folder"""
+        """
+        Get a folder.
+
+        Args:
+            path (str): Initial path.
+        """
 
         if path==None:
             path = filedialog.askdirectory(parent=self.main,
@@ -180,7 +214,9 @@ class BatchProcessPlugin(Plugin):
         return
 
     def refresh(self):
-        """Load files list into table"""
+        """
+        Load files list into table.
+        """
 
         currdf = self.pt.model.df
         ext = self.extensionvar.get()
@@ -210,7 +246,15 @@ class BatchProcessPlugin(Plugin):
         return
 
     def loadFile(self, row=None):
-        """Load a file from the table"""
+        """
+        Load a file from the table.
+
+        Args:
+            row (int): Row index.
+
+        Returns:
+            pd.DataFrame: Loaded dataframe.
+        """
 
         if row is None:
             row = self.pt.currentrow
@@ -222,7 +266,9 @@ class BatchProcessPlugin(Plugin):
         return df
 
     def previewTable(self):
-        """Preview selected table in main table."""
+        """
+        Preview selected table in main table.
+        """
 
         df = self.loadFile()
         #print (df)
@@ -232,7 +278,9 @@ class BatchProcessPlugin(Plugin):
         return
 
     def importAll(self):
-        """Import selected or all files as tables"""
+        """
+        Import selected or all files as tables.
+        """
 
         ops = ['separately', 'concat', 'merge']
         d = dialogs.MultipleValDialog(title='Batch Import Files',
@@ -253,7 +301,9 @@ class BatchProcessPlugin(Plugin):
         return
 
     def joinTables(self):
-        """Joins selected tables together and send to dataexplore"""
+        """
+        Joins selected tables together and send to dataexplore.
+        """
 
         filelist = self.pt.model.df
         res=[]
@@ -266,7 +316,9 @@ class BatchProcessPlugin(Plugin):
         return
 
     def clear(self):
-        """Clear file list"""
+        """
+        Clear file list.
+        """
 
         self.path = None
         df = self.pt.model.df
@@ -275,7 +327,9 @@ class BatchProcessPlugin(Plugin):
         return
 
     def previewPlot(self):
-        """Make preview plot"""
+        """
+        Make preview plot.
+        """
 
         cols = self.getCurrentSelections()
         df = self.loadFile()
@@ -284,7 +338,9 @@ class BatchProcessPlugin(Plugin):
         return
 
     def batchPlot(self):
-        """Plot multiple files"""
+        """
+        Plot multiple files.
+        """
 
         plotdir = self.savepath
         if not os.path.exists(plotdir):
@@ -313,14 +369,24 @@ class BatchProcessPlugin(Plugin):
         return
 
     def getCurrentSelections(self):
-        """Get row/col selections from main table for plotting"""
+        """
+        Get row/col selections from main table for plotting.
+
+        Returns:
+            list: Selected columns.
+        """
 
         table = self.parent.getCurrentTable()
         cols = table.multiplecollist
         return cols
 
     def pdfPages(self):
-        """Create pdf pages object"""
+        """
+        Create pdf pages object.
+
+        Returns:
+            PdfPages: The PDF pages object.
+        """
 
         from matplotlib.backends.backend_pdf import PdfPages
         filename = os.path.join(self.savepath, 'batch_plots.pdf')
@@ -329,6 +395,9 @@ class BatchProcessPlugin(Plugin):
         return pdf_pages
 
     def test(self):
+        """
+        Generate test data.
+        """
         path='test_batch'
         for i in range(20):
             df = TableModel.getSampleData()

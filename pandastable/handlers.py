@@ -34,10 +34,17 @@ from matplotlib.collections import PathCollection
 from matplotlib.backend_bases import key_press_handler
 
 class DragHandler(object):
-    """ A simple class to handle picking and dragging"""
+    """
+    A simple class to handle picking and dragging.
+    """
 
     def __init__(self, parent, figure=None):
-        """ Create a handler and connect it to the plotviewer figure.
+        """
+        Create a handler and connect it to the plotviewer figure.
+
+        Args:
+            parent: Parent object.
+            figure: Figure object (optional).
         """
 
         self.parent = parent
@@ -48,7 +55,9 @@ class DragHandler(object):
         return
 
     def connect(self):
-        """Connect events"""
+        """
+        Connect events.
+        """
 
         fig = self.parent.fig
         fig.canvas.mpl_connect("pick_event", self.on_pick_event)
@@ -58,6 +67,12 @@ class DragHandler(object):
         return
 
     def button_press_event(self, event):
+        """
+        Handle button press.
+
+        Args:
+            event: Mouse event.
+        """
 
         #print (event)
         fig = self.parent.fig
@@ -67,7 +82,15 @@ class DragHandler(object):
         return
 
     def on_pick_event(self, event):
-        " Store which text object was picked and were the pick event occurs."
+        """
+        Store which text object was picked and where the pick event occurs.
+
+        Args:
+            event: Pick event.
+
+        Returns:
+            bool: True.
+        """
 
         df = self.parent.data
         self.dragged = event.artist
@@ -92,7 +115,15 @@ class DragHandler(object):
         return True
 
     def on_release_event(self, event):
-        " Update and store text/annotation position "
+        """
+        Update and store text/annotation position.
+
+        Args:
+            event: Mouse event.
+
+        Returns:
+            bool: True.
+        """
 
         fig = self.parent.fig
         #ax = fig.axes[0]
@@ -123,7 +154,12 @@ class DragHandler(object):
         return True
 
     def key_press_event(self, event):
-        """Handle key press"""
+        """
+        Handle key press.
+
+        Args:
+            event: Key event.
+        """
 
         if event.key == 'delete':
             if self.selected == None:
@@ -139,7 +175,9 @@ class DragHandler(object):
         return
 
     def drawSelectionRect(self):
-        """Draw a selection box"""
+        """
+        Draw a selection box.
+        """
 
         from matplotlib.patches import FancyBboxPatch
         if self.selectedrect != None:
@@ -162,6 +200,8 @@ class DragHandler(object):
         return
 
     def disconnect(self):
-        """disconnect all the stored connection ids"""
+        """
+        Disconnect all the stored connection ids.
+        """
 
         return
