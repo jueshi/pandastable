@@ -330,10 +330,11 @@ class PlotViewer(Frame):
                 ha='left',
                 va='bottom'
             )
-            self._hover_annotation.set_zorder(1000)
+            # Keep tooltip above shmoo value overlays
+            self._hover_annotation.set_zorder(2000)
             bbox_patch = self._hover_annotation.get_bbox_patch()
             if bbox_patch is not None:
-                bbox_patch.set_zorder(999)
+                bbox_patch.set_zorder(1999)
             self._hover_annotation.set_visible(False)
             self._hover_annotation_axes = ax
         if self._hover_cid is None:
