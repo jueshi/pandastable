@@ -2446,46 +2446,75 @@ class PlotViewer(Frame):
                 print(f"Gaussian fit failed: {e}")
         
         # Dual-Dirac model for DJ separation
+        dual_dirac_params = None
         if show_dual_dirac and tj_separation:
             try:
                 tj_sep = float(tj_separation)
-                
+
                 # Dual-Dirac function: two Gaussians separated by DJ
                 def dual_dirac(x, amp1, amp2, mean, rj_std, dj):
-                    g1 = amp1 * np.exp(-((x - (mean - dj/2))**2) / (2 * rj_std**2))
-                    g2 = amp2 * np.exp(-((x - (mean + dj/2))**2) / (2 * rj_std**2))
+                    g1 = amp1 * np.exp(-((x - (mean - dj / 2))**2) / (2 * rj_std**2))
+                    g2 = amp2 * np.exp(-((x - (mean + dj / 2))**2) / (2 * rj_std**2))
                     return g1 + g2
-                
+
                 # Fit
                 bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
-                popt, _ = curve_fit(dual_dirac, bin_centers, counts,
-                                   p0=[counts.max()/2, counts.max()/2, mean_jitter, std_jitter/2, tj_sep])
-                
+                popt, _ = curve_fit(
+                    dual_dirac,
+                    bin_centers,
+                    counts,
+                    p0=[counts.max() / 2, counts.max() / 2, mean_jitter, std_jitter / 2, tj_sep],
+                )
+
                 # Plot fitted dual-Dirac
                 x_fit = np.linspace(jitter_data.min(), jitter_data.max(), 200)
                 y_fit = dual_dirac(x_fit, *popt)
-                ax.plot(x_fit, y_fit, 'g--', linewidth=2, 
-                       label=f'Dual-Dirac (RJ={popt[3]:.3f}, DJ={popt[4]:.3f})')
-                
+                ax.plot(
+                    x_fit,
+                    y_fit,
+                    'g--',
+                    linewidth=2,
+                    label=f'Dual-Dirac (RJ={popt[3]:.3f}, DJ={popt[4]:.3f})',
+                )
+
                 # Show components if requested
                 if show_components:
                     rj_component = popt[0] * np.exp(-((x_fit - popt[2])**2) / (2 * popt[3]**2))
-                    ax.plot(x_fit, rj_component, 'b:', linewidth=1.5, label='RJ Component', alpha=0.7)
-                    
+                    ax.plot(
+                        x_fit,
+                        rj_component,
+                        'b:',
+                        linewidth=1.5,
+                        label='RJ Component',
+                        alpha=0.7,
+                    )
+
+                dual_dirac_params = popt
+
             except Exception as e:
                 print(f"Dual-Dirac fit failed: {e}")
-        
+
         # Add statistics text box
         if show_stats:
-            stats_text = f'Mean: {mean_jitter:.3f}\n'
-            stats_text += f'Std Dev: {std_jitter:.3f}\n'
-            stats_text += f'RMS: {rms_jitter:.3f}\n'
-            
-            # Plot fitted dual-Dirac
-            x_fit = np.linspace(jitter_data.min(), jitter_data.max(), 200)
-            y_fit = dual_dirac(x_fit, *popt)
-            ax.plot(x_fit, y_fit, 'g--', linewidth=2, 
-                   label=f'Dual-Dirac (RJ={popt[3]:.3f}, DJ={popt[4]:.3f})')
+            stats_lines = [
+                f'Mean: {mean_jitter:.3f}',
+                f'Std Dev: {std_jitter:.3f}',
+                f'RMS: {rms_jitter:.3f}',
+            ]
+            if dual_dirac_params is not None:
+                stats_lines.append(f'RJ σ: {dual_dirac_params[3]:.3f}')
+                stats_lines.append(f'DJ: {dual_dirac_params[4]:.3f}')
+
+            stats_text = "\n".join(stats_lines)
+            ax.text(
+                0.02,
+                0.98,
+                stats_text,
+                transform=ax.transAxes,
+                fontsize=10,
+                verticalalignment='top',
+                bbox=dict(boxstyle='round', facecolor='white', alpha=0.6),
+            )
         # Grid
         if grid:
             ax.grid(True, alpha=0.3, axis='y')
