@@ -171,6 +171,11 @@ class PlotViewer(Frame):
         self.gridaxes = {}
         #reset style if it been set globally
         self.style = None
+        # Hover tooltip state
+        self._hover_targets = []
+        self._hover_annotation = None
+        self._hover_annotation_axes = None
+        self._hover_cid = None
         self.setupGUI()
         self.updateStyle()
         self.currentdir = os.path.expanduser('~')
@@ -291,6 +296,177 @@ class PlotViewer(Frame):
         except:
             logging.error("Exception occurred", exc_info=True)
         return
+
+    def _reset_hover_targets(self):
+        """Clear hover tooltip targets and annotations."""
+
+        self._hover_targets = []
+        if self._hover_annotation is not None:
+            try:
+                self._hover_annotation.remove()
+            except Exception:
+                pass
+            self._hover_annotation = None
+        self._hover_annotation_axes = None
+
+    def _ensure_hover_support(self, ax):
+        """Ensure annotation widget and motion handler exist for the axis."""
+
+        if ax is None:
+            return
+        if self._hover_annotation is None or self._hover_annotation_axes is not ax:
+            if self._hover_annotation is not None:
+                try:
+                    self._hover_annotation.remove()
+                except Exception:
+                    pass
+            self._hover_annotation = ax.annotate(
+                "",
+                xy=(0, 0),
+                xytext=(12, 12),
+                textcoords="offset points",
+                bbox=dict(boxstyle='round', fc='white', ec='black', lw=0.5, alpha=1.0),
+                fontsize=9,
+                ha='left',
+                va='bottom'
+            )
+            self._hover_annotation.set_zorder(1000)
+            bbox_patch = self._hover_annotation.get_bbox_patch()
+            if bbox_patch is not None:
+                bbox_patch.set_zorder(999)
+            self._hover_annotation.set_visible(False)
+            self._hover_annotation_axes = ax
+        if self._hover_cid is None:
+            self._hover_cid = self.canvas.mpl_connect("motion_notify_event", self._on_hover_motion)
+
+    def _register_hover_target(self, artist, payload):
+        """Register an artist for hover handling."""
+
+        if artist is None:
+            return
+        payload = payload.copy()
+        payload['artist'] = artist
+        self._hover_targets.append(payload)
+        self._ensure_hover_support(artist.axes)
+
+    def _resolve_hover_point(self, target, info):
+        indices = info.get('ind') if isinstance(info, dict) else None
+        if not indices:
+            return None
+        idx = indices[0]
+        x_vals = target.get('x_values')
+        y_vals = target.get('y_values')
+        if x_vals is None or y_vals is None:
+            return None
+        if idx >= len(x_vals) or idx >= len(y_vals):
+            return None
+        x_val = x_vals[idx]
+        y_val = y_vals[idx]
+        if np.isnan(x_val) or np.isnan(y_val):
+            return None
+        z_linear = target.get('z_linear')
+        z_display = target.get('z_display')
+        z_lin_val = None
+        z_disp_val = None
+        if z_linear is not None and idx < len(z_linear):
+            z_lin_val = z_linear[idx]
+        if z_display is not None and idx < len(z_display):
+            z_disp_val = z_display[idx]
+        labels = target.get('labels', {})
+        scale = target.get('scale', 'linear')
+        return {
+            'x': x_val,
+            'y': y_val,
+            'z': z_lin_val,
+            'z_display': z_disp_val,
+            'labels': labels,
+            'scale': scale
+        }
+
+    def _format_hover_value(self, value):
+        if value is None or (isinstance(value, float) and np.isnan(value)):
+            return 'n/a'
+        if isinstance(value, (int, np.integer)):
+            return str(value)
+        return f"{value:.6g}"
+
+    def _format_hover_text(self, point):
+        labels = point.get('labels', {})
+        x_label = labels.get('x', 'X')
+        y_label = labels.get('y', 'Y')
+        z_label = labels.get('z', 'Z')
+        lines = [
+            f"{x_label}: {self._format_hover_value(point.get('x'))}",
+            f"{y_label}: {self._format_hover_value(point.get('y'))}"
+        ]
+        z_val = point.get('z')
+        z_disp = point.get('z_display')
+        if z_val is not None:
+            lines.append(f"{z_label}: {self._format_hover_value(z_val)}")
+        elif z_disp is not None:
+            lines.append(f"{z_label}: {self._format_hover_value(z_disp)}")
+        if point.get('scale') == 'log' and z_val is not None and z_disp is not None:
+            lines.append(f"log10({z_label}): {self._format_hover_value(z_disp)}")
+        return "\n".join(lines)
+
+    def _show_hover_annotation(self, point, ax):
+        self._ensure_hover_support(ax)
+        if self._hover_annotation is None:
+            return
+        self._hover_annotation.xy = (point.get('x'), point.get('y'))
+        self._hover_annotation.set_text(self._format_hover_text(point))
+        if not self._hover_annotation.get_visible():
+            self._hover_annotation.set_visible(True)
+        self.canvas.draw_idle()
+
+    def _hide_hover_annotation(self):
+        if self._hover_annotation is not None and self._hover_annotation.get_visible():
+            self._hover_annotation.set_visible(False)
+            self.canvas.draw_idle()
+
+    def _on_hover_motion(self, event):
+        if not self._hover_targets:
+            return
+        if event.inaxes is None:
+            self._hide_hover_annotation()
+            return
+        for target in self._hover_targets:
+            artist = target.get('artist')
+            if artist is None or artist.axes is not event.inaxes:
+                continue
+            try:
+                contains, info = artist.contains(event)
+            except Exception:
+                continue
+            if not contains:
+                continue
+            point = self._resolve_hover_point(target, info)
+            if point is None:
+                continue
+            self._show_hover_annotation(point, event.inaxes)
+            return
+        self._hide_hover_annotation()
+
+    def _render_shmoo_stats_box(self, ax, stats_text):
+        """Render statistics text just outside the left edge of the shmoo axes."""
+
+        props = dict(boxstyle='round', facecolor='wheat', edgecolor='black', linewidth=0.5, alpha=1.0)
+        stats_box = ax.text(
+            -0.08,
+            1.0,
+            stats_text,
+            transform=ax.transAxes,
+            fontsize=10,
+            verticalalignment='top',
+            horizontalalignment='right',
+            bbox=props,
+            clip_on=False,
+        )
+        stats_box.set_zorder(1000)
+        bbox_patch = stats_box.get_bbox_patch()
+        if bbox_patch is not None:
+            bbox_patch.set_zorder(999)
+        return stats_box
 
     def updateWidgets(self):
         """
@@ -633,6 +809,7 @@ class PlotViewer(Frame):
         errorbars = kwds['errorbars']
         useindex = kwds['use_index']
         bw = kwds['bw']
+        self._reset_hover_targets()
         #print (kwds)
         if self._checkNumeric(data) == False and kind != 'venn':
             self.showWarning('no numeric data to plot')
@@ -2585,7 +2762,8 @@ class PlotViewer(Frame):
         x_data = x_data[mask]
         y_data = y_data[mask]
         z_data = z_data[mask]
-        
+        raw_z_values = z_data.copy()
+
         if len(x_data) == 0:
             self.showWarning('No valid data points after removing NaN values')
             return ax
@@ -2618,6 +2796,9 @@ class PlotViewer(Frame):
             threshold_max = _log_threshold(threshold_max)
             colorbar_label = f'log10({z_param})'
         
+        hover_labels = {'x': x_param, 'y': y_param, 'z': z_param}
+        hover_scale = 'log' if log_z_scale else 'linear'
+
         # Check if data is on a regular grid
         x_unique = np.unique(x_data)
         y_unique = np.unique(y_data)
@@ -2631,12 +2812,18 @@ class PlotViewer(Frame):
                 X, Y = np.meshgrid(x_unique, y_unique)
                 
                 # Reshape Z data to match grid
-                Z = np.full((len(y_unique), len(x_unique)), np.nan)
-                for i, (x, y, z) in enumerate(zip(x_data, y_data, z_data)):
-                    xi = np.where(x_unique == x)[0][0]
-                    yi = np.where(y_unique == y)[0][0]
-                    Z[yi, xi] = z
-                
+                Z = np.full((len(y_unique), len(x_unique)), np.nan, dtype=float)
+                Z_linear = np.full_like(Z, np.nan, dtype=float)
+                x_index = {value: idx for idx, value in enumerate(x_unique)}
+                y_index = {value: idx for idx, value in enumerate(y_unique)}
+                for x, y, z_val, z_raw in zip(x_data, y_data, z_data, raw_z_values):
+                    xi = x_index.get(x)
+                    yi = y_index.get(y)
+                    if xi is None or yi is None:
+                        continue
+                    Z[yi, xi] = z_val
+                    Z_linear[yi, xi] = z_raw
+
                 # Create the plot using pcolormesh for regular grids
                 if threshold_min is not None and threshold_max is not None:
                     # Create pass/fail colormap
@@ -2649,10 +2836,23 @@ class PlotViewer(Frame):
                     cmap = plt.cm.get_cmap(cmap_name)
                 
                 mesh = ax.pcolormesh(X, Y, Z, cmap=cmap, norm=norm, shading='auto')
-                
+
                 if show_colorbar:
                     self.fig.colorbar(mesh, ax=ax, label=colorbar_label)
-                
+
+                self._register_hover_target(
+                    mesh,
+                    {
+                        'type': 'mesh',
+                        'x_values': X.flatten(),
+                        'y_values': Y.flatten(),
+                        'z_linear': Z_linear.flatten(),
+                        'z_display': Z.flatten(),
+                        'labels': hover_labels,
+                        'scale': hover_scale
+                    }
+                )
+
                 # Add contour lines if requested
                 if show_contours:
                     try:
@@ -2681,10 +2881,14 @@ class PlotViewer(Frame):
                     # Interpolate Z values
                     method = 'cubic' if interpolation == 'cubic' else 'linear'
                     Zi = griddata((x_data, y_data), z_data, (Xi, Yi), method=method)
-                    
+                    if log_z_scale:
+                        Zi_linear = griddata((x_data, y_data), raw_z_values, (Xi, Yi), method=method)
+                    else:
+                        Zi_linear = Zi.copy() if Zi is not None else None
+
                     if threshold_min is not None and threshold_max is not None:
                         from matplotlib import colors as mcolors
-                        norm = mcolors.BoundaryNorm([z_data.min(), threshold_min, threshold_max, z_data.max()], 
+                        norm = mcolors.BoundaryNorm([z_data.min(), threshold_min, threshold_max, z_data.max()],
                                                    ncolors=256)
                         cmap = plt.cm.get_cmap(cmap_name)
                     else:
@@ -2692,14 +2896,27 @@ class PlotViewer(Frame):
                         cmap = plt.cm.get_cmap(cmap_name)
                     
                     mesh = ax.pcolormesh(Xi, Yi, Zi, cmap=cmap, norm=norm, shading='auto')
-                    
+
                     if show_colorbar:
                         self.fig.colorbar(mesh, ax=ax, label=z_param)
-                    
+
+                    self._register_hover_target(
+                        mesh,
+                        {
+                            'type': 'mesh',
+                            'x_values': Xi.flatten(),
+                            'y_values': Yi.flatten(),
+                            'z_linear': Zi_linear.flatten() if Zi_linear is not None else None,
+                            'z_display': Zi.flatten(),
+                            'labels': hover_labels,
+                            'scale': hover_scale
+                        }
+                    )
+
                     if show_contours:
                         try:
                             contour_levels_int = int(contour_levels)
-                            contours = ax.contour(Xi, Yi, Zi, levels=contour_levels_int, colors='black', 
+                            contours = ax.contour(Xi, Yi, Zi, levels=contour_levels_int, colors='black',
                                                  linewidths=0.5, alpha=0.5)
                             ax.clabel(contours, inline=True, fontsize=8)
                         except:
@@ -2707,33 +2924,71 @@ class PlotViewer(Frame):
                     
                     # Optionally show original data points
                     if show_markers:
-                        ax.scatter(x_data, y_data, c='black', s=10, marker='o', alpha=0.5)
+                        markers = ax.scatter(x_data, y_data, c='black', s=10, marker='o', alpha=0.5)
+                        self._register_hover_target(
+                            markers,
+                            {
+                                'type': 'scatter',
+                                'x_values': x_data,
+                                'y_values': y_data,
+                                'z_linear': raw_z_values,
+                                'z_display': z_data,
+                                'labels': hover_labels,
+                                'scale': hover_scale
+                            }
+                        )
                 else:
                     # Just use scatter plot
                     if threshold_min is not None and threshold_max is not None:
-                        colors_array = np.where((z_data >= threshold_min) & (z_data <= threshold_max), 
+                        colors_array = np.where((z_data >= threshold_min) & (z_data <= threshold_max),
                                               'green', 'red')
-                        scatter = ax.scatter(x_data, y_data, c=colors_array, s=marker_size, 
+                        scatter = ax.scatter(x_data, y_data, c=colors_array, s=marker_size,
                                            edgecolors='black', linewidth=0.5)
                     else:
-                        scatter = ax.scatter(x_data, y_data, c=z_data, cmap=cmap_name, 
+                        scatter = ax.scatter(x_data, y_data, c=z_data, cmap=cmap_name,
                                            s=marker_size, edgecolors='black', linewidth=0.5)
                         if show_colorbar:
                             self.fig.colorbar(scatter, ax=ax, label=colorbar_label)
-                        
+
+                    self._register_hover_target(
+                        scatter,
+                        {
+                            'type': 'scatter',
+                            'x_values': x_data,
+                            'y_values': y_data,
+                            'z_linear': raw_z_values,
+                            'z_display': z_data,
+                            'labels': hover_labels,
+                            'scale': hover_scale
+                        }
+                    )
+
             except ImportError:
                 # Scipy not available, fall back to scatter plot
                 if threshold_min is not None and threshold_max is not None:
-                    colors_array = np.where((z_data >= threshold_min) & (z_data <= threshold_max), 
+                    colors_array = np.where((z_data >= threshold_min) & (z_data <= threshold_max),
                                           'green', 'red')
-                    scatter = ax.scatter(x_data, y_data, c=colors_array, s=marker_size, 
+                    scatter = ax.scatter(x_data, y_data, c=colors_array, s=marker_size,
                                        edgecolors='black', linewidth=0.5)
                 else:
-                    scatter = ax.scatter(x_data, y_data, c=z_data, cmap=cmap_name, 
+                    scatter = ax.scatter(x_data, y_data, c=z_data, cmap=cmap_name,
                                        s=marker_size, edgecolors='black', linewidth=0.5)
                     if show_colorbar:
                         self.fig.colorbar(scatter, ax=ax, label=colorbar_label)
-            
+
+                self._register_hover_target(
+                    scatter,
+                    {
+                        'type': 'scatter',
+                        'x_values': x_data,
+                        'y_values': y_data,
+                        'z_linear': raw_z_values,
+                        'z_display': z_data,
+                        'labels': hover_labels,
+                        'scale': hover_scale
+                    }
+                )
+
             except Exception as e:
                 self.showWarning(f'Error creating irregular grid plot: {str(e)}')
                 return ax
@@ -2767,24 +3022,34 @@ class PlotViewer(Frame):
                 stats_text += f'Max Margin: {margin_max:.3f}'
                 
                 # Add text box with statistics
-                props = dict(boxstyle='round', facecolor='wheat', alpha=0.8)
-                ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, fontsize=10,
-                       verticalalignment='top', bbox=props)
+                self._render_shmoo_stats_box(ax, stats_text)
             else:
                 stats_text = f'Points: {len(z_data)}\n'
                 stats_text += f'Min: {z_data.min():.3f}\n'
                 stats_text += f'Max: {z_data.max():.3f}\n'
                 stats_text += f'Mean: {z_data.mean():.3f}'
                 
-                props = dict(boxstyle='round', facecolor='wheat', alpha=0.8)
-                ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, fontsize=10,
-                       verticalalignment='top', bbox=props)
+                self._render_shmoo_stats_box(ax, stats_text)
         
         # Add values if requested
         if show_values:
-            for i, (x, y, z) in enumerate(zip(x_data, y_data, z_data)):
-                ax.annotate(f'{z:.2f}', (x, y), textcoords="offset points", xytext=(0, 10), ha='center')
-        
+            value_map = OrderedDict()
+            for x, y, raw_val in zip(x_data, y_data, raw_z_values):
+                value_map[(x, y)] = raw_val
+            for (x, y), raw_val in value_map.items():
+                label = f'{raw_val:.3g}'
+                text = ax.text(
+                    x,
+                    y,
+                    label,
+                    ha='center',
+                    va='center',
+                    fontsize=9,
+                    color='black',
+                    path_effects=[patheffects.withStroke(linewidth=2, foreground='white')]
+                )
+                text.set_zorder(1000)
+
         return ax
 
     def contourData(self, data):

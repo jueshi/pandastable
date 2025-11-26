@@ -155,6 +155,9 @@ class CSVBrowser(tk.Tk):
         # Initialize table settings storage
         self.saved_table_settings = None
         
+        # Initialize minimum CSV panel ratio
+        self.min_csv_panel_ratio = 0.55  # ensure bottom table gets at least 55% of height
+        
         # # Initialize frame attributes
         self.pt_frame = ttk.Frame(self)
         self.csv_frame = ttk.Frame(self)
@@ -262,7 +265,28 @@ class CSVBrowser(tk.Tk):
         if self.is_horizontal:
             self.paned.sashpos(0, 400)  # 400 pixels from left
         else:
-            self.paned.sashpos(0, 300)  # 300 pixels from top
+            self._schedule_vertical_sash_adjustment()
+
+    def _schedule_vertical_sash_adjustment(self, delay=50):
+        if self.is_horizontal:
+            return
+        self.after(delay, self._ensure_bottom_table_min_height)
+
+    def _ensure_bottom_table_min_height(self):
+        if self.is_horizontal or not hasattr(self, 'paned'):
+            return
+        total_height = self.paned.winfo_height()
+        if total_height <= 1:
+            self._schedule_vertical_sash_adjustment(50)
+            return
+        top_height = int(total_height * (1 - self.min_csv_panel_ratio))
+        top_height = max(top_height, 150)
+        if total_height - top_height < 150:
+            top_height = max(total_height - 150, 0)
+        try:
+            self.paned.sashpos(0, top_height)
+        except tk.TclError:
+            pass
 
     def setup_file_browser(self):
         """Setup the file browser panel with pandastable"""
@@ -2626,9 +2650,8 @@ class CSVBrowser(tk.Tk):
         if self.is_horizontal:
             self.paned.sashpos(0, 400)
         else:
-            self.paned.sashpos(0, 300)
-
-
+            self._schedule_vertical_sash_adjustment()
+            
     def copy_selected_files(self):
         """Copy selected files to another folder"""
         # Get selected rows from the table's multiplerowlist
@@ -3311,7 +3334,7 @@ class CSVBrowser(tk.Tk):
             self.paned.add(self.csv_view_container, weight=3)
             
             # Set sash position
-            self.after(100, lambda: self.paned.sashpos(0, 300))
+            self._schedule_vertical_sash_adjustment()
     
     def show_about(self):
         """Show the about dialog"""
