@@ -1990,52 +1990,47 @@ class PlotViewer(Frame):
         # Identify required columns
         # Expected columns: Task, Start, End (or Duration), Progress (optional), Status (optional)
         data = df.copy()
-        
-        # Try to identify task name column
-        task_col = None
-        for col in ['Task', 'task', 'Task_Name', 'task_name', 'Name', 'name']:
-            if col in data.columns:
-                task_col = col
-                break
-        
-        if task_col is None and len(data.columns) > 0:
-            task_col = data.columns[0]
-        
-        # Try to identify start date column
-        start_col = None
-        for col in ['Start', 'start', 'Start_Date', 'start_date', 'Begin', 'begin']:
-            if col in data.columns:
-                start_col = col
-                break
-        
-        # Try to identify end date column
-        end_col = None
-        for col in ['End', 'end', 'End_Date', 'end_date', 'Finish', 'finish']:
-            if col in data.columns:
-                end_col = col
-                break
-        
-        # Try to identify duration column
-        duration_col = None
-        for col in ['Duration', 'duration', 'Days', 'days']:
-            if col in data.columns:
-                duration_col = col
-                break
-        
-        # Try to identify progress column
-        progress_col = None
-        for col in ['Progress', 'progress', 'Complete', 'complete', 'Completion', 'completion']:
-            if col in data.columns:
-                progress_col = col
-                break
-        
-        # Try to identify status column
-        status_col = None
-        for col in ['Status', 'status', 'State', 'state']:
-            if col in data.columns:
-                status_col = col
-                break
-        
+
+        def _identify_columns(current_data):
+            """Return tuple with detected gantt columns from the provided dataframe."""
+
+            def _match(candidates):
+                for candidate in candidates:
+                    if candidate in current_data.columns:
+                        return candidate
+                return None
+
+            task = _match(['Task', 'task', 'Task_Name', 'task_name', 'Name', 'name'])
+            if task is None and len(current_data.columns) > 0:
+                task = current_data.columns[0]
+
+            start = _match(['Start', 'start', 'Start_Date', 'start_date', 'Begin', 'begin'])
+            end = _match(['End', 'end', 'End_Date', 'end_date', 'Finish', 'finish'])
+            duration = _match(['Duration', 'duration', 'Days', 'days'])
+            progress = _match(['Progress', 'progress', 'Complete', 'complete', 'Completion', 'completion'])
+            status = _match(['Status', 'status', 'State', 'state'])
+            return task, start, end, duration, progress, status
+
+        task_col, start_col, end_col, duration_col, progress_col, status_col = _identify_columns(data)
+
+        # If the current selection is missing required columns, try falling back to full table data
+        if (task_col is None or start_col is None) and hasattr(self, 'table'):
+            base_df = getattr(getattr(getattr(self, 'table', None), 'model', None), 'df', None)
+            if base_df is not None:
+                try:
+                    if len(df.index) > 0:
+                        fallback = base_df.loc[df.index].copy()
+                    else:
+                        fallback = base_df.copy()
+                except Exception:
+                    # Fall back to full dataframe order if index alignment fails
+                    fallback = base_df.copy()
+
+                if fallback is not None and len(fallback.columns) > 0:
+                    data = fallback
+                    task_col, start_col, end_col, duration_col, progress_col, status_col = _identify_columns(data)
+                    print('DEBUG: Gantt fallback to full dataframe for column detection')
+
         # Validate required columns
         if task_col is None or start_col is None:
             self.showWarning('Gantt chart requires at least Task and Start columns')
