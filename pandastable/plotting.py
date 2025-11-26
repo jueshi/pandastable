@@ -40,6 +40,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.lines import Line2D
 import matplotlib.transforms as mtrans
+import matplotlib.patheffects as patheffects
 from collections import OrderedDict
 import operator
 from .dialogs import *
@@ -86,7 +87,7 @@ valid_kwds = {'line': ['alpha', 'colormap', 'grid', 'legend', 'linestyle','ms',
             'shmoo': ['alpha', 'colormap', 'grid', 'colorbar',
                      'x_param', 'y_param', 'z_param', 'threshold_min', 'threshold_max',
                      'show_contours', 'contour_levels', 'interpolation', 'show_stats',
-                     'marker_size', 'show_markers'],
+                     'marker_size', 'show_markers', 'show_values', 'log_z_scale'],
             'bathtub': ['alpha', 'colormap', 'grid', 'legend', 'linewidth',
                        'ber_target', 'show_margins', 'x_axis_type', 'show_target_line',
                        'margin_style', 'dual_curve'],
@@ -180,23 +181,19 @@ class PlotViewer(Frame):
         Setup the GUI elements including the figure canvas and control panel.
         """
 
-        #import tkinter as tk
-        #self.m = PanedWindow(self.main, orient=self.orient)
-        self.m = Frame(self.main)
+        # Two-pane layout: plot on top, controls underneath, resizable via sash
+        self.m = PanedWindow(self.main, orient=VERTICAL)
         self.m.pack(fill=BOTH,expand=1)
-        #frame for figure
+
+        # frame for figure
         self.plotfr = Frame(self.m)
-        #add it to the panedwindow
         self.fig, self.canvas = addFigure(self.plotfr)
         self.ax = self.fig.add_subplot(111)
+        self.m.add(self.plotfr, weight=4)
 
-        #self.m.add(self.plotfr, weight=12)
-        self.plotfr.pack(side=TOP,fill=BOTH, expand=1)
-
-        #frame for controls
-        self.ctrlfr = Frame(self.main)
-        #self.m.add(self.ctrlfr, weight=4)
-        self.ctrlfr.pack(side=BOTTOM,fill=BOTH)
+        # frame for controls (options + toolbar)
+        self.ctrlfr = Frame(self.m)
+        self.m.add(self.ctrlfr, weight=1)
 
         #button frame
         bf = Frame(self.ctrlfr, padding=2)
@@ -253,9 +250,9 @@ class PlotViewer(Frame):
         Add option widgets (Notebook tabs) to the control panel.
         """
 
-        self.nb = Notebook(self.ctrlfr, height=210)
+        self.nb = Notebook(self.ctrlfr)
         if self.showoptions == 1:
-            self.nb.pack(side=TOP,fill=BOTH,expand=0)
+            self.nb.pack(side=TOP,fill=BOTH,expand=1)
 
         #add plotter tool dialogs
         w1 = self.mplopts.showDialog(self.nb)
@@ -677,7 +674,8 @@ class PlotViewer(Frame):
                     by = [by, by2]
             g = data.groupby(by)
 
-            if kwargs['subplots'] == True:
+            use_subplots = kwargs.get('subplots', False)
+            if use_subplots:
                 i=1
                 if len(g) > 30:
                     self.showWarning('%s is too many subplots' %len(g))
@@ -706,6 +704,7 @@ class PlotViewer(Frame):
                     if d_num.shape[1] == 0:
                         i+=1
                         continue
+                    d_num = self._sanitize_dataframe_for_logy(d_num, kind)
                     axs = self._doplot(d_num, ax, kind, False,  errorbars, useindex,
                                   bw=bw, yerr=None, kwargs=kwargs)
                     # set subplot title; handle tuple group keys
@@ -720,9 +719,9 @@ class PlotViewer(Frame):
                     any_plotted = True
                     i+=1
 
-                if 'sharey' in kwargs and kwargs['sharey'] == True:
+                if kwargs.get('sharey') == True:
                     self.autoscale()
-                if  'sharex' in kwargs and kwargs['sharex'] == True:
+                if kwargs.get('sharex') == True:
                     self.autoscale('x')
                 if any_plotted and last_handles:
                     self.fig.legend(last_handles, last_labels, loc='center right', #bbox_to_anchor=(0.9, 0),
@@ -745,6 +744,7 @@ class PlotViewer(Frame):
                         group_num = group._get_numeric_data()
                         if group_num.shape[1] == 0:
                             continue
+                        group_num = self._sanitize_dataframe_for_logy(group_num, kind)
                         if errorbars:
                             errs = group_num.std()
                             kwargs['color'] = color
@@ -759,6 +759,7 @@ class PlotViewer(Frame):
                     #this logic could be placed in the scatter method?
                     d = data.drop(by,1)
                     d = d._get_numeric_data()
+                    d = self._sanitize_dataframe_for_logy(d, kind)
                     xcol = d.columns[0]
                     ycols = d.columns[1:]
                     c=0
@@ -769,7 +770,8 @@ class PlotViewer(Frame):
                     for n, df in g:
                         for y in ycols:
                             kwargs['color'] = clrs[c]
-                            currax, sc = self.scatter(df[[xcol,y]], ax=axs, **kwargs)
+                            group_df = d.loc[df.index, [xcol, y]].copy()
+                            currax, sc = self.scatter(group_df, ax=axs, **kwargs)
                             if type(n) is tuple:
                                 n = ','.join(n)
                             legnames.append(','.join([n,y]))
@@ -793,7 +795,8 @@ class PlotViewer(Frame):
                 if numeric_data.shape[1] == 0:
                     self.showWarning('no numeric data to plot')
                     return
-                axs = self._doplot(numeric_data, ax, kind, kwds['subplots'], errorbars,
+                sanitized_numeric = self._sanitize_dataframe_for_logy(numeric_data, kind)
+                axs = self._doplot(sanitized_numeric, ax, kind, kwds['subplots'], errorbars,
                                  useindex, bw=bw, yerr=None, kwargs=kwargs)
             except Exception as e:
                 self.showWarning(e)
@@ -922,6 +925,49 @@ class PlotViewer(Frame):
                 kwargs[k] = None
         return kwargs
 
+    def _log_safe_floor(self, values):
+        """Compute a safe replacement floor for log scaling."""
+
+        arr = np.asarray(values, dtype=float)
+        positive = arr[arr > 0]
+        if positive.size > 0:
+            min_positive = positive.min()
+        else:
+            non_zero = np.abs(arr[arr != 0])
+            min_positive = non_zero.min() if non_zero.size > 0 else 1.0
+        min_positive = max(min_positive, np.finfo(float).tiny)
+        return min_positive / 10.0
+
+    def _clamp_for_log_scale(self, values):
+        """Clamp non-positive values so log plots remain valid."""
+
+        arr = np.asarray(values, dtype=float)
+        if np.all(arr > 0):
+            return arr
+        safe_floor = self._log_safe_floor(arr)
+        return np.where(arr <= 0, safe_floor, arr)
+
+    def _sanitize_dataframe_for_logy(self, data, kind):
+        """Return a copy with non-positive Y data replaced for log plots."""
+
+        logy_kinds = {'line', 'area', 'bar', 'barh', 'boxplot', 'violinplot', 'dotplot', 'scatter'}
+        if kind not in logy_kinds:
+            return data
+
+        sanitized = data.copy()
+        numeric_cols = sanitized.select_dtypes(include=[np.number]).columns
+        if not len(numeric_cols):
+            return sanitized
+
+        if kind == 'scatter':
+            cols_to_adjust = [col for col in numeric_cols if col != sanitized.columns[0]]
+        else:
+            cols_to_adjust = numeric_cols
+
+        for col in cols_to_adjust:
+            sanitized[col] = self._clamp_for_log_scale(sanitized[col].to_numpy())
+        return sanitized
+
     def _doplot(self, data, ax, kind, subplots, errorbars, useindex, bw, yerr, kwargs):
         """
         Dispatch the plotting task to specific methods based on 'kind'.
@@ -984,14 +1030,17 @@ class PlotViewer(Frame):
             if len(data) > 300:
                 self.showWarning('too many bars to plot')
                 return
+        plot_data = self._sanitize_dataframe_for_logy(data, kind)
+
         if kind == 'scatter':
-            axs, sc = self.scatter(data, ax, **kwargs)
+            axs, sc = self.scatter(plot_data, ax, **kwargs)
             if kwargs['sharey'] == 1:
                 lims = self.fig.axes[0].get_ylim()
                 for a in self.fig.axes:
                     a.set_ylim(lims)
         elif kind == 'boxplot':
-            axs = data.boxplot(ax=ax, grid=kwargs['grid'],
+            box_data = self._sanitize_dataframe_for_logy(data, 'boxplot')
+            axs = box_data.boxplot(ax=ax, grid=kwargs['grid'],
                                patch_artist=True, return_type='dict')
             lw = kwargs['linewidth']
             plt.setp(axs['boxes'], color='black', lw=lw)
@@ -1003,9 +1052,11 @@ class PlotViewer(Frame):
             if kwargs['logy'] == 1:
                 ax.set_yscale('log')
         elif kind == 'violinplot':
-            axs = self.violinplot(data, ax, kwargs)
+            sanitized = self._sanitize_dataframe_for_logy(data, 'violinplot')
+            axs = self.violinplot(sanitized, ax, kwargs)
         elif kind == 'dotplot':
-            axs = self.dotplot(data, ax, kwargs)
+            sanitized = self._sanitize_dataframe_for_logy(data, 'dotplot')
+            axs = self.dotplot(sanitized, ax, kwargs)
 
         elif kind == 'histogram':
             #bins = int(kwargs['bins'])
@@ -1415,8 +1466,8 @@ class PlotViewer(Frame):
             return
         l = len(data.columns)
         if l<2: return
-        x = data.values[:,0]
-        y = data.values[:,1]
+        x=data.values[:,0]
+        y=data.values[:,1]
         if l==2:
             labels = list(data.columns[:2])
             v = venn2([set(x), set(y)], set_labels=labels, ax=ax)
@@ -1851,8 +1902,6 @@ class PlotViewer(Frame):
                 data['_progress'] = data['_progress'].clip(0, 100) / 100.0
             except:
                 data['_progress'] = 0
-        else:
-            data['_progress'] = 0
         
         # Sort data
         if sort_by and sort_by != 'none':
@@ -2259,18 +2308,12 @@ class PlotViewer(Frame):
             stats_text = f'Mean: {mean_jitter:.3f}\n'
             stats_text += f'Std Dev: {std_jitter:.3f}\n'
             stats_text += f'RMS: {rms_jitter:.3f}\n'
-            stats_text += f'Peak-Peak: {jitter_data.max() - jitter_data.min():.3f}'
             
-            # Add text box
-            props = dict(boxstyle='round', facecolor='wheat', alpha=0.8)
-            ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, fontsize=10,
-                   verticalalignment='top', bbox=props)
-        
-        # Labels and formatting
-        ax.set_xlabel('Jitter (ps)', fontsize=12)
-        ax.set_ylabel('Probability Density', fontsize=12)
-        ax.set_title('Jitter Histogram', fontsize=14, fontweight='bold')
-        
+            # Plot fitted dual-Dirac
+            x_fit = np.linspace(jitter_data.min(), jitter_data.max(), 200)
+            y_fit = dual_dirac(x_fit, *popt)
+            ax.plot(x_fit, y_fit, 'g--', linewidth=2, 
+                   label=f'Dual-Dirac (RJ={popt[3]:.3f}, DJ={popt[4]:.3f})')
         # Grid
         if grid:
             ax.grid(True, alpha=0.3, axis='y')
@@ -2320,7 +2363,7 @@ class PlotViewer(Frame):
         alpha = kwds.get('alpha', 0.7)
         cmap = plt.cm.get_cmap(kwds.get('colormap', 'tab10'))
         lw = kwds.get('linewidth', 1.5)
-        grid = kwds.get('grid', False)
+        grid = kwds.get('grid', True)
         legend = kwds.get('legend', True)
         subplots = kwds.get('subplots', False)
         
@@ -2497,6 +2540,8 @@ class PlotViewer(Frame):
         show_colorbar = kwds.get('colorbar', True)
         marker_size = kwds.get('marker_size', 50)
         show_markers = kwds.get('show_markers', False)
+        show_values = kwds.get('show_values', False)
+        log_z_scale = kwds.get('log_z_scale', False)
         
         # Convert threshold strings to floats if needed
         if threshold_min is not None and threshold_min != '':
@@ -2544,6 +2589,34 @@ class PlotViewer(Frame):
         if len(x_data) == 0:
             self.showWarning('No valid data points after removing NaN values')
             return ax
+
+        colorbar_label = z_param
+
+        if log_z_scale:
+            positive_values = z_data[z_data > 0]
+            if positive_values.size > 0:
+                min_positive = positive_values.min()
+            else:
+                non_zero = np.abs(z_data[z_data != 0])
+                if non_zero.size > 0:
+                    min_positive = non_zero.min()
+                else:
+                    min_positive = 1.0
+            min_positive = max(min_positive, np.finfo(float).tiny)
+            safe_floor = min_positive / 10.0
+
+            adjusted_z = np.where(z_data <= 0, safe_floor, z_data)
+            z_data = np.log10(adjusted_z)
+
+            def _log_threshold(val):
+                if val is None:
+                    return None
+                safe_val = max(val, safe_floor)
+                return np.log10(safe_val)
+
+            threshold_min = _log_threshold(threshold_min)
+            threshold_max = _log_threshold(threshold_max)
+            colorbar_label = f'log10({z_param})'
         
         # Check if data is on a regular grid
         x_unique = np.unique(x_data)
@@ -2578,7 +2651,7 @@ class PlotViewer(Frame):
                 mesh = ax.pcolormesh(X, Y, Z, cmap=cmap, norm=norm, shading='auto')
                 
                 if show_colorbar:
-                    self.fig.colorbar(mesh, ax=ax, label=z_param)
+                    self.fig.colorbar(mesh, ax=ax, label=colorbar_label)
                 
                 # Add contour lines if requested
                 if show_contours:
@@ -2646,7 +2719,7 @@ class PlotViewer(Frame):
                         scatter = ax.scatter(x_data, y_data, c=z_data, cmap=cmap_name, 
                                            s=marker_size, edgecolors='black', linewidth=0.5)
                         if show_colorbar:
-                            self.fig.colorbar(scatter, ax=ax, label=z_param)
+                            self.fig.colorbar(scatter, ax=ax, label=colorbar_label)
                         
             except ImportError:
                 # Scipy not available, fall back to scatter plot
@@ -2659,7 +2732,7 @@ class PlotViewer(Frame):
                     scatter = ax.scatter(x_data, y_data, c=z_data, cmap=cmap_name, 
                                        s=marker_size, edgecolors='black', linewidth=0.5)
                     if show_colorbar:
-                        self.fig.colorbar(scatter, ax=ax, label=z_param)
+                        self.fig.colorbar(scatter, ax=ax, label=colorbar_label)
             
             except Exception as e:
                 self.showWarning(f'Error creating irregular grid plot: {str(e)}')
@@ -2668,7 +2741,7 @@ class PlotViewer(Frame):
         # Set labels
         ax.set_xlabel(x_param, fontsize=12, fontweight='bold')
         ax.set_ylabel(y_param, fontsize=12, fontweight='bold')
-        ax.set_title(f'Shmoo Plot: {z_param}', fontsize=14, pad=15)
+        ax.set_title(f'Shmoo Plot: {colorbar_label}', fontsize=14, pad=15)
         
         # Add grid
         if grid:
@@ -2706,6 +2779,11 @@ class PlotViewer(Frame):
                 props = dict(boxstyle='round', facecolor='wheat', alpha=0.8)
                 ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, fontsize=10,
                        verticalalignment='top', bbox=props)
+        
+        # Add values if requested
+        if show_values:
+            for i, (x, y, z) in enumerate(zip(x_data, y_data, z_data)):
+                ax.annotate(f'{z:.2f}', (x, y), textcoords="offset points", xytext=(0, 10), ha='center')
         
         return ax
 
@@ -3169,7 +3247,7 @@ class MPLBaseOptions(TkOptions):
                 'axes':['grid','legend','showxlabels','showylabels','sharex','sharey','logx','logy'],
                 'colors':['colormap','bw','clrcol','cscale','colorbar'],
                 'density':['bw_method','fill','show_rug'],
-                'shmoo':['x_param','y_param','z_param','threshold_min','threshold_max',
+                'shmoo':['show_values','log_z_scale','x_param','y_param','z_param','threshold_min','threshold_max',
                         'show_contours','contour_levels','interpolation','show_stats',
                         'marker_size','show_markers'],
                 'bathtub':['ber_target','show_margins','x_axis_type','show_target_line',
@@ -3234,6 +3312,8 @@ class MPLBaseOptions(TkOptions):
                 'show_stats':{'type':'checkbutton','default':0,'label':'show statistics'},
                 'marker_size':{'type':'scale','default':50,'range':(10,200),'interval':10,'label':'marker size'},
                 'show_markers':{'type':'checkbutton','default':0,'label':'show markers'},
+                'show_values':{'type':'checkbutton','default':1,'label':'show values'},
+                'log_z_scale':{'type':'checkbutton','default':1,'label':'log10 scale (Z)'},
                 'ber_target':{'type':'entry','default':'1e-12','width':10,'label':'BER target'},
                 'show_margins':{'type':'checkbutton','default':1,'label':'show margins'},
                 'x_axis_type':{'type':'combobox','default':'UI',
