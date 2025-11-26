@@ -2793,6 +2793,15 @@ class PlotViewer(Frame):
         
         hover_labels = {'x': x_param, 'y': y_param, 'z': z_param}
         hover_scale = 'log' if log_z_scale else 'linear'
+        tooltip_values_enabled = bool(show_values)
+
+        def _tooltip_payload(payload):
+            if tooltip_values_enabled:
+                return payload
+            stripped = payload.copy()
+            stripped['z_linear'] = None
+            stripped['z_display'] = None
+            return stripped
 
         # Check if data is on a regular grid
         x_unique = np.unique(x_data)
@@ -2837,15 +2846,17 @@ class PlotViewer(Frame):
 
                 self._register_hover_target(
                     mesh,
-                    {
-                        'type': 'mesh',
-                        'x_values': X.flatten(),
-                        'y_values': Y.flatten(),
-                        'z_linear': Z_linear.flatten(),
-                        'z_display': Z.flatten(),
-                        'labels': hover_labels,
-                        'scale': hover_scale
-                    }
+                    _tooltip_payload(
+                        {
+                            'type': 'mesh',
+                            'x_values': X.flatten(),
+                            'y_values': Y.flatten(),
+                            'z_linear': Z_linear.flatten(),
+                            'z_display': Z.flatten(),
+                            'labels': hover_labels,
+                            'scale': hover_scale
+                        }
+                    )
                 )
 
                 # Add contour lines if requested
@@ -2897,15 +2908,17 @@ class PlotViewer(Frame):
 
                     self._register_hover_target(
                         mesh,
-                        {
-                            'type': 'mesh',
-                            'x_values': Xi.flatten(),
-                            'y_values': Yi.flatten(),
-                            'z_linear': Zi_linear.flatten() if Zi_linear is not None else None,
-                            'z_display': Zi.flatten(),
-                            'labels': hover_labels,
-                            'scale': hover_scale
-                        }
+                        _tooltip_payload(
+                            {
+                                'type': 'mesh',
+                                'x_values': Xi.flatten(),
+                                'y_values': Yi.flatten(),
+                                'z_linear': Zi_linear.flatten() if Zi_linear is not None else None,
+                                'z_display': Zi.flatten(),
+                                'labels': hover_labels,
+                                'scale': hover_scale
+                            }
+                        )
                     )
 
                     if show_contours:
@@ -2922,15 +2935,17 @@ class PlotViewer(Frame):
                         markers = ax.scatter(x_data, y_data, c='black', s=10, marker='o', alpha=0.5)
                         self._register_hover_target(
                             markers,
-                            {
-                                'type': 'scatter',
-                                'x_values': x_data,
-                                'y_values': y_data,
-                                'z_linear': raw_z_values,
-                                'z_display': z_data,
-                                'labels': hover_labels,
-                                'scale': hover_scale
-                            }
+                            _tooltip_payload(
+                                {
+                                    'type': 'scatter',
+                                    'x_values': x_data,
+                                    'y_values': y_data,
+                                    'z_linear': raw_z_values,
+                                    'z_display': z_data,
+                                    'labels': hover_labels,
+                                    'scale': hover_scale
+                                }
+                            )
                         )
                 else:
                     # Just use scatter plot
@@ -2947,15 +2962,17 @@ class PlotViewer(Frame):
 
                     self._register_hover_target(
                         scatter,
-                        {
-                            'type': 'scatter',
-                            'x_values': x_data,
-                            'y_values': y_data,
-                            'z_linear': raw_z_values,
-                            'z_display': z_data,
-                            'labels': hover_labels,
-                            'scale': hover_scale
-                        }
+                        _tooltip_payload(
+                            {
+                                'type': 'scatter',
+                                'x_values': x_data,
+                                'y_values': y_data,
+                                'z_linear': raw_z_values,
+                                'z_display': z_data,
+                                'labels': hover_labels,
+                                'scale': hover_scale
+                            }
+                        )
                     )
 
             except ImportError:
@@ -2973,15 +2990,17 @@ class PlotViewer(Frame):
 
                 self._register_hover_target(
                     scatter,
-                    {
-                        'type': 'scatter',
-                        'x_values': x_data,
-                        'y_values': y_data,
-                        'z_linear': raw_z_values,
-                        'z_display': z_data,
-                        'labels': hover_labels,
-                        'scale': hover_scale
-                    }
+                    _tooltip_payload(
+                        {
+                            'type': 'scatter',
+                            'x_values': x_data,
+                            'y_values': y_data,
+                            'z_linear': raw_z_values,
+                            'z_display': z_data,
+                            'labels': hover_labels,
+                            'scale': hover_scale
+                        }
+                    )
                 )
 
             except Exception as e:
