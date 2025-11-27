@@ -47,6 +47,20 @@ import pandas as pd
 from .data import TableModel
 from . import util, images
 
+
+def maybe_add_tooltip(text, *widgets):
+    """Safely attach a tooltip to one or more tkinter widgets."""
+
+    if not text:
+        return
+    for widget in widgets:
+        if widget is None:
+            continue
+        try:
+            ToolTip.createToolTip(widget, text)
+        except Exception:
+            pass
+
 def setGeometry(win, width=None):
     """
     Set window geometry to center of screen.
@@ -230,102 +244,116 @@ def dialogFromOptions(parent, opts, groups=None, callback=None,
         frame.pack(side=side,fill=fill,expand=False)
 
         for i in groups[g]:
-            w=None
+            w = None
             opt = opts[i]
+            tooltip = opt.get('tooltip')
             if opt['type'] == 'entry':
-                if 'label' in opt:
-                    label=opt['label']
-                else:
-                    label=i
-                if 'width' in opt:
-                    w=opt['width']
-                else:
-                    w=6
-                Label(frame,text=label).pack()
-                if type(opts[i]['default']) is int:
+                label_text = opt.get('label', i)
+                label_widget = Label(frame, text=label_text)
+                label_widget.pack()
+                width = opt.get('width', 6)
+                if isinstance(opt['default'], int):
                     tkvars[i] = v = IntVar()
                 else:
                     tkvars[i] = v = StringVar()
-                v.set(opts[i]['default'])
-                w = Entry(frame,textvariable=v, width=w, command=callback)
+                v.set(opt['default'])
+                w = Entry(frame, textvariable=v, width=width, command=callback)
+                maybe_add_tooltip(tooltip, label_widget, w)
             elif opt['type'] == 'scrolledtext':
                 w = ScrolledText(frame, width=20, wrap=WORD)
                 tkvars[i] = None
+                maybe_add_tooltip(tooltip, w)
             elif opt['type'] == 'checkbutton':
                 tkvars[i] = v = IntVar()
-                v.set(opts[i]['default'])
-                w = Checkbutton(frame,text=opt['label'],
-                         variable=v)
+                v.set(opt['default'])
+                w = Checkbutton(frame, text=opt['label'], variable=v)
+                maybe_add_tooltip(tooltip, w)
             elif opt['type'] == 'combobox':
-                if 'label' in opt:
-                   label=opt['label']
-                else:
-                    label = i
-                if 'width' in opt:
-                    w=opt['width']
-                else:
-                    w=16
-                Label(frame,text=label).pack()
+                label_text = opt.get('label', i)
+                label_widget = Label(frame, text=label_text)
+                label_widget.pack()
+                width = opt.get('width', 16)
                 tkvars[i] = v = StringVar()
-                v.set(opts[i]['default'])
-                w = Combobox(frame, values=opt['items'],
-                         textvariable=v,width=w,
-                         validatecommand=callback,validate='key')
-                w.set(opt['default'])
-                if 'tooltip' in opt:
-                    ToolTip.createToolTip(w, opt['tooltip'])
+                v.set(opt['default'])
+                combo = Combobox(
+                    frame,
+                    values=opt['items'],
+                    textvariable=v,
+                    width=width,
+                    validatecommand=callback,
+                    validate='key'
+                )
+                combo.set(opt['default'])
+                w = combo
+                maybe_add_tooltip(tooltip, label_widget, combo)
             elif opt['type'] == 'spinbox':
-                if 'label' in opt:
-                   label=opt['label']
-                else:
-                    label = i
-                Label(frame,text=label).pack()
+                label_text = opt.get('label', i)
+                label_widget = Label(frame, text=label_text)
+                label_widget.pack()
                 tkvars[i] = v = StringVar()
-                w = Spinbox(frame, values=opt['items'],
-                         textvariable=v,width=w,
-                         validatecommand=callback,validate='key')
-                w.set(opt['default'])
-                #if 'tooltip' in opt:
-                #    ToolTip.createToolTip(w, opt['tooltip'])
+                width = opt.get('width', 12)
+                spinbox = Spinbox(
+                    frame,
+                    values=opt['items'],
+                    textvariable=v,
+                    width=width,
+                    validatecommand=callback,
+                    validate='key'
+                )
+                spinbox.set(opt['default'])
+                w = spinbox
+                maybe_add_tooltip(tooltip, label_widget, spinbox)
             elif opt['type'] == 'listbox':
-                if 'label' in opt:
-                   label=opt['label']
-                else:
-                    label = i
-                Label(frame,text=label).pack()
-                w,v = addListBox(frame, values=opt['items'],width=12)
-                tkvars[i] = v #add widget instead of var
+                label_text = opt.get('label', i)
+                label_widget = Label(frame, text=label_text)
+                label_widget.pack()
+                list_frame, listbox_widget = addListBox(frame, values=opt['items'], width=12)
+                tkvars[i] = listbox_widget  # add widget instead of var
+                w = list_frame
+                maybe_add_tooltip(tooltip, label_widget, listbox_widget)
             elif opt['type'] == 'radio':
-                Label(frame,text=label).pack()
-                if 'label' in opt:
-                   label=opt['label']
-                else:
-                    label = i
-                Label(frame,text=label).pack()
+                label_text = opt.get('label', i)
+                label_widget = Label(frame, text=label_text)
+                label_widget.pack()
                 tkvars[i] = v = StringVar()
+                buttons = []
                 for item in opt['items']:
-                    w = Radiobutton(frame, text=item, variable=v, value=item).pack()
+                    rb = Radiobutton(frame, text=item, variable=v, value=item)
+                    rb.pack(fill=X)
+                    buttons.append(rb)
+                maybe_add_tooltip(tooltip, label_widget, *buttons)
+                widgets[i] = buttons
+                row += 1
+                continue
             elif opt['type'] == 'scale':
-                fr,to=opt['range']
+                fr, to = opt['range']
                 tkvars[i] = v = DoubleVar()
-                v.set(opts[i]['default'])
-                w = Scale(frame,label=opt['label'],
-                         from_=fr,to=to,
-                         orient='horizontal',
-                         resolution=opt['interval'],
-                         variable=v)
+                v.set(opt['default'])
+                w = Scale(
+                    frame,
+                    label=opt['label'],
+                    from_=fr,
+                    to=to,
+                    orient='horizontal',
+                    resolution=opt['interval'],
+                    variable=v
+                )
+                maybe_add_tooltip(tooltip, w)
             elif opt['type'] == 'colorchooser':
                 tkvars[i] = v = StringVar()
                 clr = opts[i]['default']
                 v.set(clr)
-                def func(var):
-                    clr=var.get()
-                    new=pickColor(parent,clr)
-                    if new != None:
-                        var.set(new)
-                w = Button(frame, text=opt['label'], command=lambda v=v : func(v))
 
-            if w != None:
+                def func(var):
+                    clr = var.get()
+                    new = pickColor(parent, clr)
+                    if new is not None:
+                        var.set(new)
+
+                w = Button(frame, text=opt['label'], command=lambda v=v: func(v))
+                maybe_add_tooltip(tooltip, w)
+
+            if w is not None:
                 pack_kwargs = {'pady': 1}
                 if opt['type'] == 'scrolledtext':
                     pack_kwargs.update({'fill': BOTH, 'expand': 1})
@@ -333,7 +361,7 @@ def dialogFromOptions(parent, opts, groups=None, callback=None,
                     pack_kwargs.update({'fill': X, 'expand': 0})
                 w.pack(**pack_kwargs)
                 widgets[i] = w
-            row+=1
+            row += 1
 
     return dialog, tkvars, widgets
 
@@ -588,10 +616,15 @@ class ToolTip(object):
         if self.tipwindow or not self.text:
             return
 
-        x, y, cx, cy = self.widget.bbox("insert")
-        x = x + event.x
+        try:
+            x, y, cx, cy = self.widget.bbox("insert")
+        except Exception:
+            x = y = cx = cy = 0
+        event_x = getattr(event, 'x', 0)
+        event_y = getattr(event, 'y', 0)
+        x = x + event_x
         x = x + self.widget.winfo_rootx() + 25
-        y = y + cy + self.widget.winfo_rooty() + 10
+        y = y + cy + self.widget.winfo_rooty() + 10 + event_y
         self.tipwindow = tw = Toplevel(self.widget)
         tw.wm_overrideredirect(1)
         tw.wm_geometry("+%d+%d" % (x, y))

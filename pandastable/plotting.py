@@ -47,6 +47,164 @@ from .dialogs import *
 from . import util, images
 import logging
 
+
+def _apply_option_tooltips(opts, overrides=None):
+    """Populate tooltip text for every option entry."""
+
+    overrides = overrides or {}
+    for key, conf in opts.items():
+        if conf.get('tooltip'):
+            continue
+        text = overrides.get(key)
+        if not text:
+            label = conf.get('label') or key.replace('_', ' ')
+            text = f"Configure {label}."
+        conf['tooltip'] = text
+
+
+BASE_OPTION_TOOLTIPS = {
+    'font': 'Font family used for titles, labels, and legends.',
+    'fontsize': 'Base font size applied to most plot text.',
+    'marker': 'Matplotlib marker symbol for point data.',
+    'linestyle': 'Line style used for plotted traces.',
+    'ms': 'Marker size in points.',
+    'grid': 'Show or hide major grid lines.',
+    'logx': 'Plot the X axis on a logarithmic scale.',
+    'logy': 'Plot the Y axis on a logarithmic scale.',
+    'use_index': 'Use the DataFrame index for the X axis.',
+    'errorbars': 'Interpret the selected column as error bar magnitudes.',
+    'clrcol': 'Column that provides per-point color values.',
+    'cscale': 'Scale applied to mapped colors (linear/log).',
+    'colorbar': 'Display a colorbar legend for scalar data.',
+    'bw': 'Render the plot using grayscale tones.',
+    'showxlabels': 'Toggle visibility of X tick labels.',
+    'showylabels': 'Toggle visibility of Y tick labels.',
+    'sharex': 'Force subplots to share the same X limits.',
+    'sharey': 'Force subplots to share the same Y limits.',
+    'legend': 'Show legend entries for plotted series.',
+    'kind': 'Primary matplotlib plot type to render.',
+    'stacked': 'Stack series on top of each other where applicable.',
+    'linewidth': 'Stroke width for lines in points.',
+    'alpha': 'Overall transparency applied to plot elements.',
+    'subplots': 'Draw each selected series in its own subplot.',
+    'colormap': 'Matplotlib colormap used for scalar mappings.',
+    'bins': 'Number of bins/steps used for histograms or jitter analysis.',
+    'by': 'First grouping column for split plots.',
+    'by2': 'Optional second grouping column.',
+    'labelcol': 'Column supplying text labels per data point.',
+    'pointsizes': 'Column controlling per-point marker area.',
+    'bw_method': 'Kernel density bandwidth selection method.',
+    'fill': 'Fill under the density curve.',
+    'show_rug': 'Draw individual data ticks along the axis.',
+    'x_param': 'Column mapped to the shmoo X axis.',
+    'y_param': 'Column mapped to the shmoo Y axis.',
+    'z_param': 'Column providing shmoo measurement values.',
+    'threshold_min': 'Lower threshold for shmoo pass/fail shading.',
+    'threshold_max': 'Upper threshold for shmoo pass/fail shading.',
+    'show_contours': 'Overlay contour lines on shmoo heatmaps.',
+    'contour_levels': 'Number of contour levels to compute.',
+    'interpolation': 'Interpolation method for shmoo grids.',
+    'show_stats': 'Display derived statistics for the current plot.',
+    'marker_size': 'Size of scatter markers when drawing raw shmoo points.',
+    'show_markers': 'Overlay the original shmoo sample positions.',
+    'show_values': 'Label each shmoo cell with its numeric value.',
+    'log_z_scale': 'Apply log10 scaling to Z data.',
+    'ber_target': 'Target BER used for bathtub visualizations.',
+    'show_margins': 'Display eye/bathtub margin annotations.',
+    'x_axis_type': 'Units used for the eye diagram X axis.',
+    'show_target_line': 'Draw the BER target line in bathtub plots.',
+    'margin_style': 'Visualization style for BER margins.',
+    'dual_curve': 'Show left/right bathtub curves separately.',
+    'log_freq': 'Use logarithmic scaling for S-parameter frequency axis.',
+    'show_phase': 'Overlay S-parameter phase on a secondary axis.',
+    'spec_limit': 'Specification limit value in dB.',
+    'limit_type': 'Orient spec limit as horizontal or vertical line.',
+    'nyquist_marker': 'Highlight the Nyquist point computed from data rate.',
+    'data_rate': 'Data rate (Gbps) used to derive Nyquist frequency.',
+    'freq_range': 'Manual frequency range override (GHz).',
+    'db_range': 'Manual dB axis range override.',
+    'show_progress': 'Display task progress bars on Gantt charts.',
+    'show_today': 'Draw a vertical line for today on Gantt charts.',
+    'date_format': 'Datetime format string for Gantt labels.',
+    'bar_height': 'Relative height of Gantt bars.',
+    'show_milestones': 'Display milestone markers on the chart.',
+    'group_by': 'Column used to group Gantt tasks.',
+    'sort_by': 'Sort order for Gantt tasks.',
+    'persistence': 'Heatmap persistence for eye diagrams.',
+    'ui_width': 'Unit interval width for eye diagrams.',
+    'sample_rate': 'Sample rate in GS/s for the captured waveform.',
+    'bit_rate': 'Bit rate in Gbps for the captured waveform.',
+    'show_mask': 'Overlay compliance mask on eye diagram.',
+    'mask_margin': 'Additional margin applied to the eye mask.',
+    'color_mode': 'Color rendering mode for eye diagram accumulation.',
+    'overlay_count': 'Number of overlays used when in overlay mode.',
+    'show_gaussian': 'Overlay a Gaussian fit when analyzing jitter.',
+    'show_dual_dirac': 'Show dual-Dirac components in jitter plots.',
+    'tj_separation': 'Total jitter (TJ) separation in picoseconds.',
+    'show_components': 'Display RJ/DJ component breakdown.',
+}
+
+
+MPL3D_OPTION_TOOLTIPS = {
+    'kind': 'Type of 3D plot to render.',
+    'rstride': 'Row sampling stride for wireframes/surfaces.',
+    'cstride': 'Column sampling stride for wireframes/surfaces.',
+    'points': 'Overlay original data points on the 3D plot.',
+    'mode': 'Interpretation of data (parametric vs grid).',
+}
+
+
+ANNOTATION_OPTION_TOOLTIPS = {
+    'title': 'Global plot title text.',
+    'xlabel': 'X axis label text.',
+    'ylabel': 'Y axis label text.',
+    'facecolor': 'Fill color for annotation boxes.',
+    'linecolor': 'Edge color for annotation boxes.',
+    'fill': 'Hatch/fill pattern for annotation boxes.',
+    'rotate': 'Rotation angle applied to added textbox objects.',
+    'boxstyle': 'Box style for annotation backgrounds.',
+    'text': 'Body text for added annotation objects.',
+    'align': 'Horizontal alignment of annotation text.',
+    'font': 'Font used for annotation text.',
+    'fontsize': 'Font size used for annotation text.',
+    'fontweight': 'Font weight used for annotation text.',
+    'rot': 'Rotation angle for tick labels.',
+}
+
+
+EXTRA_OPTION_TOOLTIPS = {
+    'xmin': 'Minimum X limit override.',
+    'xmax': 'Maximum X limit override.',
+    'ymin': 'Minimum Y limit override.',
+    'ymax': 'Maximum Y limit override.',
+    'major x-ticks': 'Number or spacing for major X ticks.',
+    'major y-ticks': 'Number or spacing for major Y ticks.',
+    'minor x-ticks': 'Number or spacing for minor X ticks.',
+    'minor y-ticks': 'Number or spacing for minor Y ticks.',
+    'formatter': 'Tick label formatter preset.',
+    'symbol': 'Suffix symbol (e.g., units) appended to tick labels.',
+    'precision': 'Decimal precision for formatted tick values.',
+    'date format': 'Datetime format string for tick labels.',
+}
+
+
+ANIMATE_OPTION_TOOLTIPS = {
+    'increment': 'Row step size between animation frames.',
+    'window': 'Number of rows plotted per frame.',
+    'startrow': 'Starting row index for playback.',
+    'delay': 'Delay between frames in seconds.',
+    'tableupdate': 'Refresh the table selection as frames advance.',
+    'expand': 'Grow the plotted window instead of sliding it.',
+    'usexrange': 'Lock X axis to the full dataset range.',
+    'useyrange': 'Lock Y axis to the full dataset range.',
+    'smoothing': 'Apply rolling average smoothing before plotting.',
+    'columntitle': 'Column used to refresh the plot title each frame.',
+    'savevideo': 'Render the animation to a video file.',
+    'codec': 'FFMpeg codec used for captured video.',
+    'fps': 'Frames per second for saved video.',
+    'filename': 'Output filename for the captured video.',
+}
+
 colormaps = sorted(m for m in plt.cm.datad if not m.endswith("_r"))
 markers = ['','o','.','^','v','>','<','s','+','x','p','d','h','*']
 linestyles = ['-','--','-.',':','steps']
@@ -3671,6 +3829,7 @@ class MPLBaseOptions(TkOptions):
                 'tj_separation':{'type':'entry','default':'','width':15,'label':'TJ separation (ps)'},
                 'show_components':{'type':'checkbutton','default':0,'label':'show RJ/DJ components'},
                 }
+        _apply_option_tooltips(self.opts, BASE_OPTION_TOOLTIPS)
         self.kwds = {}
         return
 
@@ -3747,6 +3906,7 @@ class MPL3DOptions(MPLBaseOptions):
                 'points':{'type':'checkbutton','default':0,'label':'show points'},
                 'mode':{'type':'combobox','default':'(x,y)->z','items': modes},
                  }
+        _apply_option_tooltips(self.opts, MPL3D_OPTION_TOOLTIPS)
         self.kwds = {}
         return
 
@@ -3805,6 +3965,7 @@ class PlotLayoutOptions(TkOptions):
                  resolution=1,
                  variable=v,
                  command=self.resetGrid)
+        maybe_add_tooltip('Number of subplot rows to allocate.', w)
         w.pack(fill=X,pady=2)
         v = self.colsvar = IntVar()
         v.set(self.cols)
@@ -3814,23 +3975,32 @@ class PlotLayoutOptions(TkOptions):
                  resolution=1,
                  variable=v,
                  command=self.resetGrid)
+        maybe_add_tooltip('Number of subplot columns to allocate.', w)
         w.pack(side=TOP,fill=X,pady=2)
 
         self.modevar = StringVar()
         self.modevar.set('normal')
         frame = LabelFrame(self.main, text='modes')
-        Radiobutton(frame, text='normal', variable=self.modevar, value='normal').pack(fill=X)
-        Radiobutton(frame, text='split data', variable=self.modevar, value='splitdata').pack(fill=X)
-        Radiobutton(frame, text='multi views', variable=self.modevar, value='multiviews').pack(fill=X)
+        rb = Radiobutton(frame, text='normal', variable=self.modevar, value='normal')
+        rb.pack(fill=X)
+        maybe_add_tooltip('Single subplot layout using all selected data.', rb)
+        rb = Radiobutton(frame, text='split data', variable=self.modevar, value='splitdata')
+        rb.pack(fill=X)
+        maybe_add_tooltip('Split selected data into multiple subplots.', rb)
+        rb = Radiobutton(frame, text='multi views', variable=self.modevar, value='multiviews')
+        rb.pack(fill=X)
+        maybe_add_tooltip('Enable collection of predefined multi-view plots.', rb)
         frame.pack(side=LEFT,fill=Y)
 
         frame = LabelFrame(self.main, text='multi views')
         #v = self.multiviewsvar = BooleanVar()
         plot_types = ['histogram','line','scatter','boxplot','dotplot','area','density','bar','barh',
                       'heatmap','contour','hexbin','imshow']
-        Label(frame,text='plot types:').pack(fill=X)
+        lbl = Label(frame,text='plot types:')
+        lbl.pack(fill=X)
         w,v = addListBox(frame, values=plot_types,width=12,height=8)
         w.pack(fill=X)
+        maybe_add_tooltip('Choose plot types to include in multi-view layouts.', lbl, v)
         self.plottypeslistbox = v
         frame.pack(side=LEFT,fill=Y)
 
@@ -3843,11 +4013,15 @@ class PlotLayoutOptions(TkOptions):
         axes = []
         self.axeslist = Combobox(frame, values=axes,
                         textvariable=v,width=14)
-        Label(frame,text='plot list:').pack()
+        lbl = Label(frame,text='plot list:')
+        lbl.pack()
         self.axeslist.pack(fill=BOTH,pady=2)
+        maybe_add_tooltip('Select an axis from the current layout.', lbl, self.axeslist)
         b = Button(frame, text='remove axis', command=self.parent.removeSubplot)
+        maybe_add_tooltip('Remove the selected subplot from the layout.', b)
         b.pack(fill=X,pady=2)
         b = Button(frame, text='set title', command=self.parent.setSubplotTitle)
+        maybe_add_tooltip('Assign a custom title to the selected subplot.', b)
         b.pack(fill=X,pady=2)
         frame.pack(side=LEFT,fill=Y)
         self.updateFromGrid()
@@ -3960,6 +4134,7 @@ class AnnotationOptions(TkOptions):
                 'fontweight':{'type':'combobox','default':'normal','items': fontweights},
                 'rot':{'type':'entry','default':0, 'label':'ticklabel angle'}
                 }
+        _apply_option_tooltips(self.opts, ANNOTATION_OPTION_TOOLTIPS)
         self.kwds = {}
         #used to store annotations
         self.textboxes = {}
@@ -4155,6 +4330,7 @@ class ExtraOptions(TkOptions):
                             'date format':{'type':'combobox','items':datefmts,'default':''},
                             #'table':{'type':'checkbutton','default':0,'label':'show table'},
                             }
+        _apply_option_tooltips(self.opts, EXTRA_OPTION_TOOLTIPS)
         self.kwds = {}
         return
 
@@ -4255,6 +4431,7 @@ class AnimateOptions(TkOptions):
                             'fps':{'type':'entry','default':15},
                             'filename':{'type':'entry','default':'myplot.mp4','width':20},
                             }
+        _apply_option_tooltips(self.opts, ANIMATE_OPTION_TOOLTIPS)
         self.kwds = {}
         self.running = False
         return
