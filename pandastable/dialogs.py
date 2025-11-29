@@ -659,15 +659,17 @@ class ToolTip(object):
         except:
             pass
             
-        # Create modern styled tooltip
-        frame = Frame(tw, background=self.BACKGROUND)
+        # Create modern styled tooltip using tkinter widgets (not ttk)
+        # ttk.Frame doesn't support background option directly
+        import tkinter as tk
+        frame = tk.Frame(tw, background=self.BACKGROUND)
         frame.pack(fill=BOTH, expand=True)
         
-        label = Label(frame, text=self.text, justify=LEFT,
-                      background=self.BACKGROUND, 
-                      foreground=self.FOREGROUND,
-                      font=self.FONT,
-                      wraplength=300)
+        label = tk.Label(frame, text=self.text, justify=LEFT,
+                         background=self.BACKGROUND, 
+                         foreground=self.FOREGROUND,
+                         font=self.FONT,
+                         wraplength=300)
         label.pack(padx=self.PADDING, pady=self.PADDING - 2)
 
     def hidetip(self, event=None):
