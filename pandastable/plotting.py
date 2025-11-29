@@ -89,6 +89,8 @@ BASE_OPTION_TOOLTIPS = {
     'subplots': 'Draw each selected series in its own subplot.',
     'colormap': 'Matplotlib colormap used for scalar mappings.',
     'bins': 'Number of bins/steps used for histograms or jitter analysis.',
+    'hist_min': 'Minimum value to include in histogram calculations.',
+    'hist_max': 'Maximum value to include in histogram calculations.',
     'by': 'First grouping column for split plots.',
     'by2': 'Optional second grouping column.',
     'labelcol': 'Column supplying text labels per data point.',
@@ -1392,6 +1394,25 @@ class PlotViewer(Frame):
             sanitized = self._sanitize_dataframe_for_logy(data, 'dotplot')
             axs = self.dotplot(sanitized, ax, kwargs)
         elif kind == 'histogram':
+            min_str = self.mplopts.kwds.get('hist_min', '')
+            max_str = self.mplopts.kwds.get('hist_max', '')
+            try:
+                min_v = float(min_str) if str(min_str).strip() != '' else None
+            except Exception:
+                min_v = None
+            try:
+                max_v = float(max_str) if str(max_str).strip() != '' else None
+            except Exception:
+                max_v = None
+            fdata = data.copy()
+            for col in fdata.columns:
+                s = pd.to_numeric(fdata[col], errors='coerce')
+                m = ~s.isna()
+                if min_v is not None:
+                    m &= s >= min_v
+                if max_v is not None:
+                    m &= s <= max_v
+                fdata[col] = s.where(m, np.nan)
             b = kwargs.get('bins', None)
             if isinstance(b, str):
                 try:
@@ -1399,7 +1420,7 @@ class PlotViewer(Frame):
                 except Exception:
                     try:
                         w = float(b)
-                        arr = np.asarray(data.to_numpy().flatten(), dtype=float)
+                        arr = np.asarray(fdata.to_numpy().flatten(), dtype=float)
                         if arr.size:
                             mn = np.nanmin(arr)
                             mx = np.nanmax(arr)
@@ -1418,7 +1439,7 @@ class PlotViewer(Frame):
                     kwargs['bins'] = int(round(b))
                 else:
                     w = b
-                    arr = np.asarray(data.to_numpy().flatten(), dtype=float)
+                    arr = np.asarray(fdata.to_numpy().flatten(), dtype=float)
                     if arr.size:
                         mn = np.nanmin(arr)
                         mx = np.nanmax(arr)
@@ -1430,7 +1451,39 @@ class PlotViewer(Frame):
                             kwargs['bins'] = edges
                     else:
                         kwargs['bins'] = 20
-            axs = data.plot(kind='hist',layout=layout, ax=ax, **kwargs)
+            axs = fdata.plot(kind='hist',layout=layout, ax=ax, **kwargs)
+            if min_v is not None:
+                ax.axvline(min_v, color='red', linestyle='--', linewidth=1)
+            if max_v is not None:
+                ax.axvline(max_v, color='red', linestyle='--', linewidth=1)
+            try:
+                lines = []
+                for col in fdata.columns:
+                    s = pd.to_numeric(fdata[col], errors='coerce')
+                    s = s.dropna()
+                    if s.empty:
+                        continue
+                    lines.append(
+                        f"{col}: min={s.min():.6g}, max={s.max():.6g}, mean={s.mean():.6g}, median={s.median():.6g}, std={s.std(ddof=1):.6g}"
+                    )
+                if lines:
+                    txt = "\n".join(lines)
+                    ann_ax = axs
+                    if isinstance(ann_ax, np.ndarray):
+                        ann_ax = ann_ax.flat[0]
+                    fs = max(int(self.mplopts.kwds.get('fontsize', 12) * 0.9), 8)
+                    ann_ax.text(
+                        0.98,
+                        0.98,
+                        txt,
+                        transform=ann_ax.transAxes,
+                        ha='right',
+                        va='top',
+                        bbox=dict(boxstyle='round', fc='white', ec='black', lw=0.5, alpha=0.7),
+                        fontsize=fs,
+                    )
+            except Exception:
+                pass
         elif kind == 'heatmap':
             if len(data) > 1000:
                 self.showWarning('too many rows to plot')
@@ -3731,7 +3784,7 @@ class MPLBaseOptions(TkOptions):
         grps = {'data':['by','by2','labelcol','pointsizes'],
                 'formats':['font','marker','linestyle','alpha'],
                 'sizes':['fontsize','ms','linewidth'],
-                'general':['kind','bins','stacked','subplots','use_index','errorbars'],
+                'general':['kind','bins','hist_min','hist_max','stacked','subplots','use_index','errorbars'],
                 'axes':['grid','legend','showxlabels','showylabels','sharex','sharey','logx','logy'],
                 'colors':['colormap','bw','clrcol','cscale','colorbar'],
                 'density':['bw_method','fill','show_rug'],
@@ -3778,6 +3831,8 @@ class MPLBaseOptions(TkOptions):
                 'subplots':{'type':'checkbutton','default':0,'label':'multiple subplots'},
                 'colormap':{'type':'combobox','default':'Spectral','items':colormaps},
                 'bins':{'type':'entry','default':20,'width':10},
+                'hist_min':{'type':'entry','default':'','width':10,'label':'min threshold'},
+                'hist_max':{'type':'entry','default':'','width':10,'label':'max threshold'},
                 'by':{'type':'combobox','items':datacols,'label':'group by','default':''},
                 'by2':{'type':'combobox','items':datacols,'label':'group by 2','default':''},
                 'labelcol':{'type':'combobox','items':datacols,'label':'point labels','default':''},
