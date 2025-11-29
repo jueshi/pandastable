@@ -218,11 +218,11 @@ class Table(Canvas):
         self.boxoutlinecolor = COLORS['primary']
         self.colselectedcolor = COLORS['gray_100']
         
-        # Header colors
-        self.colheaderbgcolor = COLORS['gray_100']
-        self.colheaderfgcolor = COLORS['gray_700']
-        self.rowheaderbgcolor = COLORS['gray_50']
-        self.rowheaderfgcolor = COLORS['gray_600']
+        # Header colors - ensure good contrast for visibility
+        self.colheaderbgcolor = '#4B5563'  # gray-600 - darker background
+        self.colheaderfgcolor = '#FFFFFF'  # white text for contrast
+        self.rowheaderbgcolor = '#E5E7EB'  # gray-200
+        self.rowheaderfgcolor = '#1F2937'  # gray-800 - dark text
         
         # Data formatting
         self.floatprecision = 0

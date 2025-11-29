@@ -79,11 +79,11 @@ MODERN_THEMES = {
         'multipleselectioncolor': '#E0F2FE',  # Sky 100
         'boxoutlinecolor': COLORS['primary'],
         
-        # Header colors
-        'colheaderbgcolor': COLORS['gray_100'],
-        'colheaderfgcolor': COLORS['gray_700'],
-        'rowheaderbgcolor': COLORS['gray_50'],
-        'rowheaderfgcolor': COLORS['gray_600'],
+        # Header colors - dark background with white text for visibility
+        'colheaderbgcolor': '#4B5563',  # gray-600
+        'colheaderfgcolor': '#FFFFFF',  # white
+        'rowheaderbgcolor': '#E5E7EB',  # gray-200
+        'rowheaderfgcolor': '#1F2937',  # gray-800
         
         # Entry colors
         'entrybackgr': COLORS['white'],
