@@ -90,6 +90,34 @@ import re  # For regex operations
 warnings.filterwarnings('ignore', category=FutureWarning)
 
 class CSVBrowser(tk.Tk):
+    """CSV Browser Application with Excel-like File List.
+    
+    A tkinter-based CSV browser that displays CSV files in a dual-pane layout
+    with Excel-like tables, filtering, and plotting capabilities.
+    """
+    
+    # ============== Configuration Constants ==============
+    # UI Layout
+    DEFAULT_HORIZONTAL_SASH_POS = 400  # pixels from left for horizontal layout
+    DEFAULT_MIN_PANEL_HEIGHT = 150  # minimum height for any panel in pixels
+    MIN_CSV_PANEL_RATIO = 0.55  # minimum ratio of height for CSV panel (55%)
+    
+    # File Browser
+    MAX_RECENT_DIRECTORIES = 5  # maximum number of recent directories to remember
+    DEFAULT_FIELD_COUNT = 25  # default number of Field_N columns for filename parsing
+    
+    # Column Display
+    MIN_COLUMN_WIDTH = 50  # minimum column width in pixels
+    MAX_COLUMN_WIDTH = 300  # maximum column width in pixels
+    COLUMN_WIDTH_CHAR_MULTIPLIER = 8  # approximate pixels per character
+    
+    # File Path Handling
+    LONG_PATH_THRESHOLD = 250  # characters before adding Windows long path prefix
+    SPOTFIRE_PATH_LIMIT = 200  # max path length for Spotfire compatibility
+    
+    # Encoding Fallbacks
+    ENCODING_FALLBACKS = ['utf-8', 'latin1', 'ISO-8859-1', 'cp1252', 'utf-16']
+    
     def __init__(self):
         super().__init__()
         
@@ -131,7 +159,7 @@ class CSVBrowser(tk.Tk):
         self.saved_file_filters = []  # List to store saved file filter configurations
         
         # Set maximum number of recent directories to store
-        self.max_recent_directories = 5
+        self.max_recent_directories = self.MAX_RECENT_DIRECTORIES
         
         # Initialize recent directories list
         self.recent_directories = []
@@ -156,18 +184,14 @@ class CSVBrowser(tk.Tk):
         self.saved_table_settings = None
         
         # Initialize minimum CSV panel ratio
-        self.min_csv_panel_ratio = 0.55  # ensure bottom table gets at least 55% of height
+        self.min_csv_panel_ratio = self.MIN_CSV_PANEL_RATIO  # use class constant
         
         # # Initialize frame attributes
         self.pt_frame = ttk.Frame(self)
         self.csv_frame = ttk.Frame(self)
         
-        # Set default directory
-        # self.current_directory = os.path.dirname(os.path.abspath(__file__))
-        # self.current_directory = r"C:\Users\JueShi\Astera Labs, Inc\Silicon Engineering - T3_MPW_Rx_C2M_Test_Results"
-        # self.current_directory = r"C:\Users\juesh\OneDrive\Documents\windsurf\stock_data_"
-        self.current_directory = r"D:\hp-jue\downloads"
-        # self.current_directory = r"C:\Users\JueShi\OneDrive - Astera Labs, Inc\Documents\taurus-sdk-python\validation_Rx_results\100G_KR"        
+        # Set default directory - use last recent directory or fallback to user's home/Documents
+        self.current_directory = self._get_default_directory()
         
         # Add current directory to recent directories
         self.add_to_recent_directories(self.current_directory)
@@ -208,6 +232,42 @@ class CSVBrowser(tk.Tk):
         
         # Create the application menu
         self.create_menu()
+
+    def _get_default_directory(self):
+        """Get the default directory for the file browser.
+        
+        Priority:
+        1. Most recent directory from settings (if it exists)
+        2. User's Documents folder
+        3. User's home directory
+        4. Current working directory
+        
+        Returns:
+            str: Path to the default directory
+        """
+        # Try to use the most recent directory from settings
+        if hasattr(self, 'recent_directories') and self.recent_directories:
+            for recent_dir in self.recent_directories:
+                if recent_dir and os.path.isdir(recent_dir):
+                    print(f"Using recent directory: {recent_dir}")
+                    return recent_dir
+        
+        # Try user's Documents folder
+        documents_path = os.path.join(os.path.expanduser("~"), "Documents")
+        if os.path.isdir(documents_path):
+            print(f"Using Documents folder: {documents_path}")
+            return documents_path
+        
+        # Try user's home directory
+        home_path = os.path.expanduser("~")
+        if os.path.isdir(home_path):
+            print(f"Using home directory: {home_path}")
+            return home_path
+        
+        # Fallback to current working directory
+        cwd = os.getcwd()
+        print(f"Using current working directory: {cwd}")
+        return cwd
 
     def normalize_long_path(self, path):
         """Normalize path and add long path prefix if needed"""
@@ -1414,8 +1474,32 @@ class CSVBrowser(tk.Tk):
             traceback.print_exc()
     
     def _clean_column_name(self, column_name):
-        """Remove any decorative elements from column names"""
-        # Remove arrow indicators and any other decorative elements
+        """Remove any decorative elements from column names.
+        
+        Args:
+            column_name: The column name to clean
+            
+        Returns:
+            str: The cleaned column name without decorative elements
+        """
+        if column_name is None:
+            return None
+        
+        # Convert to string if not already
+        name = str(column_name).strip()
+        
+        # Remove arrow indicators (▲, ▼, ↑, ↓) used for sort indicators
+        arrow_chars = ['▲', '▼', '↑', '↓', '△', '▽', '⬆', '⬇', '↗', '↘']
+        for arrow in arrow_chars:
+            name = name.replace(arrow, '')
+        
+        # Remove leading/trailing whitespace that may remain
+        name = name.strip()
+        
+        # Remove any leading/trailing special characters
+        name = name.strip('*#@!~`')
+        
+        return name
 
     def setup_csv_filter_context_menu(self):
         """Create a context menu for row filter with instructions and examples"""
@@ -2024,7 +2108,13 @@ class CSVBrowser(tk.Tk):
                 pass
         
         try:
-            spotfire_path = r"C:\Users\JueShi\AppData\Local\Spotfire Cloud\14.4.0\Spotfire.Dxp.exe"
+            # Find Spotfire executable - check common installation locations
+            spotfire_path = self._find_spotfire_executable()
+            if not spotfire_path:
+                messagebox.showerror("Spotfire Not Found", 
+                    "Could not find Spotfire installation.\n\n"
+                    "Please ensure Spotfire is installed or set the SPOTFIRE_PATH environment variable.")
+                return
             
             # Get all selected file paths and process them
             file_paths = []
@@ -2095,6 +2185,53 @@ class CSVBrowser(tk.Tk):
         except Exception as e:
             messagebox.showerror("Error", f"Failed to open file(s) in Spotfire:\n{str(e)}")
 
+
+    def _find_spotfire_executable(self):
+        """Find the Spotfire executable on the system.
+        
+        Checks in order:
+        1. SPOTFIRE_PATH environment variable
+        2. Common installation locations
+        
+        Returns:
+            str: Path to Spotfire executable, or None if not found
+        """
+        # Check environment variable first
+        env_path = os.environ.get('SPOTFIRE_PATH')
+        if env_path and os.path.isfile(env_path):
+            print(f"Found Spotfire from environment variable: {env_path}")
+            return env_path
+        
+        # Common Spotfire installation locations
+        local_app_data = os.environ.get('LOCALAPPDATA', os.path.join(os.path.expanduser('~'), 'AppData', 'Local'))
+        program_files = os.environ.get('PROGRAMFILES', 'C:\\Program Files')
+        program_files_x86 = os.environ.get('PROGRAMFILES(X86)', 'C:\\Program Files (x86)')
+        
+        # Search patterns for Spotfire installations
+        search_paths = [
+            # Spotfire Cloud installations (versioned)
+            os.path.join(local_app_data, 'Spotfire Cloud'),
+            # TIBCO Spotfire installations
+            os.path.join(program_files, 'TIBCO', 'Spotfire'),
+            os.path.join(program_files_x86, 'TIBCO', 'Spotfire'),
+            # Spotfire Analyst installations
+            os.path.join(program_files, 'Spotfire'),
+            os.path.join(program_files_x86, 'Spotfire'),
+        ]
+        
+        # Look for Spotfire.Dxp.exe in each location
+        for base_path in search_paths:
+            if os.path.isdir(base_path):
+                # Walk through subdirectories to find the executable
+                for root, dirs, files in os.walk(base_path):
+                    for file in files:
+                        if file.lower() == 'spotfire.dxp.exe':
+                            full_path = os.path.join(root, file)
+                            print(f"Found Spotfire at: {full_path}")
+                            return full_path
+        
+        print("Spotfire executable not found in common locations")
+        return None
 
     def get_top_correlated_columns(self, data, target_column, top_n=10):
         """
@@ -3312,8 +3449,8 @@ class CSVBrowser(tk.Tk):
             self.is_horizontal = True
             
             # Re-add the panes
-            self.paned.add(self.file_browser_container, weight=1)
-            self.paned.add(self.csv_view_container, weight=3)
+            self.paned.add(self.file_frame, weight=1)
+            self.paned.add(self.csv_container, weight=3)
             
             # Set sash position
             self.after(100, lambda: self.paned.sashpos(0, 400))
@@ -3330,8 +3467,8 @@ class CSVBrowser(tk.Tk):
             self.is_horizontal = False
             
             # Re-add the panes
-            self.paned.add(self.file_browser_container, weight=1)
-            self.paned.add(self.csv_view_container, weight=3)
+            self.paned.add(self.file_frame, weight=1)
+            self.paned.add(self.csv_container, weight=3)
             
             # Set sash position
             self._schedule_vertical_sash_adjustment()
