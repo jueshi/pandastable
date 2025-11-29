@@ -592,16 +592,31 @@ class MultipleValDialog(Dialog):
 
 class ToolTip(object):
     """
-    Tooltip class for tkinter widgets.
+    Modern tooltip class for tkinter widgets.
+    
+    Features:
+    - Modern styling with rounded appearance
+    - Configurable colors and fonts
+    - Delay before showing
+    - Multi-line support
 
     Args:
         widget: The widget to attach the tooltip to.
     """
+    
+    # Class-level styling configuration
+    BACKGROUND = '#1F2937'  # Dark gray
+    FOREGROUND = '#F9FAFB'  # Light gray
+    FONT = ('Segoe UI', 9)
+    PADDING = 8
+    DELAY = 500  # milliseconds
+    
     def __init__(self, widget):
         self.widget = widget
         self.tipwindow = None
         self.id = None
         self.x = self.y = 0
+        self._after_id = None
 
     def showtip(self, text, event=None):
         """
@@ -628,6 +643,8 @@ class ToolTip(object):
         self.tipwindow = tw = Toplevel(self.widget)
         tw.wm_overrideredirect(1)
         tw.wm_geometry("+%d+%d" % (x, y))
+        
+        # Set window attributes for modern look
         try:
             # For Mac OS
             tw.tk.call("::tk::unsupported::MacWindowStyle",
@@ -635,10 +652,23 @@ class ToolTip(object):
                        "help", "noActivates")
         except TclError:
             pass
-        label = Label(tw, text=self.text, justify=LEFT,
-                      background="#ffffe0", relief=SOLID, borderwidth=1,
-                      font=("tahoma", "8", "normal"), foreground='black')
-        label.pack(ipadx=1)
+            
+        # Try to set transparency on Windows
+        try:
+            tw.attributes('-alpha', 0.95)
+        except:
+            pass
+            
+        # Create modern styled tooltip
+        frame = Frame(tw, background=self.BACKGROUND)
+        frame.pack(fill=BOTH, expand=True)
+        
+        label = Label(frame, text=self.text, justify=LEFT,
+                      background=self.BACKGROUND, 
+                      foreground=self.FOREGROUND,
+                      font=self.FONT,
+                      wraplength=300)
+        label.pack(padx=self.PADDING, pady=self.PADDING - 2)
 
     def hidetip(self, event=None):
         """

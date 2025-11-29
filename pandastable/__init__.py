@@ -10,11 +10,19 @@ Main components:
 - TableModel: Data model wrapper around the pandas DataFrame.
 - DataExplore: A standalone application wrapper around the Table widget.
 
+New in this version:
+- Modern GUI themes with improved accessibility
+- Enhanced widgets with hover effects
+- Improved toolbar and status bar
+
 Usage:
     from pandastable import Table, TableModel
     ...
     table = Table(frame, dataframe=df)
     table.show()
+    
+    # Apply a theme
+    table.setTheme('dark')  # Options: light, dark, ocean, forest, sunset, high_contrast
 """
 
 import platform
@@ -23,4 +31,10 @@ if platform.system() == 'Darwin':
     matplotlib.use('TkAgg')
 from .core import *
 from .data import *
-__version__ = '0.14.0'
+from .gui_themes import MODERN_THEMES, ThemeManager, get_theme_manager, COLORS
+from .gui_widgets import (
+    ModernButton, ModernEntry, ModernFrame, ModernLabelFrame,
+    ModernNotebook, ModernTreeview, SearchEntry, StatusLabel,
+    CollapsibleFrame, Badge, apply_modern_style
+)
+__version__ = '0.14.1'

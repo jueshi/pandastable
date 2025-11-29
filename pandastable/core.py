@@ -46,14 +46,19 @@ from .plotting import MPLBaseOptions, PlotViewer
 from .dialogs import ImportDialog
 from . import images, util, config
 from .dialogs import *
+from .gui_themes import MODERN_THEMES, get_theme_manager, get_legacy_theme, COLORS
 
-themes = {'dark':{'cellbackgr':'gray25','grid_color':'gray50', 'textcolor':'#f2eeeb',
-                 'rowselectedcolor':'#ed9252', 'colselectedcolor':'#3d65d4'},
-          'bold':{'cellbackgr':'white','grid_color':'gray50', 'textcolor':'black',
-                 'rowselectedcolor':'yellow', 'colselectedcolor':'#e4e3e4'},
-          'default':{'cellbackgr':'#F4F4F3','grid_color':'#ABB1AD', 'textcolor':'black',
-                 'rowselectedcolor':'#E4DED4', 'colselectedcolor':'#e4e3e4'}
-         }
+# Modern themes with improved accessibility and visual appeal
+themes = {
+    'dark': MODERN_THEMES['dark'],
+    'bold': MODERN_THEMES['high_contrast'],
+    'default': MODERN_THEMES['light'],
+    'light': MODERN_THEMES['light'],
+    'ocean': MODERN_THEMES['ocean'],
+    'forest': MODERN_THEMES['forest'],
+    'sunset': MODERN_THEMES['sunset'],
+    'high_contrast': MODERN_THEMES['high_contrast'],
+}
 
 config_path = os.path.join(os.path.expanduser("~"), '.pandastable')
 logfile = os.path.join(config_path, 'error.log')
@@ -178,13 +183,16 @@ class Table(Canvas):
 
     def set_defaults(self):
         """
-        Set default settings for the table.
+        Set default settings for the table with modern styling.
+        
+        Uses colors from the modern theme system for improved
+        visual appearance and accessibility.
         """
-
+        # Cell dimensions
         self.cellwidth = 60
         self.maxcellwidth = 300
         self.mincellwidth = 30
-        self.rowheight = 20
+        self.rowheight = 22  # Slightly taller for better readability
         self.horizlines = 1
         self.vertlines = 1
         self.autoresizecols = 1
@@ -192,34 +200,43 @@ class Table(Canvas):
         self.x_start = 0
         self.y_start = 1
         self.linewidth = 1.0
-        self.font = 'Arial'
-        self.fontsize = 12
+        
+        # Typography - use modern font stack
+        self.font = 'Segoe UI'  # Modern Windows font, falls back gracefully
+        self.fontsize = 11
         self.fontstyle = ''
-        #self.thefont = ('Arial',12)
-        self.textcolor = 'black'
-        self.cellbackgr = '#F4F4F3'
-        self.entrybackgr = 'white'
-        self.grid_color = '#ABB1AD'
-        self.rowselectedcolor = '#E4DED4'
-        self.multipleselectioncolor = '#E0F2F7'
-        self.boxoutlinecolor = '#084B8A'
-        self.colselectedcolor = '#e4e3e4'
-        self.colheaderbgcolor = 'gray25'
-        self.colheaderfgcolor = 'white'
-        self.rowheaderbgcolor = 'gray75'
-        self.rowheaderfgcolor = 'black'
+        
+        # Modern color scheme from themes
+        self.textcolor = COLORS['gray_800']
+        self.cellbackgr = COLORS['white']
+        self.entrybackgr = COLORS['white']
+        self.grid_color = COLORS['gray_200']
+        
+        # Selection colors - more visible and modern
+        self.rowselectedcolor = COLORS['primary_light']
+        self.multipleselectioncolor = '#E0F2FE'  # Sky 100
+        self.boxoutlinecolor = COLORS['primary']
+        self.colselectedcolor = COLORS['gray_100']
+        
+        # Header colors
+        self.colheaderbgcolor = COLORS['gray_100']
+        self.colheaderfgcolor = COLORS['gray_700']
+        self.rowheaderbgcolor = COLORS['gray_50']
+        self.rowheaderfgcolor = COLORS['gray_600']
+        
+        # Data formatting
         self.floatprecision = 0
         self.timeformat = "%Y-%m-%d %H:%M:%S"
         self.thousandseparator = ''
         self.showindex = False
+        
+        # Column state
         self.columnwidths = {}
         self.columncolors = {}
-        #store general per column formatting as sub dicts
         self.columnformats = {}
         self.columnformats['alignment'] = {}
         self.rowcolors = pd.DataFrame()
         self.highlighted = None
-        #self.bg = Style().lookup('TLabel.label', 'background')
         return
 
     def setFont(self):
@@ -239,15 +256,43 @@ class Table(Canvas):
         Set the color theme of the table.
 
         Args:
-            name (str): The name of the theme to apply. Default is 'light'.
+            name (str): The name of the theme to apply. 
+                       Available themes: 'light', 'dark', 'ocean', 'forest', 
+                       'sunset', 'high_contrast', 'default', 'bold'.
         """
-
+        # Handle legacy theme names
+        if name not in themes:
+            name = 'light'
+            
         style = themes[name]
         for s in style:
             if s in self.__dict__:
                 self.__dict__[s] = style[s]
+                
+        # Update headers if they exist
+        if hasattr(self, 'colheader') and self.colheader:
+            if 'colheaderbgcolor' in style:
+                self.colheader.bgcolor = style['colheaderbgcolor']
+            if 'colheaderfgcolor' in style:
+                self.colheader.fgcolor = style['colheaderfgcolor']
+                
+        if hasattr(self, 'rowheader') and self.rowheader:
+            if 'rowheaderbgcolor' in style:
+                self.rowheader.bgcolor = style['rowheaderbgcolor']
+            if 'rowheaderfgcolor' in style:
+                self.rowheader.fgcolor = style['rowheaderfgcolor']
+                
         self.redraw()
         return
+    
+    def getAvailableThemes(self):
+        """
+        Get list of available theme names.
+        
+        Returns:
+            list: List of available theme names.
+        """
+        return list(themes.keys())
 
     def mouse_wheel(self, event):
         """
@@ -4653,7 +4698,12 @@ class Table(Canvas):
 
 class ToolBar(Frame):
     """
-    A toolbar widget providing buttons for common table operations.
+    A modern toolbar widget providing buttons for common table operations.
+    
+    Features:
+    - Grouped buttons with separators
+    - Modern styling with hover effects
+    - Improved tooltips
 
     Args:
         parent: Parent widget.
@@ -4664,46 +4714,86 @@ class ToolBar(Frame):
         Frame.__init__(self, parent, width=600, height=40)
         self.parentframe = parent
         self.parentapp = parentapp
+        
+        # Apply modern styling
+        self._setup_style()
+        
+        # File operations group
+        self._add_separator_label('File')
         img = images.open_proj()
-        addButton(self, 'Load table', self.parentapp.load, img, 'load table')
+        addButton(self, 'Load table', self.parentapp.load, img, 'Load table from file (Ctrl+O)')
         img = images.save_proj()
-        addButton(self, 'Save', self.parentapp.save, img, 'save')
+        addButton(self, 'Save', self.parentapp.save, img, 'Save table to file (Ctrl+S)')
         img = images.importcsv()
         func = lambda: self.parentapp.importCSV(dialog=1)
-        addButton(self, 'Import', func, img, 'import csv')
+        addButton(self, 'Import', func, img, 'Import CSV with options')
         img = images.excel()
-        addButton(self, 'Load excel', self.parentapp.loadExcel, img, 'load excel file')
+        addButton(self, 'Load excel', self.parentapp.loadExcel, img, 'Load Excel file (.xlsx, .xls)')
+        
+        self._add_separator()
+        
+        # Edit operations group
+        self._add_separator_label('Edit')
         img = images.copy()
-        addButton(self, 'Copy', self.parentapp.copyTable, img, 'copy table to clipboard')
+        addButton(self, 'Copy', self.parentapp.copyTable, img, 'Copy selection to clipboard (Ctrl+C)')
         img = images.paste()
-        addButton(self, 'Paste', self.parentapp.paste, img, 'paste table')
+        addButton(self, 'Paste', self.parentapp.paste, img, 'Paste from clipboard (Ctrl+V)')
+        
+        self._add_separator()
+        
+        # Analysis group
+        self._add_separator_label('Analysis')
         img = images.plot()
-        addButton(self, 'Plot', self.parentapp.plotSelected, img, 'plot selected')
+        addButton(self, 'Plot', self.parentapp.plotSelected, img, 'Plot selected columns')
         img = images.transpose()
-        addButton(self, 'Transpose', self.parentapp.transpose, img, 'transpose')
+        addButton(self, 'Transpose', self.parentapp.transpose, img, 'Transpose rows and columns')
         img = images.aggregate()
-        addButton(self, 'Aggregate', self.parentapp.aggregate, img, 'aggregate')
+        addButton(self, 'Aggregate', self.parentapp.aggregate, img, 'Aggregate data by groups')
         img = images.pivot()
-        addButton(self, 'Pivot', self.parentapp.pivot, img, 'pivot')
+        addButton(self, 'Pivot', self.parentapp.pivot, img, 'Create pivot table')
         img = images.melt()
-        addButton(self, 'Melt', self.parentapp.melt, img, 'melt')
+        addButton(self, 'Melt', self.parentapp.melt, img, 'Unpivot/melt table')
         img = images.merge()
-        addButton(self, 'Merge', self.parentapp.doCombine, img, 'merge, concat or join')
+        addButton(self, 'Merge', self.parentapp.doCombine, img, 'Merge, concat or join tables')
+        
+        self._add_separator()
+        
+        # Tools group
+        self._add_separator_label('Tools')
         img = images.table_multiple()
         addButton(self, 'Table from selection', self.parentapp.tableFromSelection,
-                    img, 'sub-table from selection')
+                    img, 'Create sub-table from selection')
         img = images.filtering()
-        addButton(self, 'Query', self.parentapp.queryBar, img, 'filter table')
+        addButton(self, 'Query', self.parentapp.queryBar, img, 'Filter table with query (Ctrl+F)')
         img = images.calculate()
-        addButton(self, 'Evaluate function', self.parentapp.evalBar, img, 'calculate')
+        addButton(self, 'Evaluate function', self.parentapp.evalBar, img, 'Evaluate expression on columns')
         img = images.fit()
-        addButton(self, 'Stats models', self.parentapp.statsViewer, img, 'model fitting')
+        addButton(self, 'Stats models', self.parentapp.statsViewer, img, 'Statistical model fitting')
 
+        self._add_separator()
+        
         img = images.table_delete()
-        addButton(self, 'Clear', self.parentapp.clearTable, img, 'clear table')
-        #img = images.prefs()
-        #addButton(self, 'Prefs', self.parentapp.showPrefs, img, 'table preferences')
+        addButton(self, 'Clear', self.parentapp.clearTable, img, 'Clear all table data')
         return
+        
+    def _setup_style(self):
+        """Set up modern toolbar styling."""
+        try:
+            style = Style(self)
+            style.configure('Toolbar.TFrame', background=COLORS['gray_50'])
+            self.configure(style='Toolbar.TFrame')
+        except:
+            pass
+            
+    def _add_separator(self):
+        """Add a visual separator between button groups."""
+        sep = Separator(self, orient='vertical')
+        sep.pack(side=TOP, fill=Y, padx=4, pady=4)
+        
+    def _add_separator_label(self, text):
+        """Add a small label for button group."""
+        lbl = Label(self, text=text, font=('Segoe UI', 7), foreground=COLORS['gray_500'])
+        lbl.pack(side=TOP, pady=(4, 0))
 
 class ChildToolBar(ToolBar):
     """
@@ -4734,7 +4824,14 @@ class ChildToolBar(ToolBar):
 
 class statusBar(Frame):
     """
-    A status bar widget to display table info (rows, cols, filename).
+    A modern status bar widget to display table info.
+    
+    Features:
+    - Row and column count with icons
+    - Memory usage display
+    - Selection info
+    - Filename display
+    - Zoom controls
 
     Args:
         parent: Parent widget.
@@ -4746,42 +4843,139 @@ class statusBar(Frame):
         self.parentframe = parent
         self.parentapp = parentapp
         df = self.parentapp.model.df
-        sfont = ("Helvetica bold", 10)
-        clr = '#A10000'
+        
+        # Modern styling
+        sfont = ("Segoe UI", 9)
+        sfont_bold = ("Segoe UI", 9, "bold")
+        primary_clr = COLORS['primary']
+        text_clr = COLORS['gray_700']
+        
+        # Left section - Table info
+        left_frame = Frame(self)
+        left_frame.pack(side=LEFT, padx=(8, 0))
+        
+        # Rows indicator
+        Label(left_frame, text='📊', font=sfont).pack(side=LEFT)
         self.rowsvar = StringVar()
         self.rowsvar.set(len(df))
-        l=Label(self,textvariable=self.rowsvar,font=sfont,foreground=clr)
-        l.pack(fill=X, side=LEFT)
-        Label(self,text='rows x',font=sfont,foreground=clr).pack(side=LEFT)
+        l = Label(left_frame, textvariable=self.rowsvar, font=sfont_bold, foreground=primary_clr)
+        l.pack(side=LEFT, padx=(2, 0))
+        Label(left_frame, text='rows', font=sfont, foreground=text_clr).pack(side=LEFT, padx=(2, 8))
+        
+        # Separator
+        Label(left_frame, text='×', font=sfont, foreground=COLORS['gray_400']).pack(side=LEFT)
+        
+        # Columns indicator
         self.colsvar = StringVar()
         self.colsvar.set(len(df.columns))
-        l=Label(self,textvariable=self.colsvar,font=sfont,foreground=clr)
-        l.pack(fill=X, side=LEFT)
-        Label(self,text='columns',font=sfont,foreground=clr).pack(side=LEFT)
-        self.filenamevar = StringVar()
-        l=Label(self,textvariable=self.filenamevar,font=sfont)
-        l.pack(fill=X, side=RIGHT)
-        fr = Frame(self)
-        fr.pack(fill=Y,side=RIGHT)
-
-        img = images.contract_col()
-        addButton(fr, 'Contract Cols', self.parentapp.contractColumns, img, 'contract columns', side=LEFT, padding=1)
-        img = images.expand_col()
-        addButton(fr, 'Expand Cols', self.parentapp.expandColumns, img, 'expand columns', side=LEFT, padding=1)
+        l = Label(left_frame, textvariable=self.colsvar, font=sfont_bold, foreground=primary_clr)
+        l.pack(side=LEFT, padx=(8, 0))
+        Label(left_frame, text='cols', font=sfont, foreground=text_clr).pack(side=LEFT, padx=(2, 8))
+        
+        # Memory usage
+        self.memvar = StringVar()
+        self._update_memory(df)
+        Label(left_frame, text='|', font=sfont, foreground=COLORS['gray_300']).pack(side=LEFT, padx=4)
+        Label(left_frame, text='💾', font=sfont).pack(side=LEFT)
+        l = Label(left_frame, textvariable=self.memvar, font=sfont, foreground=text_clr)
+        l.pack(side=LEFT, padx=(2, 0))
+        
+        # Selection info (center)
+        center_frame = Frame(self)
+        center_frame.pack(side=LEFT, expand=True, fill=X, padx=20)
+        
+        self.selectionvar = StringVar()
+        self.selectionvar.set('')
+        self.selection_label = Label(center_frame, textvariable=self.selectionvar, 
+                                     font=sfont, foreground=COLORS['gray_500'])
+        self.selection_label.pack(side=LEFT)
+        
+        # Right section - Filename and controls
+        right_frame = Frame(self)
+        right_frame.pack(side=RIGHT, padx=(0, 8))
+        
+        # Zoom controls
+        zoom_frame = Frame(right_frame)
+        zoom_frame.pack(side=RIGHT, padx=(8, 0))
+        
         img = images.zoom_out()
-        addButton(fr, 'Zoom Out', self.parentapp.zoomOut, img, 'zoom out', side=LEFT, padding=1)
+        addButton(zoom_frame, 'Zoom Out', self.parentapp.zoomOut, img, 'Zoom out (Ctrl+-)', side=LEFT, padding=1)
+        
+        self.zoomvar = StringVar()
+        self.zoomvar.set('100%')
+        Label(zoom_frame, textvariable=self.zoomvar, font=sfont, width=5).pack(side=LEFT, padx=2)
+        
         img = images.zoom_in()
-        addButton(fr, 'Zoom In', self.parentapp.zoomIn, img, 'zoom in', side=LEFT, padding=1)
+        addButton(zoom_frame, 'Zoom In', self.parentapp.zoomIn, img, 'Zoom in (Ctrl++)', side=LEFT, padding=1)
+        
+        # Column width controls
+        col_frame = Frame(right_frame)
+        col_frame.pack(side=RIGHT, padx=(8, 0))
+        
+        img = images.contract_col()
+        addButton(col_frame, 'Contract Cols', self.parentapp.contractColumns, img, 'Contract column widths', side=LEFT, padding=1)
+        img = images.expand_col()
+        addButton(col_frame, 'Expand Cols', self.parentapp.expandColumns, img, 'Expand column widths', side=LEFT, padding=1)
+        
+        # Filename
+        self.filenamevar = StringVar()
+        l = Label(right_frame, textvariable=self.filenamevar, font=sfont, foreground=text_clr)
+        l.pack(side=RIGHT, padx=(0, 8))
         return
+        
+    def _update_memory(self, df):
+        """Update memory usage display."""
+        try:
+            mem_bytes = df.memory_usage(deep=True).sum()
+            if mem_bytes < 1024:
+                mem_str = f'{mem_bytes} B'
+            elif mem_bytes < 1024 * 1024:
+                mem_str = f'{mem_bytes / 1024:.1f} KB'
+            elif mem_bytes < 1024 * 1024 * 1024:
+                mem_str = f'{mem_bytes / (1024 * 1024):.1f} MB'
+            else:
+                mem_str = f'{mem_bytes / (1024 * 1024 * 1024):.2f} GB'
+            self.memvar.set(mem_str)
+        except:
+            self.memvar.set('')
 
     def update(self):
         """
         Update the status bar with current table information.
         """
-
         model = self.parentapp.model
-        self.rowsvar.set(len(model.df))
-        self.colsvar.set(len(model.df.columns))
-        if self.parentapp.filename != None:
-            self.filenamevar.set(self.parentapp.filename)
+        df = model.df
+        self.rowsvar.set(f'{len(df):,}')
+        self.colsvar.set(f'{len(df.columns):,}')
+        self._update_memory(df)
+        
+        if self.parentapp.filename is not None:
+            # Show just the filename, not full path
+            import os
+            fname = os.path.basename(self.parentapp.filename)
+            self.filenamevar.set(f'📄 {fname}')
+        else:
+            self.filenamevar.set('')
         return
+        
+    def updateSelection(self, rows=0, cols=0):
+        """
+        Update selection info display.
+        
+        Args:
+            rows (int): Number of selected rows.
+            cols (int): Number of selected columns.
+        """
+        if rows > 0 or cols > 0:
+            self.selectionvar.set(f'Selected: {rows:,} rows × {cols:,} cols')
+        else:
+            self.selectionvar.set('')
+            
+    def setZoom(self, percent):
+        """
+        Update zoom level display.
+        
+        Args:
+            percent (int): Zoom percentage.
+        """
+        self.zoomvar.set(f'{percent}%')
