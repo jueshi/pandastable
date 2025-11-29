@@ -221,9 +221,48 @@ class CSVBrowser(tk.Tk):
         
         # Set up keyboard shortcuts
         self.bind("<Control-f>", self.focus_column_search)
+        self.bind("<Control-o>", self._shortcut_open_directory)
+        self.bind("<Control-r>", self._shortcut_refresh)
+        self.bind("<Escape>", self._shortcut_clear_filters)
+        self.bind("<F5>", self._shortcut_refresh)
         
         # Create the application menu
         self.create_menu()
+
+    def _shortcut_open_directory(self, event=None):
+        """Keyboard shortcut handler for opening a directory (Ctrl+O)"""
+        self.browse_directory()
+        return "break"
+    
+    def _shortcut_refresh(self, event=None):
+        """Keyboard shortcut handler for refreshing file list (Ctrl+R or F5)"""
+        self.refresh_file_list()
+        return "break"
+    
+    def _shortcut_clear_filters(self, event=None):
+        """Keyboard shortcut handler for clearing all filters (Escape)"""
+        # Clear file filter
+        if hasattr(self, 'filter_text'):
+            self.filter_text.set("")
+        # Clear row filter
+        if hasattr(self, 'csv_filter_text'):
+            self.csv_filter_text.set("")
+        # Clear column filter
+        if hasattr(self, 'column_filter_var'):
+            self.column_filter_var.set("")
+        # Clear column search
+        if hasattr(self, 'column_search_var'):
+            self.column_search_var.set("")
+        # Update status
+        self._update_status("Filters cleared")
+        return "break"
+    
+    def _update_status(self, message):
+        """Update the status bar with a message"""
+        if hasattr(self, 'status_var'):
+            self.status_var.set(message)
+            # Auto-clear status after 3 seconds
+            self.after(3000, lambda: self.status_var.set("Ready") if self.status_var.get() == message else None)
 
     def _get_default_directory(self):
         """Get the default directory for the file browser.
