@@ -39,35 +39,27 @@ Features:
 # Import os and sys first
 import os
 import sys
+import logging
+
+# ============== Logging Configuration ==============
+# Set up logging with configurable level via environment variable
+# Use CSV_BROWSER_LOG_LEVEL=DEBUG for verbose output
+LOG_LEVEL = os.environ.get('CSV_BROWSER_LOG_LEVEL', 'INFO').upper()
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL, logging.INFO),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%H:%M:%S'
+)
+logger = logging.getLogger('CSVBrowser')
 
 # Add custom pandastable path to sys.path BEFORE importing pandastable
-# custom_pandastable_path = r"C:\Users\juesh\OneDrive\Documents\windsurf\pandastable\pandastable"
-# custom_pandastable_path = r"C:\Users\juesh\OneDrive\Documents\pandastable\pandastable"
-# custom_pandastable_path = r"C:\Users\juesh\OneDrive\Documents\pandastable"
-
-# # custom_pandastable_path = r"C:\Users\JueShi\OneDrive - Astera Labs, Inc\Documents\windsurf\pandastable\pandastable"
-# if os.path.exists(custom_pandastable_path):
-#     # Insert at the beginning of sys.path to prioritize this version
-#     sys.path.insert(0, custom_pandastable_path)
-#     print(f"Using custom pandastable from: {custom_pandastable_path}")
-    
 custom_pandastable_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "pandastable")
-# Fallback paths if needed
-# custom_pandastable_path = r"C:\Users\juesh\OneDrive\Documents\windsurf\pandastable\pandastable"
-# custom_pandastable_path = r"C:\Users\JueShi\OneDrive - Astera Labs, Inc\Documents\windsurf\pandastable\pandastable"
 if os.path.exists(custom_pandastable_path):
-    # Insert at the beginning of sys.path to prioritize this version
     sys.path.insert(0, os.path.dirname(custom_pandastable_path))
-    print(f"Using custom pandastable from: {custom_pandastable_path}")
-
-# Force reload of pandastable modules if already imported
-# import importlib
-# if 'pandastable.plotting' in sys.modules:
-#     print("Reloading pandastable.plotting module...")
-#     importlib.reload(sys.modules['pandastable.plotting'])
+    logger.info(f"Using custom pandastable from: {custom_pandastable_path}")
 
 import pandastable.plotting as p
-print("Using plotting.py from:", p.__file__)
+logger.debug(f"Using plotting.py from: {p.__file__}")
 
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, simpledialog
@@ -166,8 +158,8 @@ class CSVBrowser(tk.Tk):
         
         # File to store settings (recent directories and filters)
         self.settings_file = os.path.join(os.path.expanduser("~"), "csv_browser_settings.json")
-        print(f"Settings file path: {self.settings_file}")
-
+        logger.info(f"Settings file path: {self.settings_file}")
+        
         # Load settings from file
         self.load_settings()
         
@@ -249,24 +241,24 @@ class CSVBrowser(tk.Tk):
         if hasattr(self, 'recent_directories') and self.recent_directories:
             for recent_dir in self.recent_directories:
                 if recent_dir and os.path.isdir(recent_dir):
-                    print(f"Using recent directory: {recent_dir}")
+                    logger.info(f"Using recent directory: {recent_dir}")
                     return recent_dir
         
         # Try user's Documents folder
         documents_path = os.path.join(os.path.expanduser("~"), "Documents")
         if os.path.isdir(documents_path):
-            print(f"Using Documents folder: {documents_path}")
+            logger.info(f"Using Documents folder: {documents_path}")
             return documents_path
         
         # Try user's home directory
         home_path = os.path.expanduser("~")
         if os.path.isdir(home_path):
-            print(f"Using home directory: {home_path}")
+            logger.info(f"Using home directory: {home_path}")
             return home_path
         
         # Fallback to current working directory
         cwd = os.getcwd()
-        print(f"Using current working directory: {cwd}")
+        logger.info(f"Using current working directory: {cwd}")
         return cwd
 
     def normalize_long_path(self, path):
