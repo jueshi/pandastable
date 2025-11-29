@@ -78,6 +78,7 @@ import pyperclip
 import copy
 import types
 import re  # For regex operations
+from typing import Optional, List, Dict, Any, Tuple, Union
 
 warnings.filterwarnings('ignore', category=FutureWarning)
 
@@ -229,17 +230,17 @@ class CSVBrowser(tk.Tk):
         # Create the application menu
         self.create_menu()
 
-    def _shortcut_open_directory(self, event=None):
+    def _shortcut_open_directory(self, event: Optional[tk.Event] = None) -> str:
         """Keyboard shortcut handler for opening a directory (Ctrl+O)"""
         self.browse_directory()
         return "break"
     
-    def _shortcut_refresh(self, event=None):
+    def _shortcut_refresh(self, event: Optional[tk.Event] = None) -> str:
         """Keyboard shortcut handler for refreshing file list (Ctrl+R or F5)"""
         self.refresh_file_list()
         return "break"
     
-    def _shortcut_clear_filters(self, event=None):
+    def _shortcut_clear_filters(self, event: Optional[tk.Event] = None) -> str:
         """Keyboard shortcut handler for clearing all filters (Escape)"""
         # Clear file filter
         if hasattr(self, 'filter_text'):
@@ -257,14 +258,14 @@ class CSVBrowser(tk.Tk):
         self._update_status("Filters cleared")
         return "break"
     
-    def _update_status(self, message):
+    def _update_status(self, message: str) -> None:
         """Update the status bar with a message"""
         if hasattr(self, 'status_var'):
             self.status_var.set(message)
             # Auto-clear status after 3 seconds
             self.after(3000, lambda: self.status_var.set("Ready") if self.status_var.get() == message else None)
 
-    def _get_default_directory(self):
+    def _get_default_directory(self) -> str:
         """Get the default directory for the file browser.
         
         Priority:
@@ -300,29 +301,29 @@ class CSVBrowser(tk.Tk):
         logger.info(f"Using current working directory: {cwd}")
         return cwd
 
-    def normalize_long_path(self, path):
-        """Normalize path and add long path prefix if needed"""
+    def normalize_long_path(self, path: str) -> str:
+        """Normalize path and add long path prefix if needed."""
         # Normalize the path
         normalized_path = os.path.normpath(os.path.abspath(path))
         
-        # If path is longer than 250 characters, add the long path prefix
-        if len(normalized_path) > 250 and not normalized_path.startswith('\\\\?\\'):
+        # If path is longer than threshold, add the long path prefix
+        if len(normalized_path) > self.LONG_PATH_THRESHOLD and not normalized_path.startswith('\\\\?\\'):
             # Add Windows long path prefix
             normalized_path = '\\\\?\\' + normalized_path
-            print(f"Using long path format: {normalized_path}")
+            logger.debug(f"Using long path format: {normalized_path}")
         
         return normalized_path
         
-    def format_size(self, size):
-        # Convert size to human readable format
+    def format_size(self, size: Union[int, float]) -> str:
+        """Convert size in bytes to human readable format."""
         for unit in ['B', 'KB', 'MB', 'GB']:
             if size < 1024:
                 return f"{size:.1f} {unit}"
             size /= 1024
         return f"{size:.1f} TB"
 
-    def format_date(self, timestamp):
-        # Convert timestamp to readable format
+    def format_date(self, timestamp: float) -> str:
+        """Convert timestamp to readable date format."""
         dt = datetime.fromtimestamp(timestamp)
         return dt.strftime("%Y-%m-%d %H:%M")
 
