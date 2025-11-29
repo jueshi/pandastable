@@ -3828,18 +3828,26 @@ class Table(Canvas):
         """
 
         df = self.model.df
+        nrows = len(df)
+        ncols = len(df.columns)
         cols, rows = self.multiplecollist, self.multiplerowlist
-        if not type(rows) is list:  # or self.allcols == True:
+        if not isinstance(rows, list):
             rows = list(rows)
         if self.__last_left_click_src == "row":
             if len(cols) < 1:
-                cols = list(range(self.cols))
-                rows = [self.currentrow]
+                cols = list(range(ncols))
+                r = self.currentrow if 0 <= self.currentrow < nrows else (0 if nrows > 0 else -1)
+                rows = [r] if r != -1 else []
         else:
             if len(rows) < 1 or self.allrows == True:
-                rows = list(range(self.rows))
+                rows = list(range(nrows))
             if len(cols) < 1:
-                cols = [self.currentcol]
+                cc = self.currentcol if 0 <= self.currentcol < ncols else (0 if ncols > 0 else -1)
+                cols = [cc] if cc != -1 else []
+        rows = [r for r in rows if 0 <= r < nrows]
+        cols = [c for c in cols if 0 <= c < ncols]
+        if len(rows) == 0 or len(cols) == 0:
+            return pd.DataFrame()
         try:
             data = df.iloc[rows,cols]
         except Exception as e:

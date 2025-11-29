@@ -1338,7 +1338,6 @@ class PlotViewer(Frame):
             cmap = plt.cm.get_cmap(kwargs['colormap'])
         else:
             cmap = None
-        #change some things if we are plotting in b&w
         styles = []
         if bw == True and kind not in ['pie','heatmap']:
             cmap = None
@@ -1358,7 +1357,6 @@ class PlotViewer(Frame):
             data = data[data.columns[0::2]]
             yerr.columns = data.columns
             plt.rcParams['errorbar.capsize']=4
-            #kwargs['elinewidth'] = 1
 
         if kind == 'bar' or kind == 'barh':
             if len(data) > 50:
@@ -1393,9 +1391,45 @@ class PlotViewer(Frame):
         elif kind == 'dotplot':
             sanitized = self._sanitize_dataframe_for_logy(data, 'dotplot')
             axs = self.dotplot(sanitized, ax, kwargs)
-
         elif kind == 'histogram':
-            #bins = int(kwargs['bins'])
+            b = kwargs.get('bins', None)
+            if isinstance(b, str):
+                try:
+                    kwargs['bins'] = int(b)
+                except Exception:
+                    try:
+                        w = float(b)
+                        arr = np.asarray(data.to_numpy().flatten(), dtype=float)
+                        if arr.size:
+                            mn = np.nanmin(arr)
+                            mx = np.nanmax(arr)
+                            if not np.isfinite(mn) or not np.isfinite(mx) or mx == mn:
+                                kwargs['bins'] = 20
+                            else:
+                                count = max(int(np.ceil((mx - mn) / max(w, 1e-12))), 1)
+                                edges = np.linspace(mn, mx, count + 1)
+                                kwargs['bins'] = edges
+                        else:
+                            kwargs['bins'] = 20
+                    except Exception:
+                        kwargs['bins'] = 20
+            elif isinstance(b, float):
+                if b.is_integer() or b >= 2.0:
+                    kwargs['bins'] = int(round(b))
+                else:
+                    w = b
+                    arr = np.asarray(data.to_numpy().flatten(), dtype=float)
+                    if arr.size:
+                        mn = np.nanmin(arr)
+                        mx = np.nanmax(arr)
+                        if not np.isfinite(mn) or not np.isfinite(mx) or mx == mn:
+                            kwargs['bins'] = 20
+                        else:
+                            count = max(int(np.ceil((mx - mn) / max(w, 1e-12))), 1)
+                            edges = np.linspace(mn, mx, count + 1)
+                            kwargs['bins'] = edges
+                    else:
+                        kwargs['bins'] = 20
             axs = data.plot(kind='hist',layout=layout, ax=ax, **kwargs)
         elif kind == 'heatmap':
             if len(data) > 1000:
@@ -1413,9 +1447,7 @@ class PlotViewer(Frame):
         elif kind == 'contour':
             xi,yi,zi = self.contourData(data)
             cs = ax.contour(xi,yi,zi,15,linewidths=.5,colors='k')
-            #plt.clabel(cs,fontsize=9)
             cs = ax.contourf(xi,yi,zi,15,cmap=cmap)
-            #ax.scatter(x,y,marker='o',c='b',s=5)
             self.fig.colorbar(cs,ax=ax)
             axs = ax
         elif kind == 'imshow':
@@ -1432,7 +1464,6 @@ class PlotViewer(Frame):
                 lbls=None
             else:
                 lbls = list(data.index)
-
             axs = data.plot(ax=ax,kind='pie', labels=lbls, layout=layout,
                             autopct='%1.1f%%', subplots=True, **kwargs)
             if lbls == None:
@@ -1445,28 +1476,20 @@ class PlotViewer(Frame):
             col = data.columns[-1]
             axs = pd.plotting.radviz(data, col, ax=ax, **kwargs)
         elif kind == 'density':
-            print("DEBUG: Calling density plot")
             axs = self.density(data, ax, kwargs)
         elif kind == 'shmoo':
-            print("DEBUG: Calling shmoo plot")
             axs = self.shmoo(data, ax, kwargs)
         elif kind == 'bathtub':
-            print("DEBUG: Calling bathtub plot")
             axs = self.bathtub(data, ax, kwargs)
         elif kind == 'sparam':
-            print("DEBUG: Calling S-parameter plot")
             axs = self.sparam(data, ax, kwargs)
         elif kind == 'gantt':
-            print("DEBUG: Calling Gantt chart")
             axs = self.gantt(data, ax, kwargs)
         elif kind == 'eye':
-            print("DEBUG: Calling Eye diagram")
             axs = self.eye(data, ax, kwargs)
         elif kind == 'jitter':
-            print("DEBUG: Calling Jitter histogram")
             axs = self.jitter(data, ax, kwargs)
         else:
-            #line, bar and area plots
             if useindex == False:
                 x=data.columns[0]
                 data.set_index(x,inplace=True)
@@ -1474,14 +1497,12 @@ class PlotViewer(Frame):
                 msg = "Not enough data.\nIf 'use index' is off select at least 2 columns"
                 self.showWarning(msg)
                 return
-            #adjust colormap to avoid white lines
             if cmap != None:
                 cmap = util.adjustColorMap(cmap, 0.15,1.0)
                 del kwargs['colormap']
             if kind == 'barh':
                 kwargs['xerr']=yerr
                 yerr=None
-
             axs = data.plot(ax=ax, layout=layout, yerr=yerr, style=styles, cmap=cmap,
                              **kwargs)
         self._setAxisRanges()
