@@ -153,6 +153,7 @@ MPL3D_OPTION_TOOLTIPS = {
     'cstride': 'Column sampling stride for wireframes/surfaces.',
     'points': 'Overlay original data points on the 3D plot.',
     'mode': 'Interpretation of data (parametric vs grid).',
+    'logz': 'Use logarithmic scale for Z axis. Non-positive values are clamped to min(Z)/10.',
 }
 
 
@@ -3400,6 +3401,34 @@ class PlotViewer(Frame):
         except:
             return plt.cm.get_cmap('Spectral')
 
+    def _apply_logz(self, z):
+        """
+        Apply log10 transformation to Z values for 3D plots.
+        
+        Non-positive values are clamped to min(positive_z)/10 before log transform.
+        
+        Args:
+            z: Array of Z values (can be 1D or 2D).
+            
+        Returns:
+            Array of log10-transformed Z values.
+        """
+        z = np.asarray(z, dtype=float)
+        # Find minimum positive value
+        positive_mask = z > 0
+        if np.any(positive_mask):
+            min_positive = np.min(z[positive_mask])
+            clamp_value = min_positive / 10.0
+        else:
+            # All values are non-positive, use a small default
+            clamp_value = 1e-10
+        
+        # Clamp non-positive values
+        z_clamped = np.where(z > 0, z, clamp_value)
+        
+        # Apply log10
+        return np.log10(z_clamped)
+
     def plot3D(self, redraw=True):
         """
         Generate a 3D plot.
@@ -3418,7 +3447,13 @@ class PlotViewer(Frame):
         data = self.data
         x = data.values[:,0]
         y = data.values[:,1]
-        z = data.values[:,2]
+        z = data.values[:,2].copy()
+        
+        # Handle log Z option
+        logz = kwds.get('logz', False)
+        if logz:
+            z = self._apply_logz(z)
+        
         azm,ele,dst = self.getView()
 
         #self.fig.clear()
@@ -3432,14 +3467,16 @@ class PlotViewer(Frame):
         cmap = kwds['colormap']
 
         if kind == 'scatter':
-            self.scatter3D(data, ax, kwds)
+            self.scatter3D(data, ax, kwds, logz=logz)
         elif kind == 'bar':
-            self.bar3D(data, ax, kwds)
+            self.bar3D(data, ax, kwds, logz=logz)
         elif kind == 'contour':
             from scipy.interpolate import griddata
             xi = np.linspace(x.min(), x.max())
             yi = np.linspace(y.min(), y.max())
             zi = griddata((x, y), z, (xi[None,:], yi[:,None]), method='cubic')
+            if logz:
+                zi = self._apply_logz(zi)
             #zi = np.meshgrid(x, y, z, xi, yi)
             surf = ax.contour(xi, yi, zi, rstride=rstride, cstride=cstride,
                               cmap=kwds['colormap'], alpha=alpha,
@@ -3449,17 +3486,21 @@ class PlotViewer(Frame):
                 X,Y,zi = self.meshData(x,y,z)
             else:
                 X,Y,zi = x,y,z
+            if logz:
+                zi = self._apply_logz(zi)
             w = ax.plot_wireframe(X, Y, zi, rstride=rstride, cstride=cstride,
                                   linewidth=lw)
         elif kind == 'surface':
             X,Y,zi = self.meshData(x,y,z)
+            if logz:
+                zi = self._apply_logz(zi)
             surf = ax.plot_surface(X, Y, zi, rstride=rstride, cstride=cstride,
                                    cmap=cmap, alpha=alpha,
                                    linewidth=lw)
             cb = self.fig.colorbar(surf, shrink=0.5, aspect=5)
             surf.set_clim(vmin=zi.min(), vmax=zi.max())
         if kwds['points'] == True:
-            self.scatter3D(data, ax, kwds)
+            self.scatter3D(data, ax, kwds, logz=logz)
 
         self.setFigureOptions(ax, kwds)
         if azm != None:
@@ -3473,7 +3514,7 @@ class PlotViewer(Frame):
         self.canvas.draw()
         return
 
-    def bar3D(self, data, ax, kwds):
+    def bar3D(self, data, ax, kwds, logz=False):
         """
         Create a 3D bar plot.
 
@@ -3481,18 +3522,21 @@ class PlotViewer(Frame):
             data (pd.DataFrame): Data.
             ax: 3D Axis.
             kwds (dict): Options.
+            logz (bool): Apply log10 to Z values.
         """
 
         i=0
         plots=len(data.columns)
         cmap = plt.cm.get_cmap(kwds['colormap'])
         for c in data.columns:
-            h = data[c]
+            h = data[c].values
+            if logz:
+                h = self._apply_logz(h)
             c = cmap(float(i)/(plots))
             ax.bar(data.index, h, zs=i, zdir='y', color=c)
             i+=1
 
-    def scatter3D(self, data, ax, kwds):
+    def scatter3D(self, data, ax, kwds, logz=False):
         """
         Create a 3D scatter plot.
 
@@ -3500,7 +3544,10 @@ class PlotViewer(Frame):
             data (pd.DataFrame): Data.
             ax: 3D Axis.
             kwds (dict): Options.
+            logz (bool): Apply log10 to Z values.
         """
+        
+        parent_self = self  # Reference to parent for _apply_logz
 
         def doscatter(data, ax, color=None, pointlabels=None):
             data = data._get_numeric_data()
@@ -3514,6 +3561,8 @@ class PlotViewer(Frame):
             labels=data.columns[2:]
             for i in range(2,l):
                 z = X[:,i]
+                if logz:
+                    z = parent_self._apply_logz(z)
                 if color==None:
                     c = cmap(float(i)/(l))
                 else:
@@ -3975,7 +4024,7 @@ class MPL3DOptions(MPLBaseOptions):
             datacols=[]
         fonts = util.getFonts()
         modes = ['parametric','(x,y)->z']
-        self.groups = grps = {'formats':['kind','mode','rstride','cstride','points'],
+        self.groups = grps = {'formats':['kind','mode','rstride','cstride','points','logz'],
                              }
         self.groups = OrderedDict(sorted(grps.items()))
         opts = self.opts = {
@@ -3984,6 +4033,7 @@ class MPL3DOptions(MPLBaseOptions):
                 'cstride':{'type':'entry','default':2,'width':20},
                 'points':{'type':'checkbutton','default':0,'label':'show points'},
                 'mode':{'type':'combobox','default':'(x,y)->z','items': modes},
+                'logz':{'type':'checkbutton','default':0,'label':'log Z'},
                  }
         _apply_option_tooltips(self.opts, MPL3D_OPTION_TOOLTIPS)
         self.kwds = {}
