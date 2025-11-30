@@ -3376,13 +3376,14 @@ class PlotViewer(Frame):
             tuple: (azim, elev, dist) or (None, None, None).
         """
         ax = self.ax
-        if hasattr(ax,'azim'):
-            azm=ax.azim
-            ele=ax.elev
-            dst=ax.dist
+        if hasattr(ax, 'azim'):
+            azm = ax.azim
+            ele = ax.elev
+            # ax.dist was removed in matplotlib 3.6+, use default distance
+            dst = getattr(ax, 'dist', 10)
         else:
-            return None,None,None
-        return azm,ele,dst
+            return None, None, None
+        return azm, ele, dst
 
     def getcmap(self, name):
         """
@@ -3461,10 +3462,12 @@ class PlotViewer(Frame):
             self.scatter3D(data, ax, kwds)
 
         self.setFigureOptions(ax, kwds)
-        if azm!=None:
+        if azm != None:
             self.ax.azim = azm
             self.ax.elev = ele
-            self.ax.dist = dst
+            # ax.dist was removed in matplotlib 3.6+, only set if attribute exists
+            if hasattr(self.ax, 'dist'):
+                self.ax.dist = dst
         #handles, labels = self.ax.get_legend_handles_labels()
         #self.fig.legend(handles, labels)
         self.canvas.draw()
