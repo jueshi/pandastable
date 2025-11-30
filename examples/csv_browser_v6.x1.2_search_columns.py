@@ -82,6 +82,100 @@ from typing import Optional, List, Dict, Any, Tuple, Union
 
 warnings.filterwarnings('ignore', category=FutureWarning)
 
+
+class ToolTip:
+    """Create a tooltip for a given widget.
+    
+    Usage:
+        ToolTip(widget, "Tooltip text here")
+    """
+    
+    def __init__(self, widget: tk.Widget, text: str, delay: int = 500):
+        """Initialize tooltip.
+        
+        Args:
+            widget: The widget to attach the tooltip to
+            text: The tooltip text to display
+            delay: Delay in milliseconds before showing tooltip (default 500ms)
+        """
+        self.widget = widget
+        self.text = text
+        self.delay = delay
+        self.tooltip_window: Optional[tk.Toplevel] = None
+        self.scheduled_id: Optional[str] = None
+        
+        # Bind events
+        self.widget.bind('<Enter>', self._schedule_tooltip)
+        self.widget.bind('<Leave>', self._hide_tooltip)
+        self.widget.bind('<ButtonPress>', self._hide_tooltip)
+    
+    def _schedule_tooltip(self, event: tk.Event = None) -> None:
+        """Schedule tooltip to appear after delay."""
+        self._cancel_scheduled()
+        self.scheduled_id = self.widget.after(self.delay, self._show_tooltip)
+    
+    def _cancel_scheduled(self) -> None:
+        """Cancel any scheduled tooltip."""
+        if self.scheduled_id:
+            self.widget.after_cancel(self.scheduled_id)
+            self.scheduled_id = None
+    
+    def _show_tooltip(self, event: tk.Event = None) -> None:
+        """Display the tooltip."""
+        if self.tooltip_window:
+            return
+        
+        # Get widget position
+        x = self.widget.winfo_rootx() + 20
+        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 5
+        
+        # Create tooltip window
+        self.tooltip_window = tk.Toplevel(self.widget)
+        self.tooltip_window.wm_overrideredirect(True)
+        self.tooltip_window.wm_geometry(f"+{x}+{y}")
+        
+        # Create tooltip label with styling
+        label = tk.Label(
+            self.tooltip_window,
+            text=self.text,
+            background="#FFFFD0",  # Light yellow
+            foreground="#000000",
+            relief="solid",
+            borderwidth=1,
+            font=("Segoe UI", 9),
+            padx=6,
+            pady=3,
+            wraplength=300,
+            justify="left"
+        )
+        label.pack()
+        
+        # Ensure tooltip stays on screen
+        self.tooltip_window.update_idletasks()
+        screen_width = self.widget.winfo_screenwidth()
+        screen_height = self.widget.winfo_screenheight()
+        tooltip_width = self.tooltip_window.winfo_width()
+        tooltip_height = self.tooltip_window.winfo_height()
+        
+        if x + tooltip_width > screen_width:
+            x = screen_width - tooltip_width - 10
+        if y + tooltip_height > screen_height:
+            y = self.widget.winfo_rooty() - tooltip_height - 5
+        
+        self.tooltip_window.wm_geometry(f"+{x}+{y}")
+    
+    def _hide_tooltip(self, event: tk.Event = None) -> None:
+        """Hide the tooltip."""
+        self._cancel_scheduled()
+        if self.tooltip_window:
+            self.tooltip_window.destroy()
+            self.tooltip_window = None
+    
+    def update_text(self, new_text: str) -> None:
+        """Update the tooltip text."""
+        self.text = new_text
+
+
 class CSVBrowser(tk.Tk):
     """CSV Browser Application with Excel-like File List.
     
@@ -398,14 +492,17 @@ class CSVBrowser(tk.Tk):
         ttk.Label(filter_frame, text="Filter Files:").pack(side="left", padx=(0,5))
         filter_entry = ttk.Entry(filter_frame, textvariable=self.filter_text)
         filter_entry.pack(side="left", fill="x", expand=True)
+        ToolTip(filter_entry, "Filter files by name. Use space to combine terms, '!' to exclude.\nRight-click for more options.")
         
         # Add save file filter button
         save_file_filter_btn = ttk.Button(filter_frame, text="Save Filter", command=self.save_file_filter)
         save_file_filter_btn.pack(side="left", padx=5)
+        ToolTip(save_file_filter_btn, "Save the current file filter for later use")
         
         # Add load file filter button
         load_file_filter_btn = ttk.Button(filter_frame, text="Load Filter", command=self.show_saved_file_filters)
         load_file_filter_btn.pack(side="left", padx=5)
+        ToolTip(load_file_filter_btn, "Load a previously saved file filter")
         
         # Create right-click context menu for filtering instructions
         filter_menu = tk.Menu(filter_entry, tearoff=0)
@@ -747,6 +844,7 @@ class CSVBrowser(tk.Tk):
             # Create and set up the entry widget
             self.csv_filter_entry = ttk.Entry(self.csv_filter_frame, textvariable=self.csv_filter_text)
             self.csv_filter_entry.grid(row=0, column=1, sticky='ew')
+            ToolTip(self.csv_filter_entry, "Filter rows by text search. Supports pandas query syntax.\nRight-click for filter examples and options.")
             
             # Create the context menu first
             self.setup_csv_filter_context_menu()
@@ -767,6 +865,7 @@ class CSVBrowser(tk.Tk):
             self.column_search_entry.grid(row=0, column=3, sticky='ew')
             self.column_search_entry.bind("<Button-3>", self.show_column_search_menu)
             self.column_search_entry.bind("<Return>", self.show_column_search_menu)
+            ToolTip(self.column_search_entry, "Search for columns by name (Ctrl+F).\nType to filter, press Enter or right-click to see matches.")
             
             # Ensure the context menu is set up for column search
             self.setup_column_search_menu()
@@ -779,6 +878,7 @@ class CSVBrowser(tk.Tk):
                 width=12
             )
             self.move_to_start_btn.grid(row=0, column=4, padx=(5,0))
+            ToolTip(self.move_to_start_btn, "Move the searched column to the first position in the table")
             
             # Add Save to CSV button
             self.save_to_csv_button = ttk.Button(
@@ -788,6 +888,7 @@ class CSVBrowser(tk.Tk):
                 width=12
             )
             self.save_to_csv_button.grid(row=0, column=5, padx=(5,0))
+            ToolTip(self.save_to_csv_button, "Save the currently filtered data to a new CSV file")
             
             # Add column filter row
             self.column_filter_frame = ttk.Frame(self.csv_view_container)
@@ -797,6 +898,7 @@ class CSVBrowser(tk.Tk):
             ttk.Label(self.column_filter_frame, text="Column Filter:").grid(row=0, column=0, padx=(0,5))
             self.column_filter_entry = ttk.Entry(self.column_filter_frame, textvariable=self.column_filter_var)
             self.column_filter_entry.grid(row=0, column=1, sticky='ew')
+            ToolTip(self.column_filter_entry, "Filter which columns are visible. Enter column names separated by spaces.")
             
             # Add reset button for column filter
             self.reset_column_filter_btn = ttk.Button(
@@ -806,6 +908,7 @@ class CSVBrowser(tk.Tk):
                 width=12
             )
             self.reset_column_filter_btn.grid(row=0, column=2, padx=(5,0))
+            ToolTip(self.reset_column_filter_btn, "Show all columns (reset column visibility)")
             
             # Add save filter button
             self.save_filter_button = ttk.Button(
@@ -815,6 +918,7 @@ class CSVBrowser(tk.Tk):
                 width=12
             )
             self.save_filter_button.grid(row=0, column=3, padx=(5,0))
+            ToolTip(self.save_filter_button, "Save current row and column filter settings")
             
             # Add load filter button
             self.load_filter_button = ttk.Button(
@@ -824,6 +928,7 @@ class CSVBrowser(tk.Tk):
                 width=12
             )
             self.load_filter_button.grid(row=0, column=4, padx=(5,0))
+            ToolTip(self.load_filter_button, "Load previously saved filter settings")
             
             # Add reset all filters button
             self.reset_all_filters_button = ttk.Button(
@@ -833,6 +938,7 @@ class CSVBrowser(tk.Tk):
                 width=12
             )
             self.reset_all_filters_button.grid(row=0, column=5, padx=(5,0))
+            ToolTip(self.reset_all_filters_button, "Clear all filters and show all data (Escape)")
             
             # Create frame for pandastable using grid
             self.csv_table_frame = ttk.Frame(self.csv_view_container)
@@ -1917,70 +2023,81 @@ class CSVBrowser(tk.Tk):
         return tooltip
     
     def setup_toolbar(self):
-        """Setup the toolbar with necessary controls"""
+        """Setup the toolbar with necessary controls and tooltips"""
         # Add browse folder button
-        ttk.Button(self.toolbar, text="Browse Folder", 
-                command=self.browse_folder).pack(side="left", padx=5)
+        btn_browse = ttk.Button(self.toolbar, text="Browse Folder", command=self.browse_folder)
+        btn_browse.pack(side="left", padx=5)
+        ToolTip(btn_browse, "Open a folder to browse CSV files (Ctrl+O)")
             
         # Add load subfolders button
-        ttk.Button(self.toolbar, text="Load Subfolders",
-                command=self.load_subfolders).pack(side="left", padx=5)
+        btn_subfolders = ttk.Button(self.toolbar, text="Load Subfolders", command=self.load_subfolders)
+        btn_subfolders.pack(side="left", padx=5)
+        ToolTip(btn_subfolders, "Include CSV files from all subfolders in the current directory")
 
         # Add move files button
-        ttk.Button(self.toolbar, text="Move Files", 
-                command=self.move_selected_files).pack(side="left", padx=5)
+        btn_move = ttk.Button(self.toolbar, text="Move Files", command=self.move_selected_files)
+        btn_move.pack(side="left", padx=5)
+        ToolTip(btn_move, "Move selected files to a different folder")
 
         # Add copy files button
-        ttk.Button(self.toolbar, text="Copy Files",
-                command=self.copy_selected_files).pack(side="left", padx=5)
+        btn_copy = ttk.Button(self.toolbar, text="Copy Files", command=self.copy_selected_files)
+        btn_copy.pack(side="left", padx=5)
+        ToolTip(btn_copy, "Copy selected files to a different folder")
                 
         # Add delete files button
-        ttk.Button(self.toolbar, text="Delete Files", 
-                command=self.delete_selected_files).pack(side="left", padx=5)
+        btn_delete = ttk.Button(self.toolbar, text="Delete Files", command=self.delete_selected_files)
+        btn_delete.pack(side="left", padx=5)
+        ToolTip(btn_delete, "Delete selected files (moves to Recycle Bin)")
 
         # Add rename all files button
-        ttk.Button(self.toolbar, text="Rename All Files",
-                command=self.rename_all_files).pack(side="left", padx=5)
+        btn_rename = ttk.Button(self.toolbar, text="Rename All Files", command=self.rename_all_files)
+        btn_rename.pack(side="left", padx=5)
+        ToolTip(btn_rename, "Rename all files based on field values from the filename structure")
 
         # Add reveal in explorer button
-        ttk.Button(self.toolbar, text="Reveal in Explorer", 
-                command=self.reveal_in_explorer).pack(side="left", padx=5)                
+        btn_reveal = ttk.Button(self.toolbar, text="Reveal in Explorer", command=self.reveal_in_explorer)
+        btn_reveal.pack(side="left", padx=5)
+        ToolTip(btn_reveal, "Open the folder containing the selected file in Windows Explorer")
 
         # Add Merge CSV button
-        self.merge_csv_button = ttk.Button(
-            self.toolbar, 
-            text="Merge CSV", 
-            command=self.merge_selected_csv_files
-        )
+        self.merge_csv_button = ttk.Button(self.toolbar, text="Merge CSV", command=self.merge_selected_csv_files)
         self.merge_csv_button.pack(side="left", padx=2)
+        ToolTip(self.merge_csv_button, "Merge multiple selected CSV files into one file")
 
         # Add open in Excel button
-        ttk.Button(self.toolbar, text="Open in Excel",
-                command=self.open_in_excel).pack(side="left", padx=5)
+        btn_excel = ttk.Button(self.toolbar, text="Open in Excel", command=self.open_in_excel)
+        btn_excel.pack(side="left", padx=5)
+        ToolTip(btn_excel, "Open the selected CSV file in Microsoft Excel")
 
         # Add open in Spotfire button
-        ttk.Button(self.toolbar, text="Open in Spotfire",
-                command=self.open_in_spotfire).pack(side="left", padx=5)
+        btn_spotfire = ttk.Button(self.toolbar, text="Open in Spotfire", command=self.open_in_spotfire)
+        btn_spotfire.pack(side="left", padx=5)
+        ToolTip(btn_spotfire, "Open the selected CSV file in TIBCO Spotfire")
 
         # Add correlation analysis button
-        ttk.Button(self.toolbar, text="Correlation Analysis",
-                command=self.save_correlation_analysis).pack(side="left", padx=5)
+        btn_corr = ttk.Button(self.toolbar, text="Correlation Analysis", command=self.save_correlation_analysis)
+        btn_corr.pack(side="left", padx=5)
+        ToolTip(btn_corr, "Perform correlation analysis on numeric columns and save results")
 
         # Add refresh button  
-        ttk.Button(self.toolbar, text="Refresh", 
-                    command=self.refresh_file_list).pack(side="left", padx=5)  # Changed from browse_directory to refresh_file_list
+        btn_refresh = ttk.Button(self.toolbar, text="Refresh", command=self.refresh_file_list)
+        btn_refresh.pack(side="left", padx=5)
+        ToolTip(btn_refresh, "Refresh the file list (Ctrl+R or F5)")
 
         # Add save plot settings button
-        ttk.Button(self.toolbar, text="Save Plot Settings",
-                command=self.save_plot_settings_to_file).pack(side="right", padx=5)
+        btn_save_plot = ttk.Button(self.toolbar, text="Save Plot Settings", command=self.save_plot_settings_to_file)
+        btn_save_plot.pack(side="right", padx=5)
+        ToolTip(btn_save_plot, "Save current plot configuration to a JSON file")
                 
         # Add load plot settings button
-        ttk.Button(self.toolbar, text="Load Plot Settings",
-                command=self.load_plot_settings_from_file).pack(side="right", padx=5)
+        btn_load_plot = ttk.Button(self.toolbar, text="Load Plot Settings", command=self.load_plot_settings_from_file)
+        btn_load_plot.pack(side="right", padx=5)
+        ToolTip(btn_load_plot, "Load plot configuration from a JSON file")
         
         # Add save table settings button
-        ttk.Button(self.toolbar, text="Save Table Settings",
-                command=self.save_table_settings).pack(side="right", padx=5)
+        btn_save_table = ttk.Button(self.toolbar, text="Save Table Settings", command=self.save_table_settings)
+        btn_save_table.pack(side="right", padx=5)
+        ToolTip(btn_save_table, "Save current table display settings (column widths, visibility)")
 
     def browse_folder(self):
         """Open a directory chooser dialog and update the file list"""
