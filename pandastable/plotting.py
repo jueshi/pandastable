@@ -3474,26 +3474,23 @@ class PlotViewer(Frame):
             from scipy.interpolate import griddata
             xi = np.linspace(x.min(), x.max())
             yi = np.linspace(y.min(), y.max())
+            # z already has logz applied if enabled, griddata interpolates it
             zi = griddata((x, y), z, (xi[None,:], yi[:,None]), method='cubic')
-            if logz:
-                zi = self._apply_logz(zi)
             #zi = np.meshgrid(x, y, z, xi, yi)
             surf = ax.contour(xi, yi, zi, rstride=rstride, cstride=cstride,
                               cmap=kwds['colormap'], alpha=alpha,
                               linewidth=lw, antialiased=True)
         elif kind == 'wireframe':
             if mode == '(x,y)->z':
+                # z already has logz applied if enabled, meshData interpolates it
                 X,Y,zi = self.meshData(x,y,z)
             else:
                 X,Y,zi = x,y,z
-            if logz:
-                zi = self._apply_logz(zi)
             w = ax.plot_wireframe(X, Y, zi, rstride=rstride, cstride=cstride,
                                   linewidth=lw)
         elif kind == 'surface':
+            # z already has logz applied if enabled, meshData interpolates it
             X,Y,zi = self.meshData(x,y,z)
-            if logz:
-                zi = self._apply_logz(zi)
             surf = ax.plot_surface(X, Y, zi, rstride=rstride, cstride=cstride,
                                    cmap=cmap, alpha=alpha,
                                    linewidth=lw)
